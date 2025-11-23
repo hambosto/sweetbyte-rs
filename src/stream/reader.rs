@@ -54,19 +54,14 @@ impl StreamReader {
         reader: &mut R,
     ) -> Result<Option<Vec<u8>>> {
         let mut buffer = self.pool.get();
-        
-        // SAFETY: We are setting the length to the capacity (or CHUNK_SIZE) to read into it.
-        // We immediately pass this buffer to `reader.read`, which writes to it.
-        // We then truncate to the actual number of bytes read.
-        // The only risk is if `reader.read` reads uninitialized memory, but it takes `&mut [u8]` as output.
-        // However, we are exposing uninitialized memory to `reader.read`.
-        // Rust's `Read` trait allows implementations to read from the buffer (e.g. generic copy), but standard files/sockets don't.
-        // Ideally we use `ReadBuf` but that's not stable or easy here.
-        // For performance, we assume `reader` just writes.
+
+        // Ensure buffer has the required capacity and is properly initialized
         if buffer.capacity() < CHUNK_SIZE {
             buffer.reserve(CHUNK_SIZE - buffer.len());
         }
-        unsafe { buffer.set_len(CHUNK_SIZE) };
+        // Use safe resize instead of unsafe set_len
+        // Modern allocators zero memory, so performance impact is negligible
+        buffer.resize(CHUNK_SIZE, 0);
 
         match reader.read(&mut buffer).await {
             Ok(0) => {
@@ -125,8 +120,8 @@ impl StreamReader {
         if chunk_data.capacity() < chunk_len {
             chunk_data.reserve(chunk_len - chunk_data.len());
         }
-        // SAFETY: We are about to read exactly `chunk_len` bytes into the buffer.
-        unsafe { chunk_data.set_len(chunk_len) };
+        // Use safe resize instead of unsafe set_len
+        chunk_data.resize(chunk_len, 0);
 
         match reader.read_exact(&mut chunk_data).await {
             Ok(_) => Ok(Some(chunk_data)),

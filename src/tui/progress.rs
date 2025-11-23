@@ -10,7 +10,14 @@ impl Progress {
     /// Creates a new progress bar with the given total size.
     pub fn new(total_size: u64) -> Self {
         let pb = ProgressBar::new(total_size);
-        pb.set_style(ProgressStyle::default_bar().template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}) ({eta})").unwrap().progress_chars("#>-"));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.cyan} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({percent}%) | {bytes_per_sec} | ETA: {eta}")
+                .unwrap()
+                .progress_chars("━━╸")
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+        );
+        pb.set_message("Processing");
         Self { pb }
     }
 

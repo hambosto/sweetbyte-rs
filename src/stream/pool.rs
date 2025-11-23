@@ -10,8 +10,18 @@ pub struct BufferPool {
 
 impl BufferPool {
     /// Creates a new buffer pool with the specified capacity and buffer size.
+    /// Pre-warms the pool with initial buffers to reduce allocation latency.
     pub fn new(capacity: usize, buffer_size: usize) -> Self {
         let (sender, receiver) = crossbeam_channel::bounded(capacity);
+
+        // Pre-warm the pool with initial buffers to eliminate allocation latency
+        // Allocate min(capacity, num_cpus * 2) buffers upfront
+        let prewarm_count = capacity.min(num_cpus::get() * 2);
+        for _ in 0..prewarm_count {
+            let buffer = vec![0u8; buffer_size];
+            let _ = sender.try_send(buffer);
+        }
+
         Self {
             sender,
             receiver,
@@ -37,12 +47,11 @@ impl BufferPool {
 
     /// Returns a buffer to the pool.
     /// If the pool is full, the buffer is dropped.
-    pub fn return_buffer(&self, mut buffer: Vec<u8>) {
+    pub fn return_buffer(&self, buffer: Vec<u8>) {
         // Only return buffers that are of the correct size (or larger)
         if buffer.capacity() >= self.buffer_size {
-            // We don't need to clear here necessarily, but it's good practice to not hold data.
-            // However, clearing is O(1) for Vec.
-            buffer.clear();
+            // Skip clear() here - get() will clear it anyway when reused
+            // This reduces CPU overhead, especially for large buffers
             let _ = self.sender.try_send(buffer);
         }
     }

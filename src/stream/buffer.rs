@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Buffer for maintaining chunk order.
 ///
 /// When chunks are processed in parallel, they may complete out of order.
 /// This buffer ensures chunks are returned in the correct sequence.
+/// Uses BTreeMap for better cache locality with sequential chunk indices.
 pub struct ReorderBuffer {
-    chunks: HashMap<u64, Vec<u8>>,
+    chunks: BTreeMap<u64, Vec<u8>>,
     next_expected: u64,
 }
 
@@ -13,7 +14,7 @@ impl ReorderBuffer {
     /// Creates a new empty ordered buffer
     pub fn new() -> Self {
         Self {
-            chunks: HashMap::new(),
+            chunks: BTreeMap::new(),
             next_expected: 0,
         }
     }

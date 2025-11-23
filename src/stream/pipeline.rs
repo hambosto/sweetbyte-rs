@@ -12,8 +12,8 @@ use crate::types::{Processing, Task};
 use crate::stream::pool::BufferPool;
 use crate::stream::reader::CHUNK_SIZE;
 
-/// Buffer multiplier for pipeline depth
-const BUFFER_MULTIPLIER: usize = 4;
+/// Buffer multiplier for pipeline depth (reduced from 4 to 2 for memory efficiency)
+const BUFFER_MULTIPLIER: usize = 2;
 
 /// High-performance stream processor using a concurrent pipeline architecture.
 ///
@@ -58,7 +58,8 @@ impl Pipeline {
         let chunk_reader = StreamReader::new(self.mode, self.pool.clone());
 
         // Channel for sending results to the writer
-        let buffer_size = self.concurrency * BUFFER_MULTIPLIER;
+        // Reduced buffer size with minimum to balance memory usage and throughput
+        let buffer_size = (self.concurrency * BUFFER_MULTIPLIER).max(8);
         let (tx, mut rx) = mpsc::channel::<crate::types::TaskResult>(buffer_size);
 
         // Spawn Writer Task
@@ -92,8 +93,14 @@ impl Pipeline {
 
         loop {
             // Acquire permit to limit concurrency
-            // We use acquire_owned so we can move the permit into the task
-            let permit = semaphore.clone().acquire_owned().await?;
+            // Try fast path first to avoid async overhead when under limit
+            let permit = match semaphore.clone().try_acquire_owned() {
+                Ok(permit) => permit,
+                Err(_) => {
+                    // Slow path: wait for permit
+                    semaphore.clone().acquire_owned().await?
+                }
+            };
 
             match chunk_reader.read_chunk(&mut reader, index).await? {
                 Some(data) => {

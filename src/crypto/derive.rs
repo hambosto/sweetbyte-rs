@@ -2,6 +2,7 @@ use argon2::{
     password_hash::{PasswordHasher, SaltString},
     Argon2, Params, Version,
 };
+use rand::RngCore;
 use std::io;
 
 // Argon2id parameters matching Go implementation
@@ -57,7 +58,6 @@ pub fn hash(password: &[u8], salt: &[u8]) -> anyhow::Result<[u8; ARGON_KEY_LEN]>
 
 /// Generates cryptographically secure random bytes
 pub fn get_random_bytes(size: usize) -> io::Result<Vec<u8>> {
-    use rand::RngCore;
     let mut bytes = vec![0u8; size];
     rand::rng().fill_bytes(&mut bytes);
     Ok(bytes)

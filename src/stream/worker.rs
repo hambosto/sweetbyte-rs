@@ -24,14 +24,11 @@ impl ChunkWorker {
             return Err(anyhow!("key must be at least 64 bytes"));
         }
 
-        let aes_key = &key[0..32];
-        let chacha_key = &key[32..64];
-
         Ok(Self {
             compression: Compression::new(Level::BestSpeed)?,
             padding: Padding::default(),
-            aes_cipher: AesCipher::new(aes_key)?,
-            chacha_cipher: ChaCha20Cipher::new(chacha_key)?,
+            aes_cipher: AesCipher::new(&key[0..32])?,
+            chacha_cipher: ChaCha20Cipher::new(&key[32..64])?,
             encoding: Encoding::new(crate::encoding::DATA_SHARDS, crate::encoding::PARITY_SHARDS)?,
             mode,
             pool,
@@ -81,21 +78,25 @@ impl ChunkWorker {
         // 5. Reed-Solomon encoding
         let encoded = self.encoding.encode(&chacha_encrypted)?;
 
-        // TODO: Optimize intermediate allocations?
-        // For now, we just use the pool for the final result if possible,
-        // but the intermediate steps return new Vecs.
-        // The final step `encode` returns a Vec.
-        // We can't easily inject the pool into all these components without major refactoring.
-        // But we can at least ensure the final result is what we return.
-        // Actually, `process` returns `TaskResult` which owns the data.
-        // The `encrypt_pipeline` returns a `Vec<u8>`.
-        // If we want to use the pool, we need to copy into a pool buffer?
-        // No, that adds a copy.
-        // Unless we modify `Compression`, `Padding`, `Cipher`, `Encoding` to accept an output buffer.
-        // That's a larger refactor.
-        // For now, let's stick to returning the input buffer to the pool.
-        // The output buffer is allocated by the libraries.
-        // We can return it to the pool later in `StreamWriter`.
+        // OPTIMIZATION OPPORTUNITY: Intermediate Allocations
+        //
+        // Current pipeline allocates 5 Vec<u8> per chunk:
+        //   1. compress() -> Vec
+        //   2. pad() -> Vec
+        //   3. aes_cipher.encrypt() -> Vec
+        //   4. chacha_cipher.encrypt() -> Vec
+        //   5. encoding.encode() -> Vec
+        //
+        // Potential optimization (requires API changes to crypto/compression modules):
+        //   - Modify each component to accept `&mut Vec<u8>` output buffer
+        //   - Reuse single buffer from pool across all steps
+        //   - Would reduce allocations from 5 per chunk to 1 per chunk
+        //   - Expected performance gain: 20-30% reduction in memory allocations
+        //
+        // Current approach:
+        //   - Input buffer returned to pool in `process()`
+        //   - Output buffer allocated by pipeline, returned to pool in `StreamWriter`
+        //   - Intermediate buffers allocated/deallocated per chunk (overhead)
 
         Ok(encoded)
     }

@@ -53,7 +53,7 @@ pub fn handle_encrypt(
         .clone()
         .unwrap_or_else(|| file_manager.get_output_path(file_path, ProcessorMode::Encrypt));
 
-    tui::print_info(&format!("Encrypting {} -> {}", file_path, dest));
+    println!("Encrypting {} -> {}", file_path, dest);
 
     let file_size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
     let pb = tui::Progress::new(file_size);
@@ -77,7 +77,7 @@ pub fn handle_encrypt(
             };
 
             if should_delete {
-                tui::print_info(&format!("Deleting source file: {}", file_path));
+                println!("Deleting source file: {}", file_path);
                 if let Err(e) = file_manager.remove(file_path) {
                     tui::print_error(&format!("Failed to delete source: {}", e));
                 } else {
@@ -116,7 +116,7 @@ pub fn handle_decrypt(
         .clone()
         .unwrap_or_else(|| file_manager.get_output_path(file_path, ProcessorMode::Decrypt));
 
-    tui::print_info(&format!("Decrypting {} -> {}", file_path, dest));
+    println!("Decrypting {} -> {}", file_path, dest);
 
     // Read header to get original file size for accurate progress
     let original_size = {
@@ -148,7 +148,7 @@ pub fn handle_decrypt(
             };
 
             if should_delete {
-                tui::print_info(&format!("Deleting source file: {}", file_path));
+                println!("Deleting source file: {}", file_path);
                 if let Err(e) = file_manager.remove(file_path) {
                     tui::print_error(&format!("Failed to delete source: {}", e));
                 } else {

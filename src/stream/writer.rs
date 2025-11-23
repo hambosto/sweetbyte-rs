@@ -34,7 +34,7 @@ impl StreamWriter {
     /// This method:
     /// 1. Adds the chunk to the ordered buffer
     /// 2. Retrieves all consecutive now-ready chunks
-    /// 3. Writes them to the output stream
+    /// 3. Batches them together and writes in one operation (reduces syscalls)
     ///
     /// # Arguments
     /// * `writer` - Output stream
@@ -49,34 +49,43 @@ impl StreamWriter {
         // Add to buffer and get all ready consecutive chunks
         let ready_chunks = self.buffer.add(index, data);
 
-        // Write all ready chunks
+        if ready_chunks.is_empty() {
+            return Ok(());
+        }
+
+        // Batch write all ready chunks to reduce syscalls
+        match self.mode {
+            Processing::Encryption => {
+                // For encryption: write length prefix + data for each chunk
+                // Collect into a single buffer for batched write
+                let mut batch_buffer = Vec::new();
+
+                for chunk in &ready_chunks {
+                    let length = (chunk.len() as u32).to_bytes();
+                    batch_buffer.extend_from_slice(&length);
+                    batch_buffer.extend_from_slice(chunk);
+                }
+
+                writer.write_all(&batch_buffer).await?;
+            }
+            Processing::Decryption => {
+                // For decryption: write data only (no length prefix)
+                // Collect into a single buffer for batched write
+                let mut batch_buffer = Vec::new();
+
+                for chunk in &ready_chunks {
+                    batch_buffer.extend_from_slice(chunk);
+                }
+
+                writer.write_all(&batch_buffer).await?;
+            }
+        }
+
+        // Return all buffers to pool
         for chunk in ready_chunks {
-            self.write_single_chunk(writer, &chunk).await?;
-            // Return buffer to pool
             self.pool.return_buffer(chunk);
         }
 
-        Ok(())
-    }
-
-    /// Writes a single chunk to the output stream
-    async fn write_single_chunk<W: AsyncWrite + Unpin>(
-        &self,
-        writer: &mut W,
-        data: &[u8],
-    ) -> Result<()> {
-        match self.mode {
-            Processing::Encryption => {
-                // Write 4-byte length prefix + data
-                let length = (data.len() as u32).to_bytes();
-                writer.write_all(&length).await?;
-                writer.write_all(data).await?;
-            }
-            Processing::Decryption => {
-                // Write data only (no length prefix for decrypted output)
-                writer.write_all(data).await?;
-            }
-        }
         Ok(())
     }
 
@@ -86,10 +95,31 @@ impl StreamWriter {
     pub async fn flush<W: AsyncWrite + Unpin>(&mut self, writer: &mut W) -> Result<()> {
         let remaining = self.buffer.flush();
 
-        for chunk in remaining {
-            self.write_single_chunk(writer, &chunk).await?;
-            // Return buffer to pool
-            self.pool.return_buffer(chunk);
+        if !remaining.is_empty() {
+            // Use batched writing for flush as well
+            match self.mode {
+                Processing::Encryption => {
+                    let mut batch_buffer = Vec::new();
+                    for chunk in &remaining {
+                        let length = (chunk.len() as u32).to_bytes();
+                        batch_buffer.extend_from_slice(&length);
+                        batch_buffer.extend_from_slice(chunk);
+                    }
+                    writer.write_all(&batch_buffer).await?;
+                }
+                Processing::Decryption => {
+                    let mut batch_buffer = Vec::new();
+                    for chunk in &remaining {
+                        batch_buffer.extend_from_slice(chunk);
+                    }
+                    writer.write_all(&batch_buffer).await?;
+                }
+            }
+
+            // Return all buffers to pool
+            for chunk in remaining {
+                self.pool.return_buffer(chunk);
+            }
         }
 
         writer.flush().await?;

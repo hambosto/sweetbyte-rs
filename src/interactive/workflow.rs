@@ -34,7 +34,7 @@ impl Workflow {
         // 2. Find Eligible Files
         let eligible_files = self.file_manager.find_eligible_files(mode)?;
         if eligible_files.is_empty() {
-            tui::print_info(&format!("No eligible files found for {:?} operation", mode));
+            println!("No eligible files found for {:?} operation", mode);
             return Ok(());
         }
 

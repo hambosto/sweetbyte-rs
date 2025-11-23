@@ -1,15 +1,14 @@
+use crate::crypto;
+use crate::file_manager::FileManager;
+use crate::header::Header;
+use crate::stream::Pipeline;
+use crate::types::Processing;
 use anyhow::{anyhow, Result};
 use std::io::Seek;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
 use tokio::runtime::Runtime;
-
-use crate::crypto;
-use crate::file_manager::FileManager;
-use crate::header::Header;
-use crate::stream::Pipeline;
-use crate::types::Processing;
 
 pub struct Decryptor<'a> {
     file_manager: &'a FileManager,
