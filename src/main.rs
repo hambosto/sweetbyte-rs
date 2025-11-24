@@ -1,11 +1,9 @@
-pub mod cli;
 pub mod compression;
 pub mod config;
 pub mod crypto;
 pub mod encoding;
 pub mod file;
 pub mod header;
-pub mod interactive;
 pub mod padding;
 pub mod processor;
 pub mod stream;
@@ -13,34 +11,94 @@ pub mod tui;
 pub mod types;
 pub mod utils;
 
-use anyhow::Result;
-use clap::Parser;
-use cli::{Cli, Commands};
+use anyhow::{Result, anyhow};
+use std::sync::Arc;
+use types::ProcessorMode;
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    // 1. Show welcome banner
+    tui::print_banner();
 
-    match cli.command {
-        Some(Commands::Encrypt {
-            input,
-            output,
-            password,
-            delete,
-        }) => {
-            cli::handle_encrypt(&input, output, password, delete)?;
+    // 2. Ask user for mode (Encrypt vs Decrypt)
+    let mode = tui::ask_processing_mode()?;
+
+    // 3. Find eligible files
+    let eligible_files = file::find_eligible_files(mode)?;
+    if eligible_files.is_empty() {
+        println!("No eligible files found for {:?} operation", mode);
+        return Ok(());
+    }
+
+    // 4. Select file
+    let input_path = tui::choose_file(&eligible_files)?;
+
+    // 5. Determine output path
+    let output_path = file::get_output_path(&input_path, mode);
+
+    // 6. Validate input
+    file::validate_path(&input_path, true)?;
+
+    // 7. Check overwrite
+    if file::validate_path(&output_path, false).is_err() {
+        let clean_path = output_path
+            .strip_prefix(".")
+            .unwrap_or(&output_path)
+            .display();
+        let overwrite =
+            tui::ask_confirm(&format!("Output file {} exists. Overwrite?", clean_path))?;
+        if !overwrite {
+            return Err(anyhow!("operation canceled by user"));
         }
-        Some(Commands::Decrypt {
-            input,
-            output,
-            password,
-            delete,
-        }) => {
-            cli::handle_decrypt(&input, output, password, delete)?;
+    }
+
+    // 8. Ask password
+    let password = if mode == ProcessorMode::Encrypt {
+        let p1 = tui::ask_password("Enter password:")?;
+        let p2 = tui::ask_password("Confirm password:")?;
+        if p1 != p2 {
+            anyhow::bail!("passwords do not match");
         }
-        None => {
-            // No args provided, run interactive mode
-            interactive::run()?;
+        p1
+    } else {
+        tui::ask_password("Enter password:")?
+    };
+
+    // 9. Show info
+    tui::show_processing_info(mode, input_path.to_str().unwrap_or("?"));
+
+    // 10. Progress bar
+    let size = file::get_file_size(&input_path, mode)?;
+    let pb = tui::Progress::new(size);
+    let callback: Option<Arc<dyn Fn(u64) + Send + Sync>> = {
+        let pb = pb.clone();
+        Some(Arc::new(move |bytes| pb.inc(bytes)))
+    };
+
+    // 11. Process
+    match mode {
+        ProcessorMode::Encrypt => {
+            processor::encrypt_file(&input_path, &output_path, &password, callback)?;
         }
+        ProcessorMode::Decrypt => {
+            processor::decrypt_file(&input_path, &output_path, &password, callback)?;
+        }
+    }
+
+    pb.finish_with_message("Done");
+    tui::show_success_info(mode, output_path.to_str().unwrap_or("?"));
+
+    // 12. Delete original
+    let file_type = match mode {
+        ProcessorMode::Encrypt => "original",
+        ProcessorMode::Decrypt => "encrypted",
+    };
+    let clean_path = input_path
+        .strip_prefix(".")
+        .unwrap_or(&input_path)
+        .display();
+    if tui::ask_confirm(&format!("Delete {} file {}?", file_type, clean_path))? {
+        file::remove_file(&input_path)?;
+        tui::show_source_deleted(input_path.to_str().unwrap_or("?"));
     }
 
     Ok(())

@@ -31,7 +31,12 @@ pub fn ask_processing_mode() -> Result<crate::types::ProcessorMode> {
 pub fn choose_file(files: &[PathBuf]) -> Result<PathBuf> {
     let file_strings: Vec<String> = files
         .iter()
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|p| {
+            p.strip_prefix(".")
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
         .collect();
 
     let selected = Select::new("Select file to process:", file_strings.clone()).prompt()?;
