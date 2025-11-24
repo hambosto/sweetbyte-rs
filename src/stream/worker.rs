@@ -25,7 +25,7 @@ impl ChunkWorker {
         }
 
         Ok(Self {
-            compression: Compression::new(Level::BestSpeed)?,
+            compression: Compression::new(Level::BestSpeed),
             padding: Pkcs7Padding::new(crate::padding::BLOCK_SIZE)?,
             aes_cipher: AesCipher::new(&key[0..32])?,
             chacha_cipher: ChaCha20Cipher::new(&key[32..64])?,
