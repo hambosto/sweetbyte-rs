@@ -12,7 +12,7 @@ mod random;
 
 pub use aes::Aes;
 pub use chacha::ChaCha;
-pub use kdf::{derive_key, ARGON_KEY_LEN, ARGON_SALT_LEN};
+pub use kdf::{ARGON_KEY_LEN, ARGON_SALT_LEN, derive_key};
 pub use random::random_bytes;
 
 /// Shared trait for authenticated encryption with associated data (AEAD) ciphers.

@@ -3,7 +3,7 @@
 //! This module handles splitting data into shards for erasure coding
 //! and combining/extracting shards back into original data.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Splits data into shards for encoding.
 ///

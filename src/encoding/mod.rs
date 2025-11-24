@@ -1,4 +1,4 @@
 pub mod chunking;
 pub mod erasure;
 
-pub use erasure::{ErasureEncoder, DATA_SHARDS, PARITY_SHARDS};
+pub use erasure::{DATA_SHARDS, ErasureEncoder, PARITY_SHARDS};

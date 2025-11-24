@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinSet;
 
 use super::reader::StreamReader;

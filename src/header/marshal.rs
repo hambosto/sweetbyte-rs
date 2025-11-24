@@ -4,12 +4,12 @@
 //! handling encoding, MAC computation, and section assembly/disassembly.
 
 use crate::utils::UintType;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::io::Read;
 
-use super::encoding::{self, EncodedSection, SectionType, SECTION_ORDER};
-use super::metadata::{Header, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
+use super::encoding::{self, EncodedSection, SECTION_ORDER, SectionType};
+use super::metadata::{HEADER_DATA_SIZE, Header, MAGIC_BYTES, MAGIC_SIZE};
 use super::verification;
 
 /// Marshals a header into bytes for writing to a file.

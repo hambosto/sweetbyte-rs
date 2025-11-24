@@ -6,7 +6,7 @@
 use super::prompt;
 use crate::types::ProcessorMode;
 use crate::{file, processor, tui};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::path::Path;
 use std::sync::Arc;
 

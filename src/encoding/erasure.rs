@@ -4,7 +4,7 @@
 //! Encoded data can survive loss of up to `parity_shards` chunks while still being
 //! fully recoverable.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use reed_solomon_erasure::galois_8::ReedSolomon;
 
 use super::chunking;

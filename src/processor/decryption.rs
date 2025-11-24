@@ -4,7 +4,7 @@ use crate::header;
 use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::io::Seek;
 use std::sync::Arc;
 use tokio::fs::File;

@@ -5,7 +5,7 @@
 
 use crate::encoding::ErasureEncoder;
 use crate::utils::UintType;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Section types in the encrypted file header
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
