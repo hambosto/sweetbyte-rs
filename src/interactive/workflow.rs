@@ -1,4 +1,4 @@
-use crate::file_manager::FileManager;
+use crate::file_manager;
 use crate::processor::Processor;
 use crate::tui;
 use crate::types::ProcessorMode;
@@ -6,7 +6,6 @@ use anyhow::{anyhow, Result};
 use std::path::Path;
 
 pub struct Workflow {
-    file_manager: FileManager,
     processor: Processor,
 }
 
@@ -18,12 +17,8 @@ impl Default for Workflow {
 
 impl Workflow {
     pub fn new() -> Self {
-        let file_manager = FileManager::new();
-        let processor = Processor::new(FileManager::new());
-        Self {
-            file_manager,
-            processor,
-        }
+        let processor = Processor::new();
+        Self { processor }
     }
 
     pub fn run(&self) -> Result<()> {
@@ -39,7 +34,7 @@ impl Workflow {
         let mode = tui::ask_processing_mode()?;
 
         // 2. Find Eligible Files
-        let eligible_files = self.file_manager.find_eligible_files(mode)?;
+        let eligible_files = file_manager::find_eligible_files(mode)?;
         if eligible_files.is_empty() {
             println!("No eligible files found for {:?} operation", mode);
             return Ok(());
@@ -59,16 +54,13 @@ impl Workflow {
         use crate::header::Header;
         use std::fs::File;
 
-        let output_path = self.file_manager.get_output_path(input_path, mode);
+        let output_path = file_manager::get_output_path(input_path, mode);
 
         // Validate paths
-        self.file_manager.validate_path(input_path, true)?;
+        file_manager::validate_path(input_path, true)?;
 
         // Check output overwrite
-        if self
-            .file_manager
-            .validate_path(&output_path, false)
-            .is_err()
+        if file_manager::validate_path(&output_path, false).is_err()
             && !tui::ask_confirm(&format!(
                 "Output file '{}' exists. Overwrite?",
                 output_path.display()
@@ -137,7 +129,7 @@ impl Workflow {
                     file_type,
                     input_path.display()
                 ))? {
-                    self.file_manager.remove(input_path)?;
+                    file_manager::remove_file(input_path)?;
                     tui::show_source_deleted(input_path.to_str().unwrap_or("<invalid>"));
                 }
             }

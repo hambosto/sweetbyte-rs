@@ -7,9 +7,8 @@
 use anyhow::{anyhow, Result};
 
 /// Default block size for padding operations (128 bits / 16 bytes for AES).
-///
 /// This is the standard block size for AES encryption algorithms.
-pub const DEFAULT_PADDING_BLOCK_SIZE: usize = 16;
+pub const BLOCK_SIZE: usize = 16;
 
 /// PKCS#7 padding manager for block cipher operations.
 ///
@@ -19,9 +18,9 @@ pub const DEFAULT_PADDING_BLOCK_SIZE: usize = 16;
 /// # Examples
 ///
 /// ```
-/// use sweetbyte_rs::padding::Padding;
+/// use sweetbyte::padding::Pkcs7Padding;
 ///
-/// let padding = Padding::new(16).unwrap();
+/// let padding = Pkcs7Padding::new(16).unwrap();
 /// let data = b"Hello, World!";
 ///
 /// // Pad the data to align with block size
@@ -32,14 +31,14 @@ pub const DEFAULT_PADDING_BLOCK_SIZE: usize = 16;
 /// let original = padding.unpad(&padded).unwrap();
 /// assert_eq!(data, original.as_slice());
 /// ```
-pub struct Padding {
+pub struct Pkcs7Padding {
     /// The block size in bytes that data should be padded to.
     /// Must be between 1 and 255 to fit in a single byte.
     block_size: usize,
 }
 
-impl Padding {
-    /// Creates a new `Padding` instance with the specified block size.
+impl Pkcs7Padding {
+    /// Creates a new `Pkcs7Padding` instance with the specified block size.
     ///
     /// # Arguments
     ///
@@ -47,7 +46,7 @@ impl Padding {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(Padding)` if the block size is valid, or an error if the block size
+    /// Returns `Ok(Pkcs7Padding)` if the block size is valid, or an error if the block size
     /// is 0 or greater than 255.
     ///
     /// # Errors
@@ -58,13 +57,13 @@ impl Padding {
     /// # Examples
     ///
     /// ```
-    /// use sweetbyte_rs::padding::Padding;
+    /// use sweetbyte::padding::Pkcs7Padding;
     ///
     /// // Valid block size
-    /// let padding = Padding::new(16).unwrap();
+    /// let padding = Pkcs7Padding::new(16).unwrap();
     ///
     /// // Invalid block size (too large)
-    /// assert!(Padding::new(256).is_err());
+    /// assert!(Pkcs7Padding::new(256).is_err());
     /// ```
     pub fn new(block_size: usize) -> Result<Self> {
         // Validate block size is within PKCS#7 limits (1-255)
@@ -94,9 +93,9 @@ impl Padding {
     /// # Examples
     ///
     /// ```
-    /// use sweetbyte_rs::padding::Padding;
+    /// use sweetbyte::padding::Pkcs7Padding;
     ///
-    /// let padding = Padding::new(16).unwrap();
+    /// let padding = Pkcs7Padding::new(16).unwrap();
     /// let data = b"Hello";  // 5 bytes
     ///
     /// let padded = padding.pad(data).unwrap();
@@ -115,7 +114,7 @@ impl Padding {
 
         // Append padding bytes, each with value equal to the number of padding bytes
         // This follows PKCS#7 standard where the padding value indicates padding length
-        padded_data.extend(std::iter::repeat(padding as u8).take(padding));
+        padded_data.extend(std::iter::repeat_n(padding as u8, padding));
 
         Ok(padded_data)
     }
@@ -141,9 +140,9 @@ impl Padding {
     /// # Examples
     ///
     /// ```
-    /// use sweetbyte_rs::padding::Padding;
+    /// use sweetbyte::padding::Pkcs7Padding;
     ///
-    /// let padding = Padding::new(16).unwrap();
+    /// let padding = Pkcs7Padding::new(16).unwrap();
     /// let data = b"Hello";
     ///
     /// let padded = padding.pad(data).unwrap();
@@ -168,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_pad_unpad() {
-        let padding = Padding::new(16).unwrap();
+        let padding = Pkcs7Padding::new(16).unwrap();
         let data = b"Hello, World!";
 
         let padded = padding.pad(data).unwrap();

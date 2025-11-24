@@ -5,20 +5,14 @@ use tokio::io::AsyncWriteExt;
 use tokio::runtime::Runtime;
 
 use crate::crypto;
-use crate::file_manager::FileManager;
+use crate::file_manager;
 use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
 
-pub struct Encryptor<'a> {
-    file_manager: &'a FileManager,
-}
+pub struct Encryptor;
 
-impl<'a> Encryptor<'a> {
-    pub fn new(file_manager: &'a FileManager) -> Self {
-        Self { file_manager }
-    }
-
+impl Encryptor {
     pub fn encrypt(
         &self,
         src_path: &std::path::Path,
@@ -26,9 +20,8 @@ impl<'a> Encryptor<'a> {
         password: &str,
         progress_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
     ) -> Result<()> {
-        // Get original size using FileManager (or just std::fs)
-        // We use FileManager to respect any path logic it might have, though here we just need size.
-        let (_, src_info) = self.file_manager.open_file(src_path)?;
+        // Get original size using file_manager function
+        let (_, src_info) = file_manager::open_file(src_path)?;
         let original_size = src_info.len();
 
         if original_size == 0 {

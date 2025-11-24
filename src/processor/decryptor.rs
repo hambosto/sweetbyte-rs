@@ -1,5 +1,5 @@
 use crate::crypto;
-use crate::file_manager::FileManager;
+use crate::file_manager;
 use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
@@ -10,15 +10,9 @@ use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
 use tokio::runtime::Runtime;
 
-pub struct Decryptor<'a> {
-    file_manager: &'a FileManager,
-}
+pub struct Decryptor;
 
-impl<'a> Decryptor<'a> {
-    pub fn new(file_manager: &'a FileManager) -> Self {
-        Self { file_manager }
-    }
-
+impl Decryptor {
     pub fn decrypt(
         &self,
         src_path: &std::path::Path,
@@ -27,7 +21,7 @@ impl<'a> Decryptor<'a> {
         progress_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
     ) -> Result<()> {
         // Open source file synchronously to read header
-        let (mut src_file_sync, _) = self.file_manager.open_file(src_path)?;
+        let (mut src_file_sync, _) = file_manager::open_file(src_path)?;
 
         // Unmarshal header
         let mut header = Header::new()?;

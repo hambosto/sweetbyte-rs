@@ -1,4 +1,4 @@
-mod padding;
+mod pkcs7;
 
-pub use padding::Padding;
-pub use padding::DEFAULT_PADDING_BLOCK_SIZE;
+pub use pkcs7::Pkcs7Padding;
+pub use pkcs7::BLOCK_SIZE;

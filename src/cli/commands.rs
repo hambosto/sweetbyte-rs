@@ -1,4 +1,4 @@
-use crate::file_manager::FileManager;
+use crate::file_manager;
 use crate::processor::Processor;
 use crate::tui;
 use crate::types::ProcessorMode;
@@ -24,13 +24,12 @@ pub fn handle_encrypt(
         }
     };
 
-    let file_manager = FileManager::new();
-    let processor = Processor::new(FileManager::new());
+    let processor = Processor::new();
 
     let file_path = Path::new(input);
     let dest = output
         .map(|s| s.into())
-        .unwrap_or_else(|| file_manager.get_output_path(file_path, ProcessorMode::Encrypt));
+        .unwrap_or_else(|| file_manager::get_output_path(file_path, ProcessorMode::Encrypt));
 
     println!("Encrypting {} -> {}", file_path.display(), dest.display());
 
@@ -58,7 +57,7 @@ pub fn handle_encrypt(
 
             if should_delete {
                 println!("Deleting source file: {}", file_path.display());
-                if let Err(e) = file_manager.remove(file_path) {
+                if let Err(e) = file_manager::remove_file(file_path) {
                     tui::print_error(&format!("Failed to delete source: {}", e));
                 } else {
                     tui::print_success("Source file deleted successfully");
@@ -88,13 +87,12 @@ pub fn handle_decrypt(
         None => tui::ask_password("Enter password:")?,
     };
 
-    let file_manager = FileManager::new();
-    let processor = Processor::new(FileManager::new());
+    let processor = Processor::new();
 
     let file_path = Path::new(input);
     let dest = output
         .map(|s| s.into())
-        .unwrap_or_else(|| file_manager.get_output_path(file_path, ProcessorMode::Decrypt));
+        .unwrap_or_else(|| file_manager::get_output_path(file_path, ProcessorMode::Decrypt));
 
     println!("Decrypting {} -> {}", file_path.display(), dest.display());
 
@@ -130,7 +128,7 @@ pub fn handle_decrypt(
 
             if should_delete {
                 println!("Deleting source file: {}", file_path.display());
-                if let Err(e) = file_manager.remove(file_path) {
+                if let Err(e) = file_manager::remove_file(file_path) {
                     tui::print_error(&format!("Failed to delete source: {}", e));
                 } else {
                     tui::print_success("Source file deleted successfully");

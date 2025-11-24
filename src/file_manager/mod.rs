@@ -1,88 +1,33 @@
-pub mod config;
+//! File management utilities for SweetByte encryption operations.
+//!
+//! This module provides three focused sub-modules:
+//! - **`operations`**: Core file I/O operations (open_file, remove_file)
+//! - **`validation`**: Path validation and filtering (validate_path, get_output_path, etc.)
+//! - **`discovery`**: File discovery for batch processing (find_eligible_files)
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use sweetbyte::file_manager;
+//! use sweetbyte::types::ProcessorMode;
+//! use std::path::Path;
+//!
+//! // Open a file
+//! let (file, metadata) = file_manager::open_file(Path::new("example.txt"))?;
+//!
+//! // Determine output path for encryption
+//! let output = file_manager::get_output_path(Path::new("doc.pdf"), ProcessorMode::Encrypt);
+//!
+//! // Find all eligible files for encryption
+//! let files = file_manager::find_eligible_files(ProcessorMode::Encrypt)?;
+//! # Ok::<(), anyhow::Error>(())
+//! ```
+
 pub mod discovery;
-pub mod io;
-pub mod path;
+pub mod operations;
+pub mod validation;
 
-use crate::types::ProcessorMode;
-use anyhow::Result;
-use std::fs::{self, File};
-use std::path::{Path, PathBuf};
-
-use config::FileConfig;
-use discovery::Discovery;
-
-/// FileManager handles file system operations including finding eligible files,
-/// managing paths, and performing file I/O.
-///
-/// This struct acts as a facade providing a cohesive API for file operations
-/// needed during encryption and decryption workflows.
-pub struct FileManager {
-    discovery: Discovery,
-}
-
-impl FileManager {
-    /// Creates a new FileManager instance with default configuration.
-    pub fn new() -> Self {
-        Self {
-            discovery: Discovery::new(FileConfig::default()),
-        }
-    }
-
-    /// Finds files eligible for the given processing mode.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if directory traversal fails.
-    pub fn find_eligible_files(&self, mode: ProcessorMode) -> Result<Vec<PathBuf>> {
-        self.discovery.find_eligible_files(mode)
-    }
-
-    /// Determines the output path based on input path and mode.
-    ///
-    /// For encryption, appends the file extension to the input path.
-    /// For decryption, removes the file extension if present.
-    pub fn get_output_path(&self, input_path: &Path, mode: ProcessorMode) -> PathBuf {
-        path::get_output_path(input_path, mode)
-    }
-
-    /// Removes a file if it exists.
-    ///
-    /// This is safe to call even if the file doesn't exist.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file exists but cannot be deleted.
-    pub fn remove(&self, path: &Path) -> Result<()> {
-        io::remove(path)
-    }
-
-    /// Opens a file and returns the file handle and metadata.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be opened or metadata cannot be read.
-    pub fn open_file(&self, path: &Path) -> Result<(File, fs::Metadata)> {
-        io::open_file(path)
-    }
-
-    /// Validates a path for existence or non-existence.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to validate
-    /// * `must_exist` - If true, validates that the path exists and is a non-empty file.
-    ///   If false, validates that the path does NOT exist.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if validation fails.
-    pub fn validate_path(&self, path: &Path, must_exist: bool) -> Result<()> {
-        path::validate_path(path, must_exist)
-    }
-}
-
-impl Default for FileManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Re-export commonly used functions for convenience
+pub use discovery::find_eligible_files;
+pub use operations::{open_file, remove_file};
+pub use validation::{get_output_path, validate_path};

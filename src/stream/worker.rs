@@ -3,14 +3,14 @@ use anyhow::{anyhow, Result};
 use crate::compression::{Compression, Level};
 use crate::crypto::{AesCipher, ChaCha20Cipher};
 use crate::encoding::Encoding;
-use crate::padding::{Padding, DEFAULT_PADDING_BLOCK_SIZE};
+use crate::padding::Pkcs7Padding;
 use crate::types::{Processing, Task, TaskResult};
 
 use crate::stream::pool::BufferPool;
 
 pub struct ChunkWorker {
     compression: Compression,
-    padding: Padding,
+    padding: Pkcs7Padding,
     aes_cipher: AesCipher,
     chacha_cipher: ChaCha20Cipher,
     encoding: Encoding,
@@ -26,7 +26,7 @@ impl ChunkWorker {
 
         Ok(Self {
             compression: Compression::new(Level::BestSpeed)?,
-            padding: Padding::new(DEFAULT_PADDING_BLOCK_SIZE)?,
+            padding: Pkcs7Padding::new(crate::padding::BLOCK_SIZE)?,
             aes_cipher: AesCipher::new(&key[0..32])?,
             chacha_cipher: ChaCha20Cipher::new(&key[32..64])?,
             encoding: Encoding::new(crate::encoding::DATA_SHARDS, crate::encoding::PARITY_SHARDS)?,
