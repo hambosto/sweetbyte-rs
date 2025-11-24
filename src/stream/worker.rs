@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::compression::{Compression, Level};
-use crate::crypto::cipher::{AesCipher, ChaCha20Cipher};
+use crate::crypto::{Aes, ChaCha, Cipher};
 use crate::encoding::ErasureEncoder;
 use crate::padding::Pkcs7Padding;
 use crate::types::{Processing, Task, TaskResult};
@@ -11,8 +11,8 @@ use crate::stream::pool::BufferPool;
 pub struct ChunkWorker {
     compression: Compression,
     padding: Pkcs7Padding,
-    aes_cipher: AesCipher,
-    chacha_cipher: ChaCha20Cipher,
+    aes: Aes,
+    chacha: ChaCha,
     encoding: ErasureEncoder,
     mode: Processing,
     pool: BufferPool,
@@ -27,8 +27,8 @@ impl ChunkWorker {
         Ok(Self {
             compression: Compression::new(Level::BestSpeed),
             padding: Pkcs7Padding::new(crate::padding::BLOCK_SIZE)?,
-            aes_cipher: AesCipher::new(&key[0..32])?,
-            chacha_cipher: ChaCha20Cipher::new(&key[32..64])?,
+            aes: Aes::new(&key[0..32])?,
+            chacha: ChaCha::new(&key[32..64])?,
             encoding: ErasureEncoder::new(
                 crate::encoding::DATA_SHARDS,
                 crate::encoding::PARITY_SHARDS,
@@ -73,10 +73,10 @@ impl ChunkWorker {
         let padded = self.padding.pad(&compressed)?;
 
         // 3. Encrypt with AES-GCM
-        let aes_encrypted = self.aes_cipher.encrypt(&padded)?;
+        let aes_encrypted = self.aes.encrypt(&padded)?;
 
         // 4. Encrypt with XChaCha20-Poly1305
-        let chacha_encrypted = self.chacha_cipher.encrypt(&aes_encrypted)?;
+        let chacha_encrypted = self.chacha.encrypt(&aes_encrypted)?;
 
         // 5. Reed-Solomon encoding
         let encoded = self.encoding.encode(&chacha_encrypted)?;
@@ -89,10 +89,10 @@ impl ChunkWorker {
         let decoded = self.encoding.decode(data)?;
 
         // 2. Decrypt with XChaCha20-Poly1305
-        let chacha_decrypted = self.chacha_cipher.decrypt(&decoded)?;
+        let chacha_decrypted = self.chacha.decrypt(&decoded)?;
 
         // 3. Decrypt with AES-GCM
-        let aes_decrypted = self.aes_cipher.decrypt(&chacha_decrypted)?;
+        let aes_decrypted = self.aes.decrypt(&chacha_decrypted)?;
 
         // 4. Unpad
         let unpadded = self.padding.unpad(&aes_decrypted)?;

@@ -1,4 +1,4 @@
-use crate::crypto;
+use crate::crypto::derive_key;
 use crate::file;
 use crate::header;
 use crate::header::Header;
@@ -35,7 +35,7 @@ pub fn decrypt_file(
     let salt = hdr.salt()?;
 
     // Derive key
-    let key = crypto::kdf::hash(password.as_bytes(), &salt)?;
+    let key = derive_key(password.as_bytes(), &salt)?;
 
     // Verify header
     header::verification::verify_header(&hdr, &key)?;

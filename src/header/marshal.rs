@@ -116,10 +116,10 @@ pub fn unmarshal(header: &mut Header, reader: &mut dyn Read) -> Result<()> {
 
 fn validate_inputs(header: &Header, salt: &[u8], key: &[u8]) -> Result<()> {
     header.validate()?;
-    if salt.len() != crate::crypto::kdf::ARGON_SALT_LEN {
+    if salt.len() != crate::crypto::ARGON_SALT_LEN {
         return Err(anyhow!(
             "invalid salt size: expected {}, got {}",
-            crate::crypto::kdf::ARGON_SALT_LEN,
+            crate::crypto::ARGON_SALT_LEN,
             salt.len()
         ));
     }
@@ -293,8 +293,7 @@ mod tests {
         header.set_original_size(12345);
         header.set_protected(true);
 
-        let salt =
-            crate::crypto::random::get_random_bytes(crate::crypto::kdf::ARGON_SALT_LEN).unwrap();
+        let salt = crate::crypto::random_bytes(crate::crypto::ARGON_SALT_LEN).unwrap();
         let key = vec![0u8; 64];
 
         let marshalled = marshal(&header, &salt, &key).unwrap();
@@ -309,8 +308,7 @@ mod tests {
         header.set_original_size(12345);
         header.set_protected(true);
 
-        let salt =
-            crate::crypto::random::get_random_bytes(crate::crypto::kdf::ARGON_SALT_LEN).unwrap();
+        let salt = crate::crypto::random_bytes(crate::crypto::ARGON_SALT_LEN).unwrap();
         let key = vec![0u8; 64];
 
         // Marshal

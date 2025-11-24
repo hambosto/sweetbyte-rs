@@ -4,7 +4,7 @@ use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::runtime::Runtime;
 
-use crate::crypto::{kdf, random};
+use crate::crypto::{derive_key, random_bytes, ARGON_SALT_LEN};
 use crate::file;
 use crate::header;
 use crate::header::Header;
@@ -27,10 +27,10 @@ pub fn encrypt_file(
     }
 
     // Generate salt
-    let salt = random::get_random_bytes(kdf::ARGON_SALT_LEN)?;
+    let salt = random_bytes(ARGON_SALT_LEN)?;
 
     // Derive key
-    let key = kdf::hash(password.as_bytes(), &salt)?;
+    let key = derive_key(password.as_bytes(), &salt)?;
 
     // Create header
     let mut hdr = Header::new()?;
