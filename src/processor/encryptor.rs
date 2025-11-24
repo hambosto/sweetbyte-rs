@@ -21,8 +21,8 @@ impl<'a> Encryptor<'a> {
 
     pub fn encrypt(
         &self,
-        src_path: &str,
-        dest_path: &str,
+        src_path: &std::path::Path,
+        dest_path: &std::path::Path,
         password: &str,
         progress_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
     ) -> Result<()> {

@@ -60,12 +60,11 @@ impl ReorderBuffer {
         indices.sort_unstable();
 
         // Extract chunks in order
-        let chunks = indices
+
+        indices
             .into_iter()
             .filter_map(|idx| self.chunks.remove(&idx))
-            .collect();
-
-        chunks
+            .collect()
     }
 }
 

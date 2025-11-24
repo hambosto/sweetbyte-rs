@@ -90,10 +90,9 @@ impl<'a> Serializer<'a> {
         let mut lengths_header = Vec::with_capacity(16);
 
         for section_type in &SECTION_ORDER {
-            let sec = length_sections.get(section_type).expect(&format!(
-                "missing encoded length section for {:?}",
-                section_type
-            ));
+            let sec = length_sections
+                .get(section_type)
+                .unwrap_or_else(|| panic!("missing encoded length section for {:?}", section_type));
             lengths_header.extend_from_slice(&sec.length.to_bytes());
         }
 
@@ -110,10 +109,9 @@ impl<'a> Serializer<'a> {
 
         // Append encoded length prefixes
         for section_type in &SECTION_ORDER {
-            let sec = length_sections.get(section_type).expect(&format!(
-                "missing encoded length prefix for {:?}",
-                section_type
-            ));
+            let sec = length_sections
+                .get(section_type)
+                .unwrap_or_else(|| panic!("missing encoded length prefix for {:?}", section_type));
             result.extend_from_slice(&sec.data);
         }
 
@@ -121,7 +119,7 @@ impl<'a> Serializer<'a> {
         for section_type in &SECTION_ORDER {
             let sec = sections
                 .get(section_type)
-                .expect(&format!("missing encoded section for {:?}", section_type));
+                .unwrap_or_else(|| panic!("missing encoded section for {:?}", section_type));
             result.extend_from_slice(&sec.data);
         }
 

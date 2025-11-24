@@ -20,8 +20,8 @@ impl Processor {
 
     pub fn encrypt(
         &self,
-        src_path: &str,
-        dest_path: &str,
+        src_path: &std::path::Path,
+        dest_path: &std::path::Path,
         password: &str,
         progress_callback: Option<std::sync::Arc<dyn Fn(u64) + Send + Sync>>,
     ) -> Result<()> {
@@ -31,8 +31,8 @@ impl Processor {
 
     pub fn decrypt(
         &self,
-        src_path: &str,
-        dest_path: &str,
+        src_path: &std::path::Path,
+        dest_path: &std::path::Path,
         password: &str,
         progress_callback: Option<std::sync::Arc<dyn Fn(u64) + Send + Sync>>,
     ) -> Result<()> {

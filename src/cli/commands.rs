@@ -3,6 +3,7 @@ use crate::processor::Processor;
 use crate::tui;
 use crate::types::ProcessorMode;
 use anyhow::Result;
+use std::path::Path;
 
 pub fn handle_encrypt(
     input: &str,
@@ -48,12 +49,12 @@ pub fn handle_encrypt(
     // So we should NOT use find_eligible_files here if we want strict alignment.
     // We should process `input` directly.
 
-    let file_path = input;
+    let file_path = Path::new(input);
     let dest = output
-        .clone()
+        .map(|s| s.into())
         .unwrap_or_else(|| file_manager.get_output_path(file_path, ProcessorMode::Encrypt));
 
-    println!("Encrypting {} -> {}", file_path, dest);
+    println!("Encrypting {} -> {}", file_path.display(), dest.display());
 
     let file_size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
     let pb = tui::Progress::new(file_size);
@@ -68,16 +69,17 @@ pub fn handle_encrypt(
     match result {
         Ok(_) => {
             pb.finish_with_message("Done");
-            tui::print_success(&format!("File encrypted successfully: {}", dest));
+            tui::print_success(&format!("File encrypted successfully: {}", dest.display()));
 
             let should_delete = if delete {
                 true
             } else {
-                tui::ask_confirm(&format!("Delete original file '{}'?", file_path)).unwrap_or(false)
+                tui::ask_confirm(&format!("Delete original file '{}'?", file_path.display()))
+                    .unwrap_or(false)
             };
 
             if should_delete {
-                println!("Deleting source file: {}", file_path);
+                println!("Deleting source file: {}", file_path.display());
                 if let Err(e) = file_manager.remove(file_path) {
                     tui::print_error(&format!("Failed to delete source: {}", e));
                 } else {
@@ -111,12 +113,12 @@ pub fn handle_decrypt(
     let file_manager = FileManager::new();
     let processor = Processor::new(FileManager::new());
 
-    let file_path = input;
+    let file_path = Path::new(input);
     let dest = output
-        .clone()
+        .map(|s| s.into())
         .unwrap_or_else(|| file_manager.get_output_path(file_path, ProcessorMode::Decrypt));
 
-    println!("Decrypting {} -> {}", file_path, dest);
+    println!("Decrypting {} -> {}", file_path.display(), dest.display());
 
     // Read header to get original file size for accurate progress
     let original_size = {
@@ -139,16 +141,17 @@ pub fn handle_decrypt(
     match result {
         Ok(_) => {
             pb.finish_with_message("Done");
-            tui::print_success(&format!("File decrypted successfully: {}", dest));
+            tui::print_success(&format!("File decrypted successfully: {}", dest.display()));
 
             let should_delete = if delete {
                 true
             } else {
-                tui::ask_confirm(&format!("Delete original file '{}'?", file_path)).unwrap_or(false)
+                tui::ask_confirm(&format!("Delete original file '{}'?", file_path.display()))
+                    .unwrap_or(false)
             };
 
             if should_delete {
-                println!("Deleting source file: {}", file_path);
+                println!("Deleting source file: {}", file_path.display());
                 if let Err(e) = file_manager.remove(file_path) {
                     tui::print_error(&format!("Failed to delete source: {}", e));
                 } else {

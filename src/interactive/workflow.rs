@@ -3,10 +3,17 @@ use crate::processor::Processor;
 use crate::tui;
 use crate::types::ProcessorMode;
 use anyhow::{anyhow, Result};
+use std::path::Path;
 
 pub struct Workflow {
     file_manager: FileManager,
     processor: Processor,
+}
+
+impl Default for Workflow {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Workflow {
@@ -42,13 +49,13 @@ impl Workflow {
         let selected_file = tui::choose_file(&eligible_files)?;
 
         // 6. Show Processing Info
-        tui::show_processing_info(mode, &selected_file);
+        tui::show_processing_info(mode, selected_file.to_str().unwrap_or("<invalid>"));
 
         // 7. Process File
         self.process_file(&selected_file, mode)
     }
 
-    fn process_file(&self, input_path: &str, mode: ProcessorMode) -> Result<()> {
+    fn process_file(&self, input_path: &Path, mode: ProcessorMode) -> Result<()> {
         use crate::header::Header;
         use std::fs::File;
 
@@ -58,10 +65,16 @@ impl Workflow {
         self.file_manager.validate_path(input_path, true)?;
 
         // Check output overwrite
-        if let Err(_) = self.file_manager.validate_path(&output_path, false) {
-            if !tui::ask_confirm(&format!("Output file '{}' exists. Overwrite?", output_path))? {
-                return Err(anyhow!("operation canceled by user"));
-            }
+        if self
+            .file_manager
+            .validate_path(&output_path, false)
+            .is_err()
+            && !tui::ask_confirm(&format!(
+                "Output file '{}' exists. Overwrite?",
+                output_path.display()
+            ))?
+        {
+            return Err(anyhow!("operation canceled by user"));
         }
 
         // Get Password
@@ -111,7 +124,7 @@ impl Workflow {
 
         match result {
             Ok(_) => {
-                tui::show_success_info(mode, &output_path);
+                tui::show_success_info(mode, output_path.to_str().unwrap_or("<invalid>"));
 
                 // Confirm Removal
                 let file_type = match mode {
@@ -119,13 +132,21 @@ impl Workflow {
                     ProcessorMode::Decrypt => "encrypted",
                 };
 
-                if tui::ask_confirm(&format!("Delete {} file '{}'?", file_type, input_path))? {
+                if tui::ask_confirm(&format!(
+                    "Delete {} file '{}'?",
+                    file_type,
+                    input_path.display()
+                ))? {
                     self.file_manager.remove(input_path)?;
-                    tui::show_source_deleted(input_path);
+                    tui::show_source_deleted(input_path.to_str().unwrap_or("<invalid>"));
                 }
             }
             Err(e) => {
-                tui::print_error(&format!("Failed to process {}: {}", input_path, e));
+                tui::print_error(&format!(
+                    "Failed to process {}: {}",
+                    input_path.display(),
+                    e
+                ));
                 return Err(e);
             }
         }

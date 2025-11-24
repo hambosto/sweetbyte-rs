@@ -35,7 +35,7 @@ impl Shards {
     /// Remaining shards are zero-filled for parity generation.
     pub fn split(&self, data: &[u8]) -> Vec<Vec<u8>> {
         // Calculate shard size (rounded up to fit all data)
-        let shard_size = (data.len() + self.data_shards - 1) / self.data_shards;
+        let shard_size = data.len().div_ceil(self.data_shards);
         let mut shards = vec![vec![0u8; shard_size]; self.total_shards];
 
         // Distribute data bytes across shards
