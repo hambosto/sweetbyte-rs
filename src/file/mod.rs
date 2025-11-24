@@ -29,5 +29,5 @@ pub mod validation;
 
 // Re-export commonly used functions for convenience
 pub use discovery::find_eligible_files;
-pub use operations::{open_file, remove_file};
+pub use operations::{get_file_size, open_file, remove_file};
 pub use validation::{get_output_path, validate_path};

@@ -7,6 +7,30 @@ use anyhow::{Context, Result};
 use std::fs::{self, File};
 use std::path::Path;
 
+use crate::header::{self, Header};
+use crate::types::ProcessorMode;
+
+/// Gets the file size for progress reporting based on the mode.
+///
+/// For encryption, returns the physical file size.
+/// For decryption, reads the header to get the original file size.
+pub fn get_file_size(path: &Path, mode: ProcessorMode) -> Result<u64> {
+    match mode {
+        ProcessorMode::Encrypt => {
+            let metadata = fs::metadata(path)
+                .with_context(|| format!("failed to read metadata for {}", path.display()))?;
+            Ok(metadata.len())
+        }
+        ProcessorMode::Decrypt => {
+            let mut file = File::open(path)
+                .with_context(|| format!("failed to open file {}", path.display()))?;
+            let mut header = Header::new()?;
+            header::marshal::unmarshal(&mut header, &mut file)?;
+            Ok(header.get_original_size()? as u64)
+        }
+    }
+}
+
 /// Opens a file and returns the file handle and metadata.
 ///
 /// # Arguments
