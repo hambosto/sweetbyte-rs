@@ -3,7 +3,7 @@
 //! This module provides functionality to find files eligible for processing
 //! based on the operation mode (encrypt/decrypt) and configured exclusion rules.
 
-use crate::file_manager::validation;
+use crate::file::validation;
 use crate::types::ProcessorMode;
 use anyhow::Result;
 use std::path::PathBuf;
@@ -33,7 +33,7 @@ use walkdir::WalkDir;
 /// # Examples
 ///
 /// ```no_run
-/// use sweetbyte::file_manager::discovery::find_eligible_files;
+/// use sweetbyte::file::discovery::find_eligible_files;
 /// use sweetbyte::types::ProcessorMode;
 ///
 /// // Find all files that can be encrypted

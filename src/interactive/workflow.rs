@@ -1,4 +1,4 @@
-use crate::file_manager;
+use crate::file;
 use crate::processor::Processor;
 use crate::tui;
 use crate::types::ProcessorMode;
@@ -34,7 +34,7 @@ impl Workflow {
         let mode = tui::ask_processing_mode()?;
 
         // 2. Find Eligible Files
-        let eligible_files = file_manager::find_eligible_files(mode)?;
+        let eligible_files = file::find_eligible_files(mode)?;
         if eligible_files.is_empty() {
             println!("No eligible files found for {:?} operation", mode);
             return Ok(());
@@ -54,13 +54,13 @@ impl Workflow {
         use crate::header::Header;
         use std::fs::File;
 
-        let output_path = file_manager::get_output_path(input_path, mode);
+        let output_path = file::get_output_path(input_path, mode);
 
         // Validate paths
-        file_manager::validate_path(input_path, true)?;
+        file::validate_path(input_path, true)?;
 
         // Check output overwrite
-        if file_manager::validate_path(&output_path, false).is_err()
+        if file::validate_path(&output_path, false).is_err()
             && !tui::ask_confirm(&format!(
                 "Output file '{}' exists. Overwrite?",
                 output_path.display()
@@ -129,7 +129,7 @@ impl Workflow {
                     file_type,
                     input_path.display()
                 ))? {
-                    file_manager::remove_file(input_path)?;
+                    file::remove_file(input_path)?;
                     tui::show_source_deleted(input_path.to_str().unwrap_or("<invalid>"));
                 }
             }

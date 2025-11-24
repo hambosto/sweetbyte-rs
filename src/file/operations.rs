@@ -25,7 +25,7 @@ use std::path::Path;
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use sweetbyte::file_manager::operations::open_file;
+/// use sweetbyte::file::operations::open_file;
 ///
 /// let (file, metadata) = open_file(Path::new("example.txt"))?;
 /// println!("File size: {} bytes", metadata.len());
@@ -61,7 +61,7 @@ pub fn open_file(path: &Path) -> Result<(File, fs::Metadata)> {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use sweetbyte::file_manager::operations::remove_file;
+/// use sweetbyte::file::operations::remove_file;
 ///
 /// // Safe to call even if file doesn't exist
 /// remove_file(Path::new("temp.txt"))?;

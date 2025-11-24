@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use sweetbyte::file_manager::validation::validate_path;
+/// use sweetbyte::file::validation::validate_path;
 ///
 /// // Validate that input file exists and is non-empty
 /// validate_path(Path::new("input.txt"), true)?;
@@ -83,7 +83,7 @@ pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use sweetbyte::file_manager::validation::get_output_path;
+/// use sweetbyte::file::validation::get_output_path;
 /// use sweetbyte::types::ProcessorMode;
 ///
 /// let input = Path::new("document.pdf");
@@ -123,7 +123,7 @@ pub fn get_output_path(input_path: &Path, mode: ProcessorMode) -> PathBuf {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use sweetbyte::file_manager::validation::is_encrypted_file;
+/// use sweetbyte::file::validation::is_encrypted_file;
 ///
 /// assert!(is_encrypted_file(Path::new("document.pdf.enc")));
 /// assert!(!is_encrypted_file(Path::new("document.pdf")));
@@ -152,7 +152,7 @@ pub fn is_encrypted_file(path: &Path) -> bool {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use sweetbyte::file_manager::validation::is_excluded_dir;
+/// use sweetbyte::file::validation::is_excluded_dir;
 ///
 /// assert!(is_excluded_dir(Path::new(".git/objects")));
 /// assert!(is_excluded_dir(Path::new("target/debug/deps")));
@@ -190,7 +190,7 @@ pub fn is_excluded_dir(path: &Path) -> bool {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// use sweetbyte::file_manager::validation::is_excluded_ext;
+/// use sweetbyte::file::validation::is_excluded_ext;
 ///
 /// assert!(is_excluded_ext(Path::new("main.rs")));
 /// assert!(is_excluded_ext(Path::new("go.mod")));

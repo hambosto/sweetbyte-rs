@@ -3,7 +3,7 @@ pub mod compression;
 pub mod config;
 pub mod crypto;
 pub mod encoding;
-pub mod file_manager;
+pub mod file;
 pub mod header;
 pub mod interactive;
 pub mod padding;

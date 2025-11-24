@@ -8,18 +8,18 @@
 //! # Examples
 //!
 //! ```no_run
-//! use sweetbyte::file_manager;
+//! use sweetbyte::file;
 //! use sweetbyte::types::ProcessorMode;
 //! use std::path::Path;
 //!
 //! // Open a file
-//! let (file, metadata) = file_manager::open_file(Path::new("example.txt"))?;
+//! let (file, metadata) = file::open_file(Path::new("example.txt"))?;
 //!
 //! // Determine output path for encryption
-//! let output = file_manager::get_output_path(Path::new("doc.pdf"), ProcessorMode::Encrypt);
+//! let output = file::get_output_path(Path::new("doc.pdf"), ProcessorMode::Encrypt);
 //!
 //! // Find all eligible files for encryption
-//! let files = file_manager::find_eligible_files(ProcessorMode::Encrypt)?;
+//! let files = file::find_eligible_files(ProcessorMode::Encrypt)?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 

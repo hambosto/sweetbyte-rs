@@ -5,7 +5,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::runtime::Runtime;
 
 use crate::crypto;
-use crate::file_manager;
+use crate::file;
 use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
@@ -20,8 +20,8 @@ impl Encryptor {
         password: &str,
         progress_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
     ) -> Result<()> {
-        // Get original size using file_manager function
-        let (_, src_info) = file_manager::open_file(src_path)?;
+        // Get original size using file function
+        let (_, src_info) = file::open_file(src_path)?;
         let original_size = src_info.len();
 
         if original_size == 0 {

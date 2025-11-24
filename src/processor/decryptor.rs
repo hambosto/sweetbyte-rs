@@ -1,5 +1,5 @@
 use crate::crypto;
-use crate::file_manager;
+use crate::file;
 use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
@@ -21,7 +21,7 @@ impl Decryptor {
         progress_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
     ) -> Result<()> {
         // Open source file synchronously to read header
-        let (mut src_file_sync, _) = file_manager::open_file(src_path)?;
+        let (mut src_file_sync, _) = file::open_file(src_path)?;
 
         // Unmarshal header
         let mut header = Header::new()?;
