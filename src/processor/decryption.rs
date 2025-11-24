@@ -6,7 +6,6 @@ use crate::stream::Pipeline;
 use crate::types::Processing;
 use anyhow::{Result, anyhow};
 use std::io::Seek;
-use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncSeekExt;
 use tokio::runtime::Runtime;
@@ -16,7 +15,6 @@ pub fn decrypt_file(
     src_path: &std::path::Path,
     dest_path: &std::path::Path,
     password: &str,
-    progress_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
 ) -> Result<()> {
     // Open source file synchronously to read header
     let (mut src_file_sync, _) = file::open_file(src_path)?;
@@ -45,6 +43,9 @@ pub fn decrypt_file(
         return Err(anyhow!("file is not protected"));
     }
 
+    // Get original size from header for progress tracking
+    let original_size = hdr.original_size;
+
     // Create runtime for async execution
     let rt = Runtime::new()?;
 
@@ -60,9 +61,7 @@ pub fn decrypt_file(
 
         // Process file content
         let pipeline = Pipeline::new(&key, Processing::Decryption)?;
-        pipeline
-            .process(src_file, dest_file, progress_callback)
-            .await?;
+        pipeline.process(src_file, dest_file, original_size).await?;
 
         Ok(())
     })

@@ -2,7 +2,7 @@
 ///
 /// A `Task` contains a chunk of data and its sequence index.
 /// It is passed to workers for parallel processing.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Task {
     /// The raw data chunk to be processed.
     pub data: Vec<u8>,

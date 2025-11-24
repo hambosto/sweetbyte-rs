@@ -1,5 +1,4 @@
 use anyhow::{Result, anyhow};
-use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::runtime::Runtime;
@@ -16,7 +15,6 @@ pub fn encrypt_file(
     src_path: &std::path::Path,
     dest_path: &std::path::Path,
     password: &str,
-    progress_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
 ) -> Result<()> {
     // Get original size using file module function
     let (_, src_info) = file::open_file(src_path)?;
@@ -55,9 +53,7 @@ pub fn encrypt_file(
 
         // Process file content
         let pipeline = Pipeline::new(&key, Processing::Encryption)?;
-        pipeline
-            .process(src_file, dest_file, progress_callback)
-            .await?;
+        pipeline.process(src_file, dest_file, original_size).await?;
 
         Ok(())
     })

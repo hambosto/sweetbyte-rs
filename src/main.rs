@@ -12,7 +12,6 @@ pub mod types;
 pub mod utils;
 
 use anyhow::{Result, anyhow};
-use std::sync::Arc;
 use types::ProcessorMode;
 
 fn main() -> Result<()> {
@@ -66,25 +65,16 @@ fn main() -> Result<()> {
     // 9. Show info
     tui::show_processing_info(mode, input_path.to_str().unwrap_or("?"));
 
-    // 10. Progress bar
-    let size = file::get_file_size(&input_path, mode)?;
-    let pb = tui::Progress::new(size);
-    let callback: Option<Arc<dyn Fn(u64) + Send + Sync>> = {
-        let pb = pb.clone();
-        Some(Arc::new(move |bytes| pb.inc(bytes)))
-    };
-
-    // 11. Process
+    // 10. Process
     match mode {
         ProcessorMode::Encrypt => {
-            processor::encrypt_file(&input_path, &output_path, &password, callback)?;
+            processor::encrypt_file(&input_path, &output_path, &password)?;
         }
         ProcessorMode::Decrypt => {
-            processor::decrypt_file(&input_path, &output_path, &password, callback)?;
+            processor::decrypt_file(&input_path, &output_path, &password)?;
         }
     }
 
-    pb.finish_with_message("Done");
     tui::show_success_info(mode, output_path.to_str().unwrap_or("?"));
 
     // 12. Delete original

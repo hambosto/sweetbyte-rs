@@ -2,32 +2,32 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 /// Progress bar wrapper for tracking operation progress.
 #[derive(Clone)]
-pub struct Progress {
-    pb: ProgressBar,
+pub struct Bar {
+    bar: ProgressBar,
 }
 
-impl Progress {
+impl Bar {
     /// Creates a new progress bar with the given total size.
     pub fn new(total_size: u64) -> Self {
-        let pb = ProgressBar::new(total_size);
-        pb.set_style(
+        let bar = ProgressBar::new(total_size);
+        bar.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.cyan} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({percent}%) | {bytes_per_sec} | ETA: {eta}")
                 .unwrap()
                 .progress_chars("━━╸")
                 .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
         );
-        pb.set_message("Processing");
-        Self { pb }
+        bar.set_message("Processing");
+        Bar { bar }
     }
 
     /// Increments the progress bar by the given delta.
-    pub fn inc(&self, delta: u64) {
-        self.pb.inc(delta);
+    pub fn add(&self, size: u64) {
+        self.bar.inc(size)
     }
 
     /// Finishes the progress bar with a message.
-    pub fn finish_with_message(&self, msg: &str) {
-        self.pb.finish_with_message(msg.to_string());
+    pub fn finish(&self) {
+        self.bar.finish_with_message("Done");
     }
 }
