@@ -4,7 +4,7 @@ use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::runtime::Runtime;
 
-use crate::crypto;
+use crate::crypto::{kdf, random};
 use crate::file;
 use crate::header;
 use crate::header::Header;
@@ -30,10 +30,10 @@ impl Encryptor {
         }
 
         // Generate salt
-        let salt = crypto::get_random_bytes(crypto::ARGON_SALT_LEN)?;
+        let salt = random::get_random_bytes(kdf::ARGON_SALT_LEN)?;
 
         // Derive key
-        let key = crypto::hash(password.as_bytes(), &salt)?;
+        let key = kdf::hash(password.as_bytes(), &salt)?;
 
         // Create header
         let mut hdr = Header::new()?;

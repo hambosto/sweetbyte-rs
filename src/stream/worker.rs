@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::compression::{Compression, Level};
-use crate::crypto::{AesCipher, ChaCha20Cipher};
+use crate::crypto::cipher::{AesCipher, ChaCha20Cipher};
 use crate::encoding::ErasureEncoder;
 use crate::padding::Pkcs7Padding;
 use crate::types::{Processing, Task, TaskResult};
