@@ -17,43 +17,40 @@ const BUFFER_MULTIPLIER: usize = 2;
 
 /// High-performance stream processor using a concurrent pipeline architecture.
 ///
-/// The `Pipeline` orchestrates the entire streaming process. It manages:
-/// -   A pool of worker threads for CPU-bound tasks (encryption/decryption).
-/// -   Async I/O for reading and writing.
-/// -   Flow control to prevent memory exhaustion.
-/// -   Progress reporting.
+/// The `Pipeline` orchestrates the entire streaming process, managing:
+/// - A pool of worker threads for CPU-bound tasks (encryption/decryption).
+/// - Async I/O for reading and writing operations.
+/// - Flow control to prevent memory exhaustion when handling large streams.
+/// - Optional progress reporting during the processing.
 ///
 /// # Concurrency Model
-///
-/// The pipeline uses a semaphore to limit the number of active chunks in flight.
-/// This ensures that we don't read the entire file into memory if the writer is slow.
-///
-/// Data flows as follows:
-/// `Reader -> [Channel] -> Worker (CPU) -> [Channel] -> Writer`
+/// The pipeline utilizes a semaphore to limit the number of active chunks in flight at a given time.
+/// This ensures we do not overwhelm memory by reading too many chunks while the writer is processing them.
+/// The flow of data follows this sequence: `Reader -> [Channel] -> Worker (CPU) -> [Channel] -> Writer`.
 #[derive(Clone)]
 pub struct Pipeline {
-    worker: Arc<ChunkWorker>,
-    mode: Processing,
-    concurrency: usize,
-    pool: BufferPool,
+    worker: Arc<ChunkWorker>, // Worker for processing chunks (encryption, decryption)
+    mode: Processing,         // Mode for processing (Encryption/Decryption)
+    concurrency: usize,       // Number of concurrent tasks (usually CPU threads)
+    pool: BufferPool,         // Pool for buffering chunks
 }
 
 impl Pipeline {
     /// Creates a new stream processor with the given key and processing mode.
     ///
+    /// This method initializes the pipeline with a pool of worker threads and sets up the required buffers.
+    ///
     /// # Arguments
     ///
-    /// * `key` - The 64-byte key (32 bytes AES + 32 bytes ChaCha20).
-    /// * `mode` - The processing mode (Encryption or Decryption).
+    /// * `key` - The 64-byte key used for encryption or decryption (32 bytes for AES and 32 bytes for ChaCha20).
+    /// * `mode` - The processing mode, either `Encryption` or `Decryption`.
     ///
     /// # Returns
     ///
-    /// Returns a new `Pipeline` instance or an error if initialization fails.
+    /// Returns a new `Pipeline` instance, or an error if initialization fails.
     pub fn new(key: &[u8], mode: Processing) -> Result<Self> {
-        let concurrency = num_cpus::get();
-        // Pool capacity: enough for reader, writer, and in-flight chunks.
-        // concurrency * BUFFER_MULTIPLIER is the channel size.
-        // We probably want a bit more for the pool to avoid starvation.
+        let concurrency = num_cpus::get(); // Get the number of CPU cores
+        // Calculate pool capacity: enough for reader, writer, and in-flight chunks.
         let pool_capacity = concurrency * BUFFER_MULTIPLIER * 3;
         let pool = BufferPool::new(pool_capacity, CHUNK_SIZE);
 
@@ -67,13 +64,17 @@ impl Pipeline {
 
     /// Process data from reader to writer with optional progress callback.
     ///
-    /// This method runs the pipeline until completion or error.
+    /// This method processes the data through the pipeline, performing reading, chunk processing, and writing.
     ///
     /// # Arguments
     ///
-    /// * `reader` - The input stream (AsyncRead).
-    /// * `writer` - The output stream (AsyncWrite).
-    /// * `progress_callback` - Optional callback for progress updates (bytes processed).
+    /// * `reader` - The input stream to read data from (must implement `AsyncRead`).
+    /// * `writer` - The output stream to write data to (must implement `AsyncWrite`).
+    /// * `progress_callback` - Optional callback function to report progress (in bytes processed).
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure of the processing.
     pub async fn process<R, W>(
         &self,
         mut reader: R,
@@ -86,13 +87,11 @@ impl Pipeline {
     {
         let chunk_reader = StreamReader::new(self.mode, self.pool.clone());
 
-        // Channel for sending results to the writer
-        // Reduced buffer size with minimum to balance memory usage and throughput
-        let buffer_size = (self.concurrency * BUFFER_MULTIPLIER).max(8);
+        // Channel for sending results to the writer (with flow control)
+        let buffer_size = (self.concurrency * BUFFER_MULTIPLIER).max(8); // Ensure minimum buffer size
         let (tx, mut rx) = mpsc::channel::<crate::types::TaskResult>(buffer_size);
 
-        // Spawn Writer Task
-        // The writer runs in a separate async task to handle I/O concurrently with processing.
+        // Spawn a writer task to handle the async writing of processed chunks
         let mode = self.mode;
         let pool = self.pool.clone();
         let writer_handle = tokio::spawn(async move {
@@ -100,7 +99,7 @@ impl Pipeline {
 
             while let Some(result) = rx.recv().await {
                 if let Some(err) = result.err {
-                    return Err(err);
+                    return Err(err); // Return early if there's an error in processing
                 }
 
                 // Write chunk (handles reordering internally)
@@ -108,60 +107,57 @@ impl Pipeline {
                     .write_chunk(&mut writer, result.index, result.data)
                     .await?;
 
-                // Report progress
+                // Report progress if a callback is provided
                 if let Some(ref cb) = progress_callback {
                     cb(result.size as u64);
                 }
             }
 
-            // Flush any remaining buffered chunks
+            // Ensure all remaining buffered chunks are written
             chunk_writer.flush(&mut writer).await?;
             Ok::<_, anyhow::Error>(())
         });
 
-        // Reader Loop & Worker Spawning
-        let mut join_set = JoinSet::new();
-        let semaphore = Arc::new(Semaphore::new(self.concurrency));
+        // Reader Loop & Worker Task Spawning
+        let mut join_set = JoinSet::new(); // For managing multiple async tasks
+        let semaphore = Arc::new(Semaphore::new(self.concurrency)); // Control concurrency with a semaphore
         let mut index = 0u64;
 
         loop {
-            // Acquire permit to limit concurrency
-            // Try fast path first to avoid async overhead when under limit
+            // Acquire a permit to control concurrency
             let permit = match semaphore.clone().try_acquire_owned() {
                 Ok(permit) => permit,
                 Err(_) => {
-                    // Slow path: wait for permit
+                    // If the semaphore is full, wait until a permit becomes available
                     semaphore.clone().acquire_owned().await?
                 }
             };
 
-            // Read next chunk
+            // Read the next chunk from the input stream
             match chunk_reader.read_chunk(&mut reader, index).await? {
                 Some(data) => {
-                    let tx = tx.clone();
+                    let tx = tx.clone(); // Clone sender for worker task
+
+                    // Spawn a worker task to process the chunk in a blocking thread
                     let worker = self.worker.clone();
-
-                    // Spawn worker task
                     join_set.spawn(async move {
-                        // Permit is dropped when this task finishes, allowing new chunks to be read
-                        let _permit = permit;
+                        let _permit = permit; // Drop the permit once the task finishes
 
-                        // Run CPU-bound work in a blocking thread
-                        // This prevents blocking the async runtime
+                        // Run CPU-bound work in a blocking thread to prevent blocking async runtime
                         let result = tokio::task::spawn_blocking(move || {
                             worker.process(Task { index, data })
                         })
                         .await?;
 
-                        // Send result to writer
+                        // Send the processed chunk result to the writer
                         tx.send(result).await?;
                         Ok::<_, anyhow::Error>(())
                     });
 
-                    index += 1;
+                    index += 1; // Increment index for the next chunk
                 }
                 _ => {
-                    // EOF
+                    // End of file reached
                     break;
                 }
             }
@@ -169,13 +165,13 @@ impl Pipeline {
 
         // Wait for all worker tasks to complete
         while let Some(res) = join_set.join_next().await {
-            res??;
+            res??; // Propagate errors from worker tasks
         }
 
-        // Drop the original sender so the writer knows when to stop
+        // Close the sender to signal the writer to stop
         drop(tx);
 
-        // Wait for writer to finish and check for errors
+        // Wait for the writer to finish processing all chunks and handle any errors
         writer_handle.await??;
 
         Ok(())
