@@ -79,7 +79,7 @@ pub fn handle_decrypt(
     password: Option<String>,
     delete: bool,
 ) -> Result<()> {
-    use crate::header::Header;
+    use crate::header::{self, Header};
     use std::fs::File;
 
     let password = match password {
@@ -100,7 +100,7 @@ pub fn handle_decrypt(
     let original_size = {
         let mut file = File::open(file_path)?;
         let mut header = Header::new()?;
-        header.unmarshal(&mut file)?;
+        header::marshal::unmarshal(&mut header, &mut file)?;
         header.get_original_size()? as u64
     };
 

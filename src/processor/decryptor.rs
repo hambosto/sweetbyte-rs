@@ -1,5 +1,6 @@
 use crate::crypto;
 use crate::file;
+use crate::header;
 use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
@@ -24,8 +25,8 @@ impl Decryptor {
         let (mut src_file_sync, _) = file::open_file(src_path)?;
 
         // Unmarshal header
-        let mut header = Header::new()?;
-        header.unmarshal(&mut src_file_sync)?;
+        let mut hdr = Header::new()?;
+        header::marshal::unmarshal(&mut hdr, &mut src_file_sync)?;
 
         // Get current position (offset after header)
         let offset = src_file_sync.stream_position()?;
@@ -34,16 +35,16 @@ impl Decryptor {
         drop(src_file_sync);
 
         // Get salt from header
-        let salt = header.salt()?;
+        let salt = hdr.salt()?;
 
         // Derive key
         let key = crypto::hash(password.as_bytes(), &salt)?;
 
         // Verify header
-        header.verify(&key)?;
+        header::verification::verify_header(&hdr, &key)?;
 
         // Check if protected
-        if !header.is_protected() {
+        if !hdr.is_protected() {
             return Err(anyhow!("file is not protected"));
         }
 

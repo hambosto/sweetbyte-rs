@@ -1,28 +1,62 @@
-use crate::utils::UintType;
+//! Core header metadata and data structures.
+//!
+//! This module defines the `Header` struct which represents the metadata
+//! prepended to encrypted files, including versioning, flags, and original file size.
+
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
-use super::mac;
-use super::section::SectionType;
+use super::encoding::SectionType;
+use crate::utils::UintType;
 
+/// Magic bytes identifying a SweetByte encrypted file
 pub const MAGIC_BYTES: u32 = 0xCAFEBABE;
+
+/// Size of magic bytes in the header
 pub const MAGIC_SIZE: usize = 4;
+
+/// Size of MAC (HMAC-SHA256) in bytes
 pub const MAC_SIZE: usize = 32;
+
+/// Size of the serialized header data (version + flags + original_size)
 pub const HEADER_DATA_SIZE: usize = 14;
+
+/// Current header format version
 pub const CURRENT_VERSION: u16 = 0x0001;
+
+/// Flag indicating the file is protected/encrypted
 pub const FLAG_PROTECTED: u32 = 1 << 0;
 
 /// Header represents the metadata prepended to encrypted files.
-/// It contains versioning, flags, original file size, and security parameters.
+///
+/// It contains versioning information, flags indicating the file state,
+/// the original unencrypted file size, and decoded sections after unmarshaling.
+#[derive(Debug)]
 pub struct Header {
+    /// Header format version
     pub version: u16,
+
+    /// Bit flags for file state (e.g., FLAG_PROTECTED)
     pub flags: u32,
+
+    /// Original size of the unencrypted file in bytes
     pub original_size: u64,
-    decoded_sections: Option<HashMap<SectionType, Vec<u8>>>,
+
+    /// Decoded header sections (populated after unmarshaling)
+    pub(super) decoded_sections: Option<HashMap<SectionType, Vec<u8>>>,
 }
 
 impl Header {
-    /// Creates a new default Header.
+    /// Creates a new default Header with current version.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use sweetbyte::header::Header;
+    ///
+    /// let header = Header::new().unwrap();
+    /// assert_eq!(header.version, sweetbyte::header::CURRENT_VERSION);
+    /// ```
     pub fn new() -> Result<Self> {
         Ok(Self {
             version: CURRENT_VERSION,
@@ -32,6 +66,11 @@ impl Header {
         })
     }
 
+    /// Gets the original file size as i64.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the size exceeds i64::MAX.
     pub fn get_original_size(&self) -> Result<i64> {
         if self.original_size > i64::MAX as u64 {
             return Err(anyhow!("original size overflow during i64 conversion"));
@@ -39,14 +78,17 @@ impl Header {
         Ok(self.original_size as i64)
     }
 
+    /// Sets the original file size.
     pub fn set_original_size(&mut self, size: u64) {
         self.original_size = size;
     }
 
+    /// Checks if the file is marked as protected/encrypted.
     pub fn is_protected(&self) -> bool {
         self.flags & FLAG_PROTECTED != 0
     }
 
+    /// Sets or clears the protected flag.
     pub fn set_protected(&mut self, protected: bool) {
         if protected {
             self.flags |= FLAG_PROTECTED;
@@ -55,6 +97,13 @@ impl Header {
         }
     }
 
+    /// Validates the header for correctness.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Version is newer than CURRENT_VERSION
+    /// - Original size is zero
     pub fn validate(&self) -> Result<()> {
         if self.version > CURRENT_VERSION {
             return Err(anyhow!(
@@ -69,39 +118,30 @@ impl Header {
         Ok(())
     }
 
-    pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        let serializer = super::serializer::Serializer::new(self)?;
-        serializer.marshal(salt, key)
-    }
-
-    pub fn unmarshal(&mut self, reader: &mut dyn std::io::Read) -> Result<()> {
-        let mut deserializer = super::deserializer::Deserializer::new(self)?;
-        deserializer.unmarshal(reader)
-    }
-
+    /// Retrieves the salt from decoded sections.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if header hasn't been unmarshaled or salt is missing.
     pub fn salt(&self) -> Result<Vec<u8>> {
         self.section(SectionType::Salt, crate::crypto::ARGON_SALT_LEN)
     }
 
+    /// Retrieves the magic bytes from decoded sections.
     #[allow(dead_code)]
     pub fn magic(&self) -> Result<Vec<u8>> {
         self.section(SectionType::Magic, MAGIC_SIZE)
     }
 
-    pub fn verify(&self, key: &[u8]) -> Result<()> {
-        if key.is_empty() {
-            return Err(anyhow!("key cannot be empty"));
-        }
-
-        let expected_mac = self.section(SectionType::MAC, MAC_SIZE)?;
-        let magic = self.section(SectionType::Magic, MAGIC_SIZE)?;
-        let salt = self.section(SectionType::Salt, crate::crypto::ARGON_SALT_LEN)?;
-        let header_data = self.section(SectionType::HeaderData, HEADER_DATA_SIZE)?;
-
-        mac::verify_mac(key, &expected_mac, &[&magic, &salt, &header_data])
-    }
-
-    fn section(&self, st: SectionType, min_len: usize) -> Result<Vec<u8>> {
+    /// Retrieves a specific section with minimum length validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Header hasn't been unmarshaled
+    /// - Section is missing
+    /// - Section is shorter than min_len
+    pub(super) fn section(&self, st: SectionType, min_len: usize) -> Result<Vec<u8>> {
         let sections = self
             .decoded_sections
             .as_ref()
@@ -118,11 +158,15 @@ impl Header {
         Ok(data[..min_len].to_vec())
     }
 
+    /// Sets the decoded sections (used by io module after unmarshaling).
     pub(super) fn set_decoded_sections(&mut self, sections: HashMap<SectionType, Vec<u8>>) {
         self.decoded_sections = Some(sections);
     }
 
-    pub(super) fn serialize(&self) -> Vec<u8> {
+    /// Serializes header metadata to bytes.
+    ///
+    /// Returns a 14-byte array: version (2) + flags (4) + original_size (8)
+    pub(super) fn serialize_metadata(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(HEADER_DATA_SIZE);
         data.extend_from_slice(&self.version.to_bytes());
         data.extend_from_slice(&self.flags.to_bytes());
@@ -130,7 +174,12 @@ impl Header {
         data
     }
 
-    pub(super) fn deserialize(&mut self, data: &[u8]) -> Result<()> {
+    /// Deserializes header metadata from bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if data is not exactly HEADER_DATA_SIZE bytes.
+    pub(super) fn deserialize_metadata(&mut self, data: &[u8]) -> Result<()> {
         if data.len() != HEADER_DATA_SIZE {
             return Err(anyhow!(
                 "invalid header data size: expected {} bytes, got {}",
@@ -174,11 +223,11 @@ mod tests {
         h.set_original_size(123456);
         h.set_protected(true);
 
-        let serialized = h.serialize();
+        let serialized = h.serialize_metadata();
         assert_eq!(serialized.len(), HEADER_DATA_SIZE);
 
         let mut h2 = Header::new().unwrap();
-        h2.deserialize(&serialized).unwrap();
+        h2.deserialize_metadata(&serialized).unwrap();
 
         assert_eq!(h.version, h2.version);
         assert_eq!(h.flags, h2.flags);

@@ -51,7 +51,7 @@ impl Workflow {
     }
 
     fn process_file(&self, input_path: &Path, mode: ProcessorMode) -> Result<()> {
-        use crate::header::Header;
+        use crate::header::{self, Header};
         use std::fs::File;
 
         let output_path = file::get_output_path(input_path, mode);
@@ -88,7 +88,7 @@ impl Workflow {
                 // For decryption: read header to get original (decrypted) size
                 let mut file = File::open(input_path)?;
                 let mut header = Header::new()?;
-                header.unmarshal(&mut file)?;
+                header::marshal::unmarshal(&mut header, &mut file)?;
                 header.get_original_size()? as u64
             }
         };
