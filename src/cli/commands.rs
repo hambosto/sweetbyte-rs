@@ -27,28 +27,6 @@ pub fn handle_encrypt(
     let file_manager = FileManager::new();
     let processor = Processor::new(FileManager::new());
 
-    // Check if input is a file or directory
-    // Go CLI seems to handle single file input primarily based on the code snippet:
-    // "if _, err := os.Stat(inputFile); ..."
-    // But FindEligibleFiles is used in interactive.
-    // The Rust CLI was using find_eligible_files which implies directory support.
-    // However, the Go CLI `runEncrypt` takes a single `inputFile`.
-    // To strictly align with Go CLI `runEncrypt`, we should process a single file.
-    // But `find_eligible_files` is useful.
-    // Let's stick to the Rust CLI behavior of supporting directories if that was the intent,
-    // OR strictly align with Go which seems to target single file in CLI.
-    // The Go CLI `runEncrypt` does NOT call `FindEligibleFiles`. It processes `inputFile`.
-    // So if `inputFile` is a directory, `os.Open` might succeed but `processor.Encrypt` expects a file.
-    // Let's align with Go CLI: Process the specific input file.
-
-    // Actually, looking at Go's `runEncrypt`:
-    // if _, err := os.Stat(inputFile); ...
-    // processor.Encrypt(inputFile, ...)
-    // It processes a single file.
-
-    // So we should NOT use find_eligible_files here if we want strict alignment.
-    // We should process `input` directly.
-
     let file_path = Path::new(input);
     let dest = output
         .map(|s| s.into())
@@ -74,7 +52,7 @@ pub fn handle_encrypt(
             let should_delete = if delete {
                 true
             } else {
-                tui::ask_confirm(&format!("Delete original file '{}'?", file_path.display()))
+                tui::ask_confirm(&format!("Delete original file {}?", file_path.display()))
                     .unwrap_or(false)
             };
 
@@ -146,7 +124,7 @@ pub fn handle_decrypt(
             let should_delete = if delete {
                 true
             } else {
-                tui::ask_confirm(&format!("Delete original file '{}'?", file_path.display()))
+                tui::ask_confirm(&format!("Delete original file {}?", file_path.display()))
                     .unwrap_or(false)
             };
 

@@ -1,3 +1,4 @@
-mod padder;
+mod padding;
 
-pub use padder::Padding;
+pub use padding::Padding;
+pub use padding::DEFAULT_PADDING_BLOCK_SIZE;
