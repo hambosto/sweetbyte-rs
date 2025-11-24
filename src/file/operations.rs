@@ -44,17 +44,6 @@ pub fn get_file_size(path: &Path, mode: ProcessorMode) -> Result<u64> {
 /// # Errors
 ///
 /// Returns an error if the file cannot be opened or metadata cannot be read.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use sweetbyte::file::operations::open_file;
-///
-/// let (file, metadata) = open_file(Path::new("example.txt"))?;
-/// println!("File size: {} bytes", metadata.len());
-/// # Ok::<(), anyhow::Error>(())
-/// ```
 pub fn open_file(path: &Path) -> Result<(File, fs::Metadata)> {
     let file =
         File::open(path).with_context(|| format!("failed to open file: {}", path.display()))?;
@@ -80,17 +69,6 @@ pub fn open_file(path: &Path) -> Result<(File, fs::Metadata)> {
 ///
 /// Returns an error if the file exists but cannot be deleted due to permissions
 /// or other I/O errors.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use sweetbyte::file::operations::remove_file;
-///
-/// // Safe to call even if file doesn't exist
-/// remove_file(Path::new("temp.txt"))?;
-/// # Ok::<(), anyhow::Error>(())
-/// ```
 pub fn remove_file(path: &Path) -> Result<()> {
     if !path.exists() {
         return Ok(());

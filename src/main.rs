@@ -1,7 +1,21 @@
+pub mod cli;
+pub mod compression;
+pub mod config;
+pub mod crypto;
+pub mod encoding;
+pub mod file;
+pub mod header;
+pub mod interactive;
+pub mod padding;
+pub mod processor;
+pub mod stream;
+pub mod tui;
+pub mod types;
+pub mod utils;
+
 use anyhow::Result;
 use clap::Parser;
-use sweetbyte::cli::{self, Cli, Commands};
-use sweetbyte::interactive;
+use cli::{Cli, Commands};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();

@@ -3,7 +3,7 @@
 //! This module defines the `Header` struct which represents the metadata
 //! prepended to encrypted files, including versioning, flags, and original file size.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 
 use super::encoding::SectionType;
@@ -48,15 +48,6 @@ pub struct Header {
 
 impl Header {
     /// Creates a new default Header with current version.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sweetbyte::header::Header;
-    ///
-    /// let header = Header::new().unwrap();
-    /// assert_eq!(header.version, sweetbyte::header::CURRENT_VERSION);
-    /// ```
     pub fn new() -> Result<Self> {
         Ok(Self {
             version: CURRENT_VERSION,

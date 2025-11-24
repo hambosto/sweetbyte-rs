@@ -3,12 +3,12 @@
 //! This module provides functions for computing and verifying MACs using HMAC-SHA256,
 //! and for verifying the integrity and authenticity of file headers.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
 use super::encoding::SectionType;
-use super::metadata::{Header, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE};
+use super::metadata::{HEADER_DATA_SIZE, Header, MAC_SIZE, MAGIC_SIZE};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -22,21 +22,6 @@ type HmacSha256 = Hmac<Sha256>;
 /// # Returns
 ///
 /// Returns the computed MAC as a 32-byte vector.
-///
-/// # Errors
-///
-/// Returns an error if the key is empty or HMAC creation fails.
-///
-/// # Examples
-///
-/// ```
-/// use sweetbyte::header::verification::compute_mac;
-///
-/// let key = b"secret_key";
-/// let parts = vec![b"part1".as_slice(), b"part2".as_slice()];
-/// let mac = compute_mac(key, &parts).unwrap();
-/// assert_eq!(mac.len(), 32);
-/// ```
 pub fn compute_mac(key: &[u8], parts: &[&[u8]]) -> Result<Vec<u8>> {
     if key.is_empty() {
         return Err(anyhow!("key cannot be empty"));
@@ -72,19 +57,6 @@ pub fn compute_mac(key: &[u8], parts: &[&[u8]]) -> Result<Vec<u8>> {
 /// - Key is empty
 /// - MAC computation fails
 /// - MAC verification fails
-///
-/// # Examples
-///
-/// ```
-/// use sweetbyte::header::verification::{compute_mac, verify_mac};
-///
-/// let key = b"secret_key";
-/// let parts = vec![b"data".as_slice()];
-/// let mac = compute_mac(key, &parts).unwrap();
-///
-/// // Verification should succeed with correct MAC
-/// assert!(verify_mac(key, &mac, &parts).is_ok());
-/// ```
 pub fn verify_mac(key: &[u8], expected_mac: &[u8], parts: &[&[u8]]) -> Result<()> {
     let computed_mac = compute_mac(key, parts)?;
 
@@ -119,18 +91,6 @@ pub fn verify_mac(key: &[u8], expected_mac: &[u8], parts: &[&[u8]]) -> Result<()
 /// - Key is empty
 /// - Required sections are missing
 /// - MAC verification fails
-///
-/// # Examples
-///
-/// ```no_run
-/// use sweetbyte::header::{Header, verification};
-///
-/// let mut header = Header::new().unwrap();
-/// // ... unmarshal header from file ...
-/// let key = vec![0u8; 32];
-///
-/// verification::verify_header(&header, &key).unwrap();
-/// ```
 pub fn verify_header(header: &Header, key: &[u8]) -> Result<()> {
     if key.is_empty() {
         return Err(anyhow!("key cannot be empty"));

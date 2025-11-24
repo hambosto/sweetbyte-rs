@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use flate2::{read::ZlibDecoder, write::ZlibEncoder};
 use std::io::{Read, Write};
 
@@ -19,14 +19,6 @@ impl Compression {
     /// # Arguments
     ///
     /// * `level` - The compression level to use
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sweetbyte::compression::{Compression, Level};
-    ///
-    /// let comp = Compression::new(Level::BestSpeed);
-    /// ```
     pub fn new(level: impl Into<flate2::Compression>) -> Self {
         Self {
             level: level.into(),

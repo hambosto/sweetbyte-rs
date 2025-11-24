@@ -28,20 +28,6 @@ use std::path::{Path, PathBuf};
 /// - If `must_exist` is true and the path is a directory
 /// - If `must_exist` is true and the file is empty (0 bytes)
 /// - If `must_exist` is false and the path already exists
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use sweetbyte::file::validation::validate_path;
-///
-/// // Validate that input file exists and is non-empty
-/// validate_path(Path::new("input.txt"), true)?;
-///
-/// // Validate that output file doesn't exist yet
-/// validate_path(Path::new("output.txt.enc"), false)?;
-/// # Ok::<(), anyhow::Error>(())
-/// ```
 pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {
     if must_exist {
         if !path.exists() {
@@ -78,22 +64,6 @@ pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {
 /// # Returns
 ///
 /// Returns a `PathBuf` representing the appropriate output path for the given mode.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use sweetbyte::file::validation::get_output_path;
-/// use sweetbyte::types::ProcessorMode;
-///
-/// let input = Path::new("document.pdf");
-/// let output = get_output_path(input, ProcessorMode::Encrypt);
-/// assert_eq!(output, Path::new("document.pdf.enc"));
-///
-/// let encrypted = Path::new("document.pdf.enc");
-/// let output = get_output_path(encrypted, ProcessorMode::Decrypt);
-/// assert_eq!(output, Path::new("document.pdf"));
-/// ```
 pub fn get_output_path(input_path: &Path, mode: ProcessorMode) -> PathBuf {
     match mode {
         ProcessorMode::Encrypt => {
@@ -118,16 +88,6 @@ pub fn get_output_path(input_path: &Path, mode: ProcessorMode) -> PathBuf {
 /// # Returns
 ///
 /// Returns `true` if the path ends with the encrypted file extension, `false` otherwise.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use sweetbyte::file::validation::is_encrypted_file;
-///
-/// assert!(is_encrypted_file(Path::new("document.pdf.enc")));
-/// assert!(!is_encrypted_file(Path::new("document.pdf")));
-/// ```
 pub fn is_encrypted_file(path: &Path) -> bool {
     path.to_str()
         .map(|s| s.ends_with(FILE_EXTENSION))
@@ -147,17 +107,6 @@ pub fn is_encrypted_file(path: &Path) -> bool {
 ///
 /// Returns `true` if the path contains any excluded directory component,
 /// `false` otherwise.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use sweetbyte::file::validation::is_excluded_dir;
-///
-/// assert!(is_excluded_dir(Path::new(".git/objects")));
-/// assert!(is_excluded_dir(Path::new("target/debug/deps")));
-/// assert!(!is_excluded_dir(Path::new("src/main.rs")));
-/// ```
 pub fn is_excluded_dir(path: &Path) -> bool {
     path.components().any(|component| {
         component
@@ -185,17 +134,6 @@ pub fn is_excluded_dir(path: &Path) -> bool {
 ///
 /// Returns `true` if the file matches any excluded extension or pattern,
 /// `false` otherwise.
-///
-/// # Examples
-///
-/// ```no_run
-/// use std::path::Path;
-/// use sweetbyte::file::validation::is_excluded_ext;
-///
-/// assert!(is_excluded_ext(Path::new("main.rs")));
-/// assert!(is_excluded_ext(Path::new("go.mod")));
-/// assert!(!is_excluded_ext(Path::new("document.pdf")));
-/// ```
 pub fn is_excluded_ext(path: &Path) -> bool {
     path.to_str()
         .map(|path_str| EXCLUDED_EXTS.iter().any(|ext| path_str.ends_with(ext)))

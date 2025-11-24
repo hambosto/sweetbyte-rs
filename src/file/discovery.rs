@@ -29,22 +29,6 @@ use walkdir::WalkDir;
 ///
 /// Returns an error if directory traversal fails catastrophically.
 /// Individual file access errors are silently skipped.
-///
-/// # Examples
-///
-/// ```no_run
-/// use sweetbyte::file::discovery::find_eligible_files;
-/// use sweetbyte::types::ProcessorMode;
-///
-/// // Find all files that can be encrypted
-/// let files = find_eligible_files(ProcessorMode::Encrypt)?;
-/// println!("Found {} files to encrypt", files.len());
-///
-/// // Find all encrypted files that can be decrypted
-/// let encrypted_files = find_eligible_files(ProcessorMode::Decrypt)?;
-/// println!("Found {} encrypted files", encrypted_files.len());
-/// # Ok::<(), anyhow::Error>(())
-/// ```
 pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     let files = WalkDir::new(".")
         .follow_links(false)

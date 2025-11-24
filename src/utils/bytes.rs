@@ -4,30 +4,8 @@ use byteorder::{BigEndian, ByteOrder};
 ///
 /// This trait abstracts the byte conversion logic, ensuring consistent
 /// big-endian representation across the application (important for file formats).
-///
-/// # Examples
-///
-/// ```
-/// use sweetbyte::utils::UintType;
-///
-/// let val: u32 = 0x12345678;
-/// let bytes = val.to_bytes();
-/// assert_eq!(bytes, vec![0x12, 0x34, 0x56, 0x78]);
-///
-/// let decoded = u32::from_bytes(&bytes);
-/// assert_eq!(decoded, val);
-/// ```
 pub trait UintType: Sized {
     /// Converts the integer to a big-endian byte vector.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sweetbyte::utils::UintType;
-    ///
-    /// let val: u16 = 0xAABB;
-    /// assert_eq!(val.to_bytes(), vec![0xAA, 0xBB]);
-    /// ```
     fn to_bytes(&self) -> Vec<u8>;
 
     /// Creates an integer from a big-endian byte slice.
@@ -35,16 +13,6 @@ pub trait UintType: Sized {
     /// # Panics
     ///
     /// Panics if the slice length is insufficient for the type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use sweetbyte::utils::UintType;
-    ///
-    /// let bytes = [0xAA, 0xBB];
-    /// let val = u16::from_bytes(&bytes);
-    /// assert_eq!(val, 0xAABB);
-    /// ```
     fn from_bytes(bytes: &[u8]) -> Self;
 }
 
