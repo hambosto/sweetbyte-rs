@@ -1,16 +1,17 @@
-//! Reed-Solomon erasure coding for data redundancy.
+//! Reed-Solomon erasure coding implementation.
 //!
 //! This module provides encoding and decoding using Reed-Solomon error correction.
-//! Encoded data can survive loss of up to `PARITY_SHARDS` chunks while still being
+//! Encoded data can survive loss of up to `parity_shards` chunks while still being
 //! fully recoverable.
 
 use anyhow::{anyhow, Result};
 use reed_solomon_erasure::galois_8::ReedSolomon;
 
-use super::shards::Shards;
+use super::chunking;
 
 /// Number of data shards (4 shards)
 pub const DATA_SHARDS: usize = 4;
+
 /// Number of parity shards for redundancy (10 shards)
 /// This provides 71% redundancy - up to 10 of 14 total shards can be lost
 pub const PARITY_SHARDS: usize = 10;
@@ -19,14 +20,16 @@ pub const PARITY_SHARDS: usize = 10;
 ///
 /// Provides data redundancy by distributing data across multiple shards
 /// with parity information. Can recover original data even if some shards are lost.
-pub struct Encoding {
+pub struct ErasureEncoder {
     /// Reed-Solomon encoder/decoder
     encoder: ReedSolomon,
-    /// Shard manager for splitting and combining data
-    shards: Shards,
+    /// Number of data shards
+    data_shards: usize,
+    /// Total number of shards
+    total_shards: usize,
 }
 
-impl Encoding {
+impl ErasureEncoder {
     /// Creates a new Reed-Solomon encoder/decoder.
     ///
     /// # Arguments
@@ -41,7 +44,8 @@ impl Encoding {
 
         Ok(Self {
             encoder,
-            shards: Shards::new(data_shards, parity_shards),
+            data_shards,
+            total_shards: data_shards + parity_shards,
         })
     }
 
@@ -53,14 +57,14 @@ impl Encoding {
     /// # Errors
     /// Returns error if encoding fails
     pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let mut shards = self.shards.split(data);
+        let mut shards = chunking::split_data(data, self.data_shards, self.total_shards);
 
         // Generate parity shards for error correction
         self.encoder
             .encode(&mut shards)
             .map_err(|e| anyhow!("encoding failed: {}", e))?;
 
-        Ok(self.shards.combine(&shards))
+        Ok(chunking::combine_shards(&shards))
     }
 
     /// Decodes Reed-Solomon encoded data.
@@ -71,7 +75,7 @@ impl Encoding {
     /// # Errors
     /// Returns error if reconstruction fails (too many missing shards)
     pub fn decode(&self, encoded: &[u8]) -> Result<Vec<u8>> {
-        let shards = self.shards.split_encoded(encoded);
+        let shards = chunking::split_encoded(encoded, self.total_shards);
         let mut shard_options: Vec<Option<Vec<u8>>> = shards.into_iter().map(Some).collect();
 
         // Reconstruct missing shards using parity information
@@ -82,7 +86,7 @@ impl Encoding {
         // Extract original data from reconstructed shards
         let decoded_shards: Vec<Vec<u8>> = shard_options.into_iter().flatten().collect();
 
-        self.shards.extract(&decoded_shards)
+        chunking::extract_data(&decoded_shards, self.data_shards)
     }
 }
 
@@ -92,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode() {
-        let enc = Encoding::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
+        let enc = ErasureEncoder::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
         let data = b"Hello, World! This is a test of Reed-Solomon encoding.";
 
         let encoded = enc.encode(data).unwrap();

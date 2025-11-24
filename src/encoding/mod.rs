@@ -1,4 +1,4 @@
-mod encoder;
-mod shards;
+pub mod chunking;
+pub mod erasure;
 
-pub use encoder::*;
+pub use erasure::{ErasureEncoder, DATA_SHARDS, PARITY_SHARDS};

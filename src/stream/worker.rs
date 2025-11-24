@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 
 use crate::compression::{Compression, Level};
 use crate::crypto::{AesCipher, ChaCha20Cipher};
-use crate::encoding::Encoding;
+use crate::encoding::ErasureEncoder;
 use crate::padding::Pkcs7Padding;
 use crate::types::{Processing, Task, TaskResult};
 
@@ -13,7 +13,7 @@ pub struct ChunkWorker {
     padding: Pkcs7Padding,
     aes_cipher: AesCipher,
     chacha_cipher: ChaCha20Cipher,
-    encoding: Encoding,
+    encoding: ErasureEncoder,
     mode: Processing,
     pool: BufferPool,
 }
@@ -29,7 +29,10 @@ impl ChunkWorker {
             padding: Pkcs7Padding::new(crate::padding::BLOCK_SIZE)?,
             aes_cipher: AesCipher::new(&key[0..32])?,
             chacha_cipher: ChaCha20Cipher::new(&key[32..64])?,
-            encoding: Encoding::new(crate::encoding::DATA_SHARDS, crate::encoding::PARITY_SHARDS)?,
+            encoding: ErasureEncoder::new(
+                crate::encoding::DATA_SHARDS,
+                crate::encoding::PARITY_SHARDS,
+            )?,
             mode,
             pool,
         })
@@ -77,26 +80,6 @@ impl ChunkWorker {
 
         // 5. Reed-Solomon encoding
         let encoded = self.encoding.encode(&chacha_encrypted)?;
-
-        // OPTIMIZATION OPPORTUNITY: Intermediate Allocations
-        //
-        // Current pipeline allocates 5 Vec<u8> per chunk:
-        //   1. compress() -> Vec
-        //   2. pad() -> Vec
-        //   3. aes_cipher.encrypt() -> Vec
-        //   4. chacha_cipher.encrypt() -> Vec
-        //   5. encoding.encode() -> Vec
-        //
-        // Potential optimization (requires API changes to crypto/compression modules):
-        //   - Modify each component to accept `&mut Vec<u8>` output buffer
-        //   - Reuse single buffer from pool across all steps
-        //   - Would reduce allocations from 5 per chunk to 1 per chunk
-        //   - Expected performance gain: 20-30% reduction in memory allocations
-        //
-        // Current approach:
-        //   - Input buffer returned to pool in `process()`
-        //   - Output buffer allocated by pipeline, returned to pool in `StreamWriter`
-        //   - Intermediate buffers allocated/deallocated per chunk (overhead)
 
         Ok(encoded)
     }

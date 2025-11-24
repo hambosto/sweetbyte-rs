@@ -3,7 +3,7 @@
 //! This module handles encoding and decoding of header sections with
 //! Reed-Solomon error correction for resilience.
 
-use crate::encoding::Encoding;
+use crate::encoding::ErasureEncoder;
 use crate::utils::UintType;
 use anyhow::{anyhow, Result};
 
@@ -68,20 +68,21 @@ pub fn encode_section(data: &[u8]) -> Result<EncodedSection> {
         return Err(anyhow!("data cannot be empty"));
     }
 
-    let encoder = Encoding::new(crate::encoding::DATA_SHARDS, crate::encoding::PARITY_SHARDS)?;
+    let encoder =
+        ErasureEncoder::new(crate::encoding::DATA_SHARDS, crate::encoding::PARITY_SHARDS)?;
     let encoded = encoder.encode(data)?;
-    let encoded_len = encoded.len();
+    let original_len = data.len();
 
-    if encoded_len > u32::MAX as usize {
+    if original_len > u32::MAX as usize {
         return Err(anyhow!(
-            "encoded data length {} exceeds maximum allowed size for u32",
-            encoded_len
+            "original data length {} exceeds maximum allowed size for u32",
+            original_len
         ));
     }
 
     Ok(EncodedSection {
         data: encoded,
-        length: encoded_len as u32,
+        length: original_len as u32,
     })
 }
 
@@ -105,8 +106,17 @@ pub fn decode_section(section: &EncodedSection) -> Result<Vec<u8>> {
         return Err(anyhow!("invalid encoded section"));
     }
 
-    let encoder = Encoding::new(crate::encoding::DATA_SHARDS, crate::encoding::PARITY_SHARDS)?;
-    encoder.decode(&section.data)
+    let encoder =
+        ErasureEncoder::new(crate::encoding::DATA_SHARDS, crate::encoding::PARITY_SHARDS)?;
+    let decoded = encoder.decode(&section.data)?;
+
+    // Truncate to original length if needed (padding removal)
+    let original_len = section.length as usize;
+    if decoded.len() < original_len {
+        return Err(anyhow!("decoded data shorter than expected length"));
+    }
+
+    Ok(decoded[..original_len].to_vec())
 }
 
 /// Encodes a length value as a section.
@@ -164,8 +174,20 @@ pub fn verify_magic(magic: &[u8]) -> bool {
     if magic.len() < 4 {
         return false;
     }
-    let expected = 0xCAFEBABEu32.to_bytes();
+    let expected = crate::header::MAGIC_BYTES.to_bytes();
     magic[..4] == expected[..]
+}
+
+/// Calculates the encoded length for a given original data length.
+///
+/// # Arguments
+/// * `original_len` - Length of the original data
+///
+/// # Returns
+/// Length of the data after encoding
+pub fn get_encoded_length(original_len: usize) -> usize {
+    let shard_size = original_len.div_ceil(crate::encoding::DATA_SHARDS);
+    shard_size * (crate::encoding::DATA_SHARDS + crate::encoding::PARITY_SHARDS)
 }
 
 #[cfg(test)]

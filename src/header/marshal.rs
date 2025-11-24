@@ -170,7 +170,7 @@ fn build_lengths_header(length_sections: &HashMap<SectionType, EncodedSection>) 
         let sec = length_sections
             .get(section_type)
             .unwrap_or_else(|| panic!("missing encoded length section for {:?}", section_type));
-        lengths_header.extend_from_slice(&sec.length.to_bytes());
+        lengths_header.extend_from_slice(&(sec.data.len() as u32).to_bytes());
     }
 
     lengths_header
@@ -241,7 +241,7 @@ fn read_and_decode_lengths(
 
         let section = EncodedSection {
             data: encoded_data,
-            length: *encoded_length,
+            length: 4, // Length prefixes are always 4 bytes original
         };
 
         let length = encoding::decode_length_prefix(&section)?;
@@ -262,13 +262,16 @@ fn read_and_decode_data(
             .get(section_type)
             .ok_or_else(|| anyhow!("missing section length for {:?}", section_type))?;
 
-        let mut encoded_data = vec![0u8; *length as usize];
+        let original_length = *length;
+        let encoded_length = encoding::get_encoded_length(original_length as usize);
+
+        let mut encoded_data = vec![0u8; encoded_length];
         r.read_exact(&mut encoded_data)
             .map_err(|e| anyhow!("failed to read encoded {:?}: {}", section_type, e))?;
 
         let section = EncodedSection {
             data: encoded_data,
-            length: *length,
+            length: original_length,
         };
 
         let decoded = encoding::decode_section(&section)?;
