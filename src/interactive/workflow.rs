@@ -1,13 +1,11 @@
 use crate::file;
-use crate::processor::Processor;
+use crate::processor;
 use crate::tui;
 use crate::types::ProcessorMode;
 use anyhow::{anyhow, Result};
 use std::path::Path;
 
-pub struct Workflow {
-    processor: Processor,
-}
+pub struct Workflow;
 
 impl Default for Workflow {
     fn default() -> Self {
@@ -17,8 +15,7 @@ impl Default for Workflow {
 
 impl Workflow {
     pub fn new() -> Self {
-        let processor = Processor::new();
-        Self { processor }
+        Self
     }
 
     pub fn run(&self) -> Result<()> {
@@ -97,18 +94,16 @@ impl Workflow {
 
         let result = match mode {
             ProcessorMode::Encrypt => {
-                self.processor
-                    .encrypt(input_path, &output_path, &password, {
-                        let pb = pb.clone();
-                        Some(std::sync::Arc::new(move |bytes| pb.inc(bytes)))
-                    })
+                processor::encrypt_file(input_path, &output_path, &password, {
+                    let pb = pb.clone();
+                    Some(std::sync::Arc::new(move |bytes| pb.inc(bytes)))
+                })
             }
             ProcessorMode::Decrypt => {
-                self.processor
-                    .decrypt(input_path, &output_path, &password, {
-                        let pb = pb.clone();
-                        Some(std::sync::Arc::new(move |bytes| pb.inc(bytes)))
-                    })
+                processor::decrypt_file(input_path, &output_path, &password, {
+                    let pb = pb.clone();
+                    Some(std::sync::Arc::new(move |bytes| pb.inc(bytes)))
+                })
             }
         };
 

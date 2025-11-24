@@ -1,5 +1,5 @@
 use crate::file;
-use crate::processor::Processor;
+use crate::processor;
 use crate::tui;
 use crate::types::ProcessorMode;
 use anyhow::Result;
@@ -24,8 +24,6 @@ pub fn handle_encrypt(
         }
     };
 
-    let processor = Processor::new();
-
     let file_path = Path::new(input);
     let dest = output
         .map(|s| s.into())
@@ -36,7 +34,7 @@ pub fn handle_encrypt(
     let file_size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
     let pb = tui::Progress::new(file_size);
 
-    let result = processor.encrypt(file_path, &dest, &password, {
+    let result = processor::encrypt_file(file_path, &dest, &password, {
         let pb = pb.clone();
         Some(std::sync::Arc::new(move |bytes| {
             pb.inc(bytes);
@@ -87,8 +85,6 @@ pub fn handle_decrypt(
         None => tui::ask_password("Enter password:")?,
     };
 
-    let processor = Processor::new();
-
     let file_path = Path::new(input);
     let dest = output
         .map(|s| s.into())
@@ -107,7 +103,7 @@ pub fn handle_decrypt(
     // Use original (decrypted) size for progress bar, not encrypted size
     let pb = tui::Progress::new(original_size);
 
-    let result = processor.decrypt(file_path, &dest, &password, {
+    let result = processor::decrypt_file(file_path, &dest, &password, {
         let pb = pb.clone();
         Some(std::sync::Arc::new(move |bytes| {
             pb.inc(bytes);
