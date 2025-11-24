@@ -12,7 +12,9 @@ use crate::stream::pool::BufferPool;
 
 /// Writes chunks to output stream, maintaining correct order.
 ///
-/// Uses ReorderBuffer to handle out-of-order chunk completion from parallel workers.
+/// Since chunks are processed in parallel, they may complete out of order.
+/// The `StreamWriter` uses a `ReorderBuffer` to buffer out-of-order chunks
+/// and write them sequentially.
 pub struct StreamWriter {
     mode: Processing,
     buffer: ReorderBuffer,
@@ -20,7 +22,12 @@ pub struct StreamWriter {
 }
 
 impl StreamWriter {
-    /// Creates a new chunk writer for the specified processing mode
+    /// Creates a new chunk writer for the specified processing mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Processing mode (Encryption/Decryption).
+    /// * `pool` - Buffer pool for returning used buffers.
     pub fn new(mode: Processing, pool: BufferPool) -> Self {
         Self {
             mode,
@@ -32,14 +39,15 @@ impl StreamWriter {
     /// Writes a chunk, buffering if necessary to maintain order.
     ///
     /// This method:
-    /// 1. Adds the chunk to the ordered buffer
-    /// 2. Retrieves all consecutive now-ready chunks
-    /// 3. Batches them together and writes in one operation (reduces syscalls)
+    /// 1. Adds the chunk to the ordered buffer.
+    /// 2. Retrieves all consecutive now-ready chunks.
+    /// 3. Batches them together and writes in one operation (reduces syscalls).
     ///
     /// # Arguments
-    /// * `writer` - Output stream
-    /// * `index` - Chunk sequence number
-    /// * `data` - Chunk data to write
+    ///
+    /// * `writer` - Output stream.
+    /// * `index` - Chunk sequence number.
+    /// * `data` - Chunk data to write.
     pub async fn write_chunk<W: AsyncWrite + Unpin>(
         &mut self,
         writer: &mut W,
@@ -92,6 +100,7 @@ impl StreamWriter {
     /// Flushes any remaining buffered chunks to the output stream.
     ///
     /// Should be called at the end of processing to ensure all data is written.
+    /// This handles any edge cases where chunks might be remaining in the buffer.
     pub async fn flush<W: AsyncWrite + Unpin>(&mut self, writer: &mut W) -> Result<()> {
         let remaining = self.buffer.flush();
 

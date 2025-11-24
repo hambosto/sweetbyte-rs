@@ -18,25 +18,37 @@ use crate::stream::pool::BufferPool;
 
 /// Reads data in chunks from an input stream.
 ///
-/// For encryption: reads fixed-size chunks of plaintext
-/// For decryption: reads length-prefixed encrypted chunks
+/// The reader handles two modes:
+/// -   **Encryption**: Reads fixed-size chunks (`CHUNK_SIZE`) of plaintext.
+/// -   **Decryption**: Reads length-prefixed encrypted chunks.
 pub struct StreamReader {
     mode: Processing,
     pool: BufferPool,
 }
 
 impl StreamReader {
-    /// Creates a new chunk reader for the specified processing mode
+    /// Creates a new chunk reader for the specified processing mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Processing mode (Encryption/Decryption).
+    /// * `pool` - Buffer pool for allocating chunk buffers.
     pub fn new(mode: Processing, pool: BufferPool) -> Self {
         Self { mode, pool }
     }
 
     /// Reads the next chunk from the stream.
     ///
+    /// # Arguments
+    ///
+    /// * `reader` - The input stream to read from.
+    /// * `index` - The expected chunk index (used for error reporting).
+    ///
     /// # Returns
-    /// * `Ok(Some(data))` - Successfully read a chunk
-    /// * `Ok(None)` - End of stream reached
-    /// * `Err(_)` - I/O or format error
+    ///
+    /// * `Ok(Some(data))` - Successfully read a chunk.
+    /// * `Ok(None)` - End of stream reached.
+    /// * `Err(_)` - I/O or format error.
     pub async fn read_chunk<R: AsyncRead + Unpin>(
         &self,
         reader: &mut R,
@@ -48,19 +60,20 @@ impl StreamReader {
         }
     }
 
-    /// Reads a fixed-size chunk of plaintext (for encryption)
+    /// Reads a fixed-size chunk of plaintext (for encryption).
+    ///
+    /// Attempts to fill the buffer up to `CHUNK_SIZE`.
     async fn read_plaintext_chunk<R: AsyncRead + Unpin>(
         &self,
         reader: &mut R,
     ) -> Result<Option<Vec<u8>>> {
         let mut buffer = self.pool.get();
 
-        // Ensure buffer has the required capacity and is properly initialized
+        // Ensure buffer has the required capacity
         if buffer.capacity() < CHUNK_SIZE {
             buffer.reserve(CHUNK_SIZE - buffer.len());
         }
-        // Use safe resize instead of unsafe set_len
-        // Modern allocators zero memory, so performance impact is negligible
+        // Resize to target size. Modern allocators zero memory efficiently.
         buffer.resize(CHUNK_SIZE, 0);
 
         match reader.read(&mut buffer).await {
@@ -70,6 +83,7 @@ impl StreamReader {
                 Ok(None)
             }
             Ok(n) => {
+                // Truncate to actual bytes read
                 buffer.truncate(n);
                 Ok(Some(buffer))
             }
@@ -80,13 +94,15 @@ impl StreamReader {
         }
     }
 
-    /// Reads a length-prefixed encrypted chunk (for decryption)
+    /// Reads a length-prefixed encrypted chunk (for decryption).
+    ///
+    /// Format: `[Length (4 bytes)] [Data (Length bytes)]`
     async fn read_encrypted_chunk<R: AsyncRead + Unpin>(
         &self,
         reader: &mut R,
         index: u64,
     ) -> Result<Option<Vec<u8>>> {
-        // Read 4-byte length prefix (uint32)
+        // 1. Read 4-byte length prefix (uint32)
         let mut length_buf = [0u8; 4];
 
         match reader.read_exact(&mut length_buf).await {
@@ -115,12 +131,11 @@ impl StreamReader {
             ));
         }
 
-        // Read chunk data
+        // 2. Read chunk data based on length
         let mut chunk_data = self.pool.get();
         if chunk_data.capacity() < chunk_len {
             chunk_data.reserve(chunk_len - chunk_data.len());
         }
-        // Use safe resize instead of unsafe set_len
         chunk_data.resize(chunk_len, 0);
 
         match reader.read_exact(&mut chunk_data).await {

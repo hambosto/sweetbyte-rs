@@ -1,8 +1,13 @@
 use std::fmt;
 
+/// Defines the operation mode for the processor.
+///
+/// This enum is used to configure the high-level intent of the application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessorMode {
+    /// Encrypts files.
     Encrypt,
+    /// Decrypts files.
     Decrypt,
 }
 
@@ -15,9 +20,15 @@ impl fmt::Display for ProcessorMode {
     }
 }
 
+/// Describes the current processing state or action.
+///
+/// This is often used for logging, UI updates, or internal state tracking
+/// to indicate what operation is currently being performed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Processing {
+    /// The system is currently performing encryption.
     Encryption,
+    /// The system is currently performing decryption.
     Decryption,
 }
 

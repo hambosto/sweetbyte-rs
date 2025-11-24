@@ -4,14 +4,14 @@ use std::collections::BTreeMap;
 ///
 /// When chunks are processed in parallel, they may complete out of order.
 /// This buffer ensures chunks are returned in the correct sequence.
-/// Uses BTreeMap for better cache locality with sequential chunk indices.
+/// Uses `BTreeMap` for efficient storage and retrieval of sequential indices.
 pub struct ReorderBuffer {
     chunks: BTreeMap<u64, Vec<u8>>,
     next_expected: u64,
 }
 
 impl ReorderBuffer {
-    /// Creates a new empty ordered buffer
+    /// Creates a new empty ordered buffer.
     pub fn new() -> Self {
         Self {
             chunks: BTreeMap::new(),
@@ -22,11 +22,14 @@ impl ReorderBuffer {
     /// Adds a chunk and returns all consecutive ready chunks.
     ///
     /// # Arguments
-    /// * `index` - Chunk sequence number
-    /// * `data` - Chunk data
+    ///
+    /// * `index` - Chunk sequence number.
+    /// * `data` - Chunk data.
     ///
     /// # Returns
-    /// Vector of all consecutive chunks ready to write (may be empty)
+    ///
+    /// A vector of all consecutive chunks starting from the next expected index.
+    /// If the added chunk is not the next expected one, returns an empty vector.
     pub fn add(&mut self, index: u64, data: Vec<u8>) -> Vec<Vec<u8>> {
         self.chunks.insert(index, data);
 
@@ -48,8 +51,12 @@ impl ReorderBuffer {
 
     /// Flushes all remaining chunks in sorted order.
     ///
-    /// Called at the end of processing to write any buffered chunks.
-    /// This handles edge cases where chunks arrive out of order.
+    /// This is a fallback method called at the end of processing to ensure
+    /// no data is left behind, even if there was a gap in indices (which shouldn't happen).
+    ///
+    /// # Returns
+    ///
+    /// A vector of all remaining chunks, sorted by index.
     pub fn flush(&mut self) -> Vec<Vec<u8>> {
         if self.chunks.is_empty() {
             return Vec::new();
@@ -60,7 +67,6 @@ impl ReorderBuffer {
         indices.sort_unstable();
 
         // Extract chunks in order
-
         indices
             .into_iter()
             .filter_map(|idx| self.chunks.remove(&idx))
