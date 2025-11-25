@@ -19,30 +19,22 @@ pub fn print_error(msg: &str) {
     eprintln!("{} Error: {}", style(">").red(), msg);
 }
 
-/// Displays information about the file being processed.
-pub fn show_processing_info(mode: ProcessorMode, file: &str) {
-    let mode_str = match mode {
-        ProcessorMode::Encrypt => "Encrypting",
-        ProcessorMode::Decrypt => "Decrypting",
-    };
-    let clean_path = std::path::Path::new(file)
-        .strip_prefix(".")
-        .unwrap_or(std::path::Path::new(file))
-        .to_string_lossy();
-    println!("{} {} {}", style(">").green(), mode_str, clean_path);
-}
-
 /// Displays information about a successful operation.
 pub fn show_success_info(mode: ProcessorMode, output_path: &str) {
     let action = match mode {
-        ProcessorMode::Encrypt => "Encrypted",
-        ProcessorMode::Decrypt => "Decrypted",
+        ProcessorMode::Encrypt => "encrypted",
+        ProcessorMode::Decrypt => "decrypted",
     };
     let clean_path = std::path::Path::new(output_path)
         .strip_prefix(".")
         .unwrap_or(std::path::Path::new(output_path))
         .to_string_lossy();
-    println!("{} {}: {}", style(">").green(), action, clean_path);
+    println!(
+        "{} File {} successfully: {}",
+        style(">").green(),
+        action,
+        style(clean_path).blue()
+    );
 }
 
 /// Displays information about a deleted source file.
@@ -51,5 +43,9 @@ pub fn show_source_deleted(path: &str) {
         .strip_prefix(".")
         .unwrap_or(std::path::Path::new(path))
         .to_string_lossy();
-    println!("{} Source file deleted: {}", style(">").green(), clean_path);
+    println!(
+        "{} Source file deleted: {}",
+        style(">").green(),
+        style(clean_path).blue()
+    );
 }

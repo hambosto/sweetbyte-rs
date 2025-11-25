@@ -54,7 +54,7 @@ impl Pipeline {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let progress_bar = crate::tui::Bar::new(total_size);
+        let progress_bar = crate::tui::Bar::new(total_size, self.mode);
         let chunk_reader = StreamReader::new(self.mode, self.pool.clone());
 
         let buffer_size = (self.concurrency * BUFFER_MULTIPLIER).max(MIN_BUFFER_SIZE);

@@ -1,3 +1,4 @@
+use crate::types::Processing;
 use indicatif::{ProgressBar, ProgressStyle};
 
 /// Progress bar wrapper for tracking operation progress.
@@ -7,8 +8,8 @@ pub struct Bar {
 }
 
 impl Bar {
-    /// Creates a new progress bar with the given total size.
-    pub fn new(total_size: u64) -> Self {
+    /// Creates a new progress bar with the given total size and processing mode.
+    pub fn new(total_size: u64, mode: Processing) -> Self {
         let bar = ProgressBar::new(total_size);
         bar.set_style(
             ProgressStyle::default_bar()
@@ -17,7 +18,7 @@ impl Bar {
                 .progress_chars("━━╸")
                 .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
         );
-        bar.set_message("Processing");
+        bar.set_message(mode.to_string());
         Bar { bar }
     }
 
