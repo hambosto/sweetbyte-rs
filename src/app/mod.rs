@@ -1,52 +1,62 @@
 use crate::{file, processor, tui, types::ProcessorMode};
 use anyhow::{Result, anyhow};
+use std::fs;
+
+const PASSWORD_MIN_LENGTH: usize = 8;
 
 pub fn run() -> Result<()> {
+    // Initialize the prompt input handler
+    let prompt = tui::PromptInput::new(PASSWORD_MIN_LENGTH);
+
     // 1. Show welcome banner
     tui::print_banner();
 
     // 2. Ask user for mode (Encrypt vs Decrypt)
-    let mode = tui::ask_processing_mode()?;
+    let mode = prompt.get_processing_mode()?;
 
     // 3. Find eligible files
-    let eligible_files = file::find_eligible_files(mode)?;
+    let (eligible_files, display_paths) = file::find_eligible_files_with_display(mode)?;
     if eligible_files.is_empty() {
         println!("No eligible files found for {:?} operation", mode);
         return Ok(());
     }
 
-    // 4. Select file
-    let input_path = tui::choose_file(&eligible_files)?;
+    // 4. Display file information in a table
 
-    // 5. Determine output path
-    let output_path = file::get_output_path(&input_path, mode);
+    let file_sizes: Vec<u64> = eligible_files
+        .iter()
+        .filter_map(|p| fs::metadata(p).ok().map(|m| m.len()))
+        .collect();
 
-    // 6. Validate input
+    let file_encrypted: Vec<bool> = eligible_files
+        .iter()
+        .map(|p| file::is_encrypted_file(p))
+        .collect();
+
+    tui::show_file_info(&display_paths, &file_sizes, &file_encrypted);
+
+    // 5. Select file
+    let input_path = prompt.choose_file(&eligible_files)?;
+
+    // 6. Determine output path
+    let (output_path, output_display) = file::get_output_path_with_display(&input_path, mode);
+
+    // 7. Validate input
     file::validate_path(&input_path, true)?;
 
-    // 7. Check overwrite
+    // 8. Check overwrite
     if file::validate_path(&output_path, false).is_err() {
-        let clean_path = output_path
-            .strip_prefix(".")
-            .unwrap_or(&output_path)
-            .display();
-        let overwrite =
-            tui::ask_confirm(&format!("Output file {} exists. Overwrite?", clean_path))?;
+        let overwrite = prompt.confirm_file_overwrite(&output_display)?;
         if !overwrite {
             return Err(anyhow!("operation canceled by user"));
         }
     }
 
-    // 8. Ask password
+    // 9. Ask password
     let password = if mode == ProcessorMode::Encrypt {
-        let p1 = tui::ask_password("Enter password:")?;
-        let p2 = tui::ask_password("Confirm password:")?;
-        if p1 != p2 {
-            anyhow::bail!("passwords do not match");
-        }
-        p1
+        prompt.get_encryption_password()?
     } else {
-        tui::ask_password("Enter password:")?
+        prompt.get_decryption_password()?
     };
 
     // 10. Process
@@ -59,20 +69,17 @@ pub fn run() -> Result<()> {
         }
     }
 
-    tui::show_success_info(mode, output_path.to_str().unwrap_or("?"));
+    tui::show_success_info(mode, &output_display);
 
     // 12. Delete original
     let file_type = match mode {
         ProcessorMode::Encrypt => "original",
         ProcessorMode::Decrypt => "encrypted",
     };
-    let clean_path = input_path
-        .strip_prefix(".")
-        .unwrap_or(&input_path)
-        .display();
-    if tui::ask_confirm(&format!("Delete {} file {}?", file_type, clean_path))? {
+    let input_display = file::get_clean_path(&input_path);
+    if prompt.confirm_file_removal(&input_display, file_type)? {
         file::remove_file(&input_path)?;
-        tui::show_source_deleted(input_path.to_str().unwrap_or("?"));
+        tui::show_source_deleted(&input_display);
     }
 
     Ok(())

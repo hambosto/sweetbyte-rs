@@ -79,6 +79,43 @@ pub fn get_output_path(input_path: &Path, mode: ProcessorMode) -> PathBuf {
     }
 }
 
+/// Determines the output path and returns both actual and cleaned display paths.
+///
+/// This is a convenience function that combines `get_output_path` with path cleaning
+/// for display purposes.
+///
+/// # Arguments
+///
+/// * `input_path` - The input file path
+/// * `mode` - The processing mode (Encrypt or Decrypt)
+///
+/// # Returns
+///
+/// Returns a tuple `(PathBuf, String)` where:
+/// - First element is the actual output path for processing
+/// - Second element is the cleaned path for display to users
+pub fn get_output_path_with_display(input_path: &Path, mode: ProcessorMode) -> (PathBuf, String) {
+    let output_path = get_output_path(input_path, mode);
+    let display_path = clean_path(&output_path);
+    (output_path, display_path)
+}
+
+/// Returns a cleaned path for display purposes.
+///
+/// This is a convenience wrapper around the internal `clean_path` function,
+/// provided for cases where only path cleaning is needed (e.g., for input paths).
+///
+/// # Arguments
+///
+/// * `path` - The path to clean
+///
+/// # Returns
+///
+/// Returns a cleaned path as a `String`.
+pub fn get_clean_path(path: &Path) -> String {
+    clean_path(path)
+}
+
 /// Checks if a file is an encrypted file based on its extension.
 ///
 /// # Arguments
@@ -138,4 +175,32 @@ pub fn is_excluded_ext(path: &Path) -> bool {
     path.to_str()
         .map(|path_str| EXCLUDED_EXTS.iter().any(|ext| path_str.ends_with(ext)))
         .unwrap_or(false)
+}
+
+/// Cleans a path for display by stripping the "./" prefix.
+///
+/// This normalizes path display for user-facing output, removing the
+/// current directory prefix that is commonly added during file traversal.
+///
+/// # Arguments
+///
+/// * `path` - The path to clean
+///
+/// # Returns
+///
+/// Returns a cleaned path as a `String`.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// let path = Path::new("./file.txt");
+/// let clean = clean_path(path);
+/// assert_eq!(clean, "file.txt");
+/// ```
+pub fn clean_path(path: &Path) -> String {
+    path.strip_prefix(".")
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string()
 }

@@ -52,6 +52,33 @@ pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
+/// Finds files eligible for the given processing mode and returns cleaned display paths.
+///
+/// This is a convenience function that combines `find_eligible_files` with path cleaning
+/// for display purposes. It returns both the actual file paths and their cleaned versions
+/// (with "./" prefix stripped).
+///
+/// # Arguments
+///
+/// * `mode` - The processing mode (Encrypt or Decrypt)
+///
+/// # Returns
+///
+/// Returns a tuple of `(Vec<PathBuf>, Vec<String>)` where:
+/// - First element contains actual file paths for processing
+/// - Second element contains cleaned paths for display to users
+///
+/// # Errors
+///
+/// Returns an error if directory traversal fails catastrophically.
+pub fn find_eligible_files_with_display(
+    mode: ProcessorMode,
+) -> Result<(Vec<PathBuf>, Vec<String>)> {
+    let files = find_eligible_files(mode)?;
+    let display_paths = files.iter().map(|p| validation::clean_path(p)).collect();
+    Ok((files, display_paths))
+}
+
 /// Checks if a file is eligible for the given processing mode.
 ///
 /// # Arguments
