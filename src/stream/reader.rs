@@ -1,8 +1,11 @@
-use anyhow::{Result, anyhow};
-use tokio::io::{AsyncRead, AsyncReadExt};
+use anyhow::{Context, Result, anyhow};
+use crossbeam_channel::{Receiver, Sender, bounded};
+use std::io::{self, Read};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 
-use crate::stream::pool::BufferPool;
-use crate::types::Processing;
+use crate::types::{Processing, Task};
 use crate::utils::UintType;
 
 /// Default chunk size: 256KB (matching Go implementation)
@@ -11,151 +14,205 @@ pub const CHUNK_SIZE: usize = 256 * 1024;
 const MAX_CHUNK_SIZE: usize = 10 * 1024 * 1024;
 const LENGTH_PREFIX_SIZE: usize = 4;
 
-/// Reads data in chunks from an input stream.
+/// Reads data in chunks from an input stream and emits tasks via channels.
 ///
-/// Handles two modes:
+/// Spawns a dedicated reader thread that handles two modes:
 /// - **Encryption**: Fixed-size chunks of plaintext
 /// - **Decryption**: Length-prefixed encrypted chunks
-pub struct StreamReader {
-    mode: Processing,
-    pool: BufferPool,
+///
+/// Matches Go's ChunkReader architecture with goroutine-based reading.
+#[derive(Debug)]
+pub struct ChunkReader {
+    processing: Processing,
+    chunk_size: usize,
+    concurrency: usize,
 }
 
-impl StreamReader {
-    pub fn new(mode: Processing, pool: BufferPool) -> Self {
-        Self { mode, pool }
-    }
-
-    /// Reads the next chunk based on the processing mode.
-    pub async fn read_chunk<R: AsyncRead + Unpin>(
-        &self,
-        reader: &mut R,
-        index: u64,
-    ) -> Result<Option<Vec<u8>>> {
-        match self.mode {
-            Processing::Encryption => self.read_plaintext_chunk(reader).await,
-            Processing::Decryption => self.read_encrypted_chunk(reader, index).await,
+impl ChunkReader {
+    /// Creates a new chunk reader.
+    pub fn new(processing: Processing, chunk_size: usize, concurrency: usize) -> Self {
+        Self {
+            processing,
+            chunk_size,
+            concurrency,
         }
     }
 
-    async fn read_plaintext_chunk<R: AsyncRead + Unpin>(
-        &self,
-        reader: &mut R,
-    ) -> Result<Option<Vec<u8>>> {
-        let mut buffer = self.pool.get();
-        buffer.resize(CHUNK_SIZE, 0);
+    /// Returns the processing mode.
+    pub fn processing(&self) -> Processing {
+        self.processing
+    }
 
-        match reader.read(&mut buffer).await {
-            Ok(0) => {
-                self.pool.recycle(buffer);
-                Ok(None)
+    /// Reads chunks from the input reader in a dedicated thread.
+    ///
+    /// Returns a tuple of (task_receiver, error_receiver).
+    /// The reader thread sends tasks through task_channel and any errors through error_channel.
+    /// Respects the cancellation flag to stop early.
+    pub fn read_chunks<R>(
+        &self,
+        mut reader: R,
+        cancel: Arc<AtomicBool>,
+    ) -> (Receiver<Task>, Receiver<anyhow::Error>)
+    where
+        R: Read + Send + 'static,
+    {
+        let (task_tx, task_rx) = bounded(self.concurrency);
+        let (err_tx, err_rx) = bounded(1);
+
+        let processing = self.processing;
+        let chunk_size = self.chunk_size;
+
+        thread::spawn(move || {
+            let result = match processing {
+                Processing::Encryption => {
+                    Self::read_for_encryption(&mut reader, &task_tx, chunk_size, &cancel)
+                }
+                Processing::Decryption => Self::read_for_decryption(&mut reader, &task_tx, &cancel),
+            };
+
+            // Send error if one occurred (ignore if channel is closed)
+            match result {
+                Err(e) if !cancel.load(Ordering::SeqCst) => {
+                    let _ = err_tx.send(e);
+                }
+                _ => {}
             }
-            Ok(n) => {
-                buffer.truncate(n);
-                Ok(Some(buffer))
+        });
+
+        (task_rx, err_rx)
+    }
+
+    /// Reads fixed-size chunks for encryption.
+    #[inline]
+    fn read_for_encryption<R>(
+        reader: &mut R,
+        tasks: &Sender<Task>,
+        chunk_size: usize,
+        cancel: &Arc<AtomicBool>,
+    ) -> Result<()>
+    where
+        R: Read,
+    {
+        // Use two buffers to avoid cloning on every iteration
+        let mut read_buffer = vec![0u8; chunk_size];
+        let mut send_buffer = Vec::with_capacity(chunk_size);
+        let mut index = 0u64;
+
+        loop {
+            // Check for cancellation
+            if cancel.load(Ordering::SeqCst) {
+                return Err(anyhow!("operation cancelled"));
             }
-            Err(e) => {
-                self.pool.recycle(buffer);
-                Err(anyhow!("Failed to read chunk: {}", e))
+
+            match reader.read(&mut read_buffer) {
+                Ok(0) => return Ok(()), // EOF
+                Ok(n) => {
+                    // Swap buffers to avoid cloning the data
+                    std::mem::swap(&mut read_buffer, &mut send_buffer);
+                    send_buffer.truncate(n);
+
+                    let task = Task {
+                        data: send_buffer,
+                        index,
+                    };
+
+                    // Check cancellation before blocking send
+                    if cancel.load(Ordering::SeqCst) {
+                        return Err(anyhow!("operation cancelled"));
+                    }
+
+                    tasks
+                        .send(task)
+                        .map_err(|_| anyhow!("task channel closed"))?;
+
+                    // Recreate send_buffer for next iteration
+                    send_buffer = Vec::with_capacity(chunk_size);
+                    read_buffer.clear();
+                    read_buffer.resize(chunk_size, 0);
+                    index += 1;
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e).context("failed to read from input stream"),
             }
         }
     }
 
-    async fn read_encrypted_chunk<R: AsyncRead + Unpin>(
-        &self,
+    /// Reads length-prefixed chunks for decryption.
+    #[inline]
+    fn read_for_decryption<R>(
         reader: &mut R,
-        index: u64,
-    ) -> Result<Option<Vec<u8>>> {
-        let chunk_len = match self.read_chunk_length(reader, index).await? {
-            Some(len) => len,
-            None => return Ok(None),
-        };
+        tasks: &Sender<Task>,
+        cancel: &Arc<AtomicBool>,
+    ) -> Result<()>
+    where
+        R: Read,
+    {
+        let mut index = 0u64;
 
-        self.validate_chunk_size(chunk_len, index)?;
-
-        let mut chunk_data = self.pool.get();
-        chunk_data.resize(chunk_len, 0);
-
-        match reader.read_exact(&mut chunk_data).await {
-            Ok(_) => Ok(Some(chunk_data)),
-            Err(e) => {
-                self.pool.recycle(chunk_data);
-                Err(anyhow!("Failed to read chunk {} data: {}", index, e))
+        loop {
+            // Check for cancellation
+            if cancel.load(Ordering::SeqCst) {
+                return Err(anyhow!("operation cancelled"));
             }
+
+            // Read 4-byte length prefix
+            let chunk_len = match Self::read_chunk_length(reader, index)? {
+                Some(len) => len,
+                None => return Ok(()), // EOF
+            };
+
+            if chunk_len == 0 {
+                continue;
+            }
+
+            // Validate chunk size
+            if chunk_len > MAX_CHUNK_SIZE {
+                return Err(anyhow!(
+                    "chunk {} size ({} bytes) exceeds maximum ({} bytes)",
+                    index,
+                    chunk_len,
+                    MAX_CHUNK_SIZE
+                ));
+            }
+
+            // Read chunk data
+            let mut data = vec![0u8; chunk_len];
+            reader.read_exact(&mut data).with_context(|| {
+                format!("failed to read chunk {} data ({} bytes)", index, chunk_len)
+            })?;
+
+            let task = Task { data, index };
+
+            // Check cancellation before blocking send
+            if cancel.load(Ordering::SeqCst) {
+                return Err(anyhow!("operation cancelled"));
+            }
+
+            tasks
+                .send(task)
+                .map_err(|_| anyhow!("task channel closed"))?;
+
+            index += 1;
         }
     }
 
-    async fn read_chunk_length<R: AsyncRead + Unpin>(
-        &self,
-        reader: &mut R,
-        index: u64,
-    ) -> Result<Option<usize>> {
+    /// Reads the 4-byte length prefix for encrypted chunks.
+    #[inline]
+    fn read_chunk_length<R>(reader: &mut R, index: u64) -> Result<Option<usize>>
+    where
+        R: Read,
+    {
         let mut length_buf = [0u8; LENGTH_PREFIX_SIZE];
 
-        match reader.read_exact(&mut length_buf).await {
+        match reader.read_exact(&mut length_buf) {
             Ok(_) => {
                 let len = u32::from_bytes(&length_buf) as usize;
-                if len == 0 { Ok(None) } else { Ok(Some(len)) }
+                Ok(Some(len))
             }
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(None),
-            Err(e) => Err(anyhow!("Failed to read chunk {} length: {}", index, e)),
+            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
+            Err(e) => {
+                Err(e).with_context(|| format!("failed to read chunk {} length prefix", index))
+            }
         }
-    }
-
-    fn validate_chunk_size(&self, chunk_len: usize, index: u64) -> Result<()> {
-        if chunk_len > MAX_CHUNK_SIZE {
-            Err(anyhow!(
-                "Invalid chunk {} size: {} bytes exceeds maximum of {} bytes",
-                index,
-                chunk_len,
-                MAX_CHUNK_SIZE
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Cursor;
-
-    #[tokio::test]
-    async fn test_read_plaintext_chunk() {
-        let data = vec![1u8; 100];
-        let mut cursor = Cursor::new(data);
-
-        let pool = BufferPool::new(10, CHUNK_SIZE);
-        let reader = StreamReader::new(Processing::Encryption, pool);
-        let chunk = reader.read_chunk(&mut cursor, 0).await.unwrap();
-
-        assert!(chunk.is_some());
-        assert_eq!(chunk.unwrap().len(), 100);
-    }
-
-    #[tokio::test]
-    async fn test_read_plaintext_eof() {
-        let mut cursor = Cursor::new(Vec::<u8>::new());
-
-        let pool = BufferPool::new(10, CHUNK_SIZE);
-        let reader = StreamReader::new(Processing::Encryption, pool);
-        let chunk = reader.read_chunk(&mut cursor, 0).await.unwrap();
-
-        assert!(chunk.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_read_encrypted_chunk() {
-        let mut data = vec![];
-        data.extend_from_slice(&5u32.to_be_bytes());
-        data.extend_from_slice(&[1, 2, 3, 4, 5]);
-
-        let mut cursor = Cursor::new(data);
-        let pool = BufferPool::new(10, CHUNK_SIZE);
-        let reader = StreamReader::new(Processing::Decryption, pool);
-        let chunk = reader.read_chunk(&mut cursor, 0).await.unwrap();
-
-        assert_eq!(chunk.unwrap(), vec![1, 2, 3, 4, 5]);
     }
 }

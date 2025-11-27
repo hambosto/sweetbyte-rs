@@ -1,59 +1,89 @@
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 
-const PREWARM_MULTIPLIER: usize = 2;
+use crate::types::{Task, TaskResult};
 
-/// Thread-safe buffer pool to reduce allocation overhead.
+use super::worker::ChunkWorker;
+
+/// Pool of worker threads for parallel chunk processing.
 ///
-/// Recycling buffers minimizes allocation costs and memory fragmentation,
-/// especially for large buffers (e.g., 256KB chunks).
-#[derive(Clone)]
-pub struct BufferPool {
-    sender: Sender<Vec<u8>>,
-    receiver: Receiver<Vec<u8>>,
-    buffer_size: usize,
+/// Spawns a fixed number of worker threads that process tasks concurrently.
+/// Matches Go's WorkerPool architecture with goroutine-based workers.
+pub struct WorkerPool {
+    processor: Arc<ChunkWorker>,
+    concurrency: usize,
 }
 
-impl BufferPool {
-    /// Creates a new buffer pool with pre-warmed buffers.
+impl WorkerPool {
+    /// Creates a new worker pool.
     ///
-    /// Pre-warming eliminates allocation latency during runtime by
-    /// initializing a reasonable number of buffers upfront.
-    pub fn new(capacity: usize, buffer_size: usize) -> Self {
-        let (sender, receiver) = crossbeam_channel::bounded(capacity);
-
-        let prewarm_count = capacity.min(num_cpus::get() * PREWARM_MULTIPLIER);
-        for _ in 0..prewarm_count {
-            let buffer = vec![0u8; buffer_size];
-            let _ = sender.try_send(buffer);
-        }
-
+    /// # Arguments
+    ///
+    /// * `processor` - The task processor to use for each task
+    /// * `concurrency` - Number of worker threads to spawn
+    pub fn new(processor: ChunkWorker, concurrency: usize) -> Self {
         Self {
-            sender,
-            receiver,
-            buffer_size,
+            processor: Arc::new(processor),
+            concurrency,
         }
     }
 
-    /// Gets a buffer from the pool or allocates a new one if empty.
+    /// Processes tasks from the input channel using worker threads.
     ///
-    /// Returned buffers are cleared (length 0) but retain their capacity.
-    pub fn get(&self) -> Vec<u8> {
-        match self.receiver.try_recv() {
-            Ok(mut buffer) => {
-                buffer.clear();
-                buffer
+    /// Spawns `concurrency` worker threads that:
+    /// 1. Receive tasks from the tasks channel
+    /// 2. Process each task using the ChunkWorker
+    /// 3. Send results to the results channel
+    /// 4. Exit when tasks channel is closed or cancellation is requested
+    ///
+    /// Returns a receiver for task results.
+    pub fn process(&self, tasks: Receiver<Task>, cancel: Arc<AtomicBool>) -> Receiver<TaskResult> {
+        let (results_tx, results_rx) = bounded(self.concurrency);
+
+        // Spawn worker threads
+        for _ in 0..self.concurrency {
+            let tasks = tasks.clone();
+            let results = results_tx.clone();
+            let processor = Arc::clone(&self.processor);
+            let cancel = Arc::clone(&cancel);
+
+            thread::spawn(move || {
+                Self::worker(processor, tasks, results, cancel);
+            });
+        }
+
+        // Drop the original sender so channel closes when all workers are done
+        drop(results_tx);
+
+        results_rx
+    }
+
+    /// Worker thread function.
+    ///
+    /// Continuously processes tasks until the channel is closed or cancellation is requested.
+    #[inline]
+    fn worker(
+        processor: Arc<ChunkWorker>,
+        tasks: Receiver<Task>,
+        results: Sender<TaskResult>,
+        cancel: Arc<AtomicBool>,
+    ) {
+        while !cancel.load(Ordering::SeqCst) {
+            // Receive next task
+            let task = match tasks.recv() {
+                Ok(task) => task,
+                Err(_) => return, // Channel closed, exit
+            };
+
+            // Process the task
+            let result = processor.process(task);
+
+            // Send result (exit if channel closed)
+            if results.send(result).is_err() {
+                return;
             }
-            Err(_) => Vec::with_capacity(self.buffer_size),
-        }
-    }
-
-    /// Returns a buffer to the pool for reuse.
-    ///
-    /// Buffers smaller than `buffer_size` are dropped. If the pool is full,
-    /// the buffer is also dropped.
-    pub fn recycle(&self, buffer: Vec<u8>) {
-        if buffer.capacity() >= self.buffer_size {
-            let _ = self.sender.try_send(buffer);
         }
     }
 }

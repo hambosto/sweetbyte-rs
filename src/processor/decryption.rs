@@ -5,10 +5,8 @@ use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
 use anyhow::{Result, anyhow};
-use std::io::Seek;
-use tokio::fs::File;
-use tokio::io::AsyncSeekExt;
-use tokio::runtime::Runtime;
+use std::fs::File;
+use std::io::{Seek, SeekFrom};
 
 /// Decrypts a file from source to destination using the provided password.
 pub fn decrypt_file(
@@ -46,23 +44,18 @@ pub fn decrypt_file(
     // Get original size from header for progress tracking
     let original_size = hdr.original_size;
 
-    // Create runtime for async execution
-    let rt = Runtime::new()?;
+    // Open source file
+    let mut src_file = File::open(src_path)?;
 
-    rt.block_on(async {
-        // Open source file async
-        let mut src_file = File::open(src_path).await?;
+    // Seek to offset
+    src_file.seek(SeekFrom::Start(offset))?;
 
-        // Seek to offset
-        src_file.seek(tokio::io::SeekFrom::Start(offset)).await?;
+    // Create destination file
+    let dest_file = File::create(dest_path)?;
 
-        // Create destination file
-        let dest_file = File::create(dest_path).await?;
+    // Process file content
+    let pipeline = Pipeline::new(&key, Processing::Decryption)?;
+    pipeline.process(src_file, dest_file, original_size)?;
 
-        // Process file content
-        let pipeline = Pipeline::new(&key, Processing::Decryption)?;
-        pipeline.process(src_file, dest_file, original_size).await?;
-
-        Ok(())
-    })
+    Ok(())
 }

@@ -1,163 +1,143 @@
-use anyhow::Result;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use anyhow::{Context, Result, anyhow};
+use crossbeam_channel::Receiver;
+use std::io::Write;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::buffer::ReorderBuffer;
-use crate::types::Processing;
+use super::buffer::OrderedBuffer;
+use crate::types::{Processing, TaskResult};
 use crate::utils::UintType;
 
-use crate::stream::pool::BufferPool;
-
-const LENGTH_PREFIX_SIZE: usize = 4;
-
-/// Writes chunks to the output stream while maintaining correct order.
+/// Writes processed chunks to the output stream while maintaining correct order.
 ///
-/// Uses a `ReorderBuffer` to handle out-of-order chunks from parallel processing.
-pub struct StreamWriter {
-    mode: Processing,
-    buffer: ReorderBuffer,
-    pool: BufferPool,
+/// Uses an OrderedBuffer to handle out-of-order results from parallel processing.
+/// Matches Go's ChunkWriter architecture with synchronized buffering.
+#[derive(Debug)]
+pub struct ChunkWriter {
+    processing: Processing,
+    buffer: Arc<OrderedBuffer>,
 }
 
-impl StreamWriter {
-    pub fn new(mode: Processing, pool: BufferPool) -> Self {
+impl Clone for ChunkWriter {
+    fn clone(&self) -> Self {
         Self {
-            mode,
-            buffer: ReorderBuffer::new(),
-            pool,
+            processing: self.processing,
+            buffer: Arc::clone(&self.buffer),
+        }
+    }
+}
+
+impl ChunkWriter {
+    /// Creates a new chunk writer.
+    pub fn new(processing: Processing) -> Self {
+        Self {
+            processing,
+            buffer: Arc::new(OrderedBuffer::new()),
         }
     }
 
-    /// Writes a chunk, buffering as needed to maintain correct order.
+    /// Writes chunks from the results channel to the output writer.
     ///
-    /// Batches consecutive ready chunks together to reduce system calls.
-    pub async fn write_chunk<W: AsyncWrite + Unpin>(
-        &mut self,
-        writer: &mut W,
-        index: u64,
-        data: Vec<u8>,
-    ) -> Result<()> {
-        let ready_chunks = self.buffer.add(index, data);
+    /// This is a blocking operation that:
+    /// 1. Receives results from the channel
+    /// 2. Adds them to the OrderedBuffer
+    /// 3. Writes ready chunks immediately in the correct order
+    /// 4. Updates the progress bar
+    /// 5. Handles errors and cancellation
+    /// 6. Flushes remaining chunks at the end
+    ///
+    /// # Arguments
+    ///
+    /// * `writer` - Output writer
+    /// * `results` - Channel of task results
+    /// * `progress` - Progress bar for tracking
+    /// * `cancel` - Cancellation flag
+    pub fn write_chunks<W>(
+        &self,
+        writer: W,
+        results: Receiver<TaskResult>,
+        progress: Arc<crate::tui::Bar>,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<()>
+    where
+        W: Write,
+    {
+        // Wrap in BufWriter for better I/O performance
+        let mut writer = std::io::BufWriter::new(writer);
 
-        if ready_chunks.is_empty() {
-            return Ok(());
+        loop {
+            // Check for cancellation
+            if cancel.load(Ordering::SeqCst) {
+                return Err(anyhow!("operation cancelled"));
+            }
+
+            // Receive next result
+            let result = match results.recv() {
+                Ok(result) => result,
+                Err(_) => {
+                    // Channel closed, flush remaining results
+                    let remaining = self.buffer.flush();
+                    self.write_results(&mut writer, &remaining, &progress)?;
+                    writer.flush()?;
+                    return Ok(());
+                }
+            };
+
+            // Check for processing error
+            if let Some(err) = result.err {
+                cancel.store(true, Ordering::SeqCst);
+                return Err(err)
+                    .with_context(|| format!("chunk {} processing failed", result.index));
+            }
+
+            // Add to buffer and get ready chunks
+            let ready_chunks = self.buffer.add(result);
+
+            // Write ready chunks
+            if !ready_chunks.is_empty() {
+                self.write_results(&mut writer, &ready_chunks, &progress)?;
+            }
         }
-
-        self.write_batch(writer, &ready_chunks).await?;
-        self.recycle_chunks(ready_chunks);
-
-        Ok(())
     }
 
-    /// Flushes any remaining buffered chunks.
-    pub async fn flush<W: AsyncWrite + Unpin>(&mut self, writer: &mut W) -> Result<()> {
-        let remaining = self.buffer.flush();
-
-        if !remaining.is_empty() {
-            self.write_batch(writer, &remaining).await?;
-            self.recycle_chunks(remaining);
-        }
-
-        writer.flush().await?;
-        Ok(())
-    }
-
-    async fn write_batch<W: AsyncWrite + Unpin>(
+    /// Writes a batch of results to the output.
+    #[inline]
+    fn write_results<W>(
         &self,
         writer: &mut W,
-        chunks: &[Vec<u8>],
-    ) -> Result<()> {
-        let batch = self.create_batch_buffer(chunks);
-        writer.write_all(&batch).await?;
+        results: &[TaskResult],
+        progress: &crate::tui::Bar,
+    ) -> Result<()>
+    where
+        W: Write,
+    {
+        for result in results {
+            // For encryption, write 4-byte length prefix first
+            if self.processing == Processing::Encryption {
+                let size = result.data.len();
+                if size > u32::MAX as usize {
+                    return Err(anyhow!(
+                        "chunk {} size ({} bytes) exceeds u32::MAX",
+                        result.index,
+                        size
+                    ));
+                }
+
+                let length_bytes = (size as u32).to_bytes();
+                writer
+                    .write_all(&length_bytes)
+                    .context("failed to write chunk length prefix")?;
+            }
+
+            // Write chunk data
+            writer
+                .write_all(&result.data)
+                .with_context(|| format!("failed to write chunk {} data", result.index))?;
+
+            // Update progress
+            progress.add(result.size as u64);
+        }
+
         Ok(())
-    }
-
-    fn create_batch_buffer(&self, chunks: &[Vec<u8>]) -> Vec<u8> {
-        match self.mode {
-            Processing::Encryption => self.create_encrypted_batch(chunks),
-            Processing::Decryption => self.create_decrypted_batch(chunks),
-        }
-    }
-
-    fn create_encrypted_batch(&self, chunks: &[Vec<u8>]) -> Vec<u8> {
-        let total_size: usize = chunks.iter().map(|c| c.len() + LENGTH_PREFIX_SIZE).sum();
-        let mut batch = Vec::with_capacity(total_size);
-
-        for chunk in chunks {
-            let length = (chunk.len() as u32).to_bytes();
-            batch.extend_from_slice(&length);
-            batch.extend_from_slice(chunk);
-        }
-
-        batch
-    }
-
-    fn create_decrypted_batch(&self, chunks: &[Vec<u8>]) -> Vec<u8> {
-        let total_size: usize = chunks.iter().map(|c| c.len()).sum();
-        let mut batch = Vec::with_capacity(total_size);
-
-        for chunk in chunks {
-            batch.extend_from_slice(chunk);
-        }
-
-        batch
-    }
-
-    fn recycle_chunks(&self, chunks: Vec<Vec<u8>>) {
-        for chunk in chunks {
-            self.pool.recycle(chunk);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::stream::reader::CHUNK_SIZE;
-    use std::io::Cursor;
-
-    #[tokio::test]
-    async fn test_write_in_order() {
-        let mut writer_buf = Vec::new();
-        let mut cursor = Cursor::new(&mut writer_buf);
-
-        let pool = BufferPool::new(10, CHUNK_SIZE);
-        let mut chunk_writer = StreamWriter::new(Processing::Encryption, pool);
-
-        chunk_writer
-            .write_chunk(&mut cursor, 0, vec![1, 2, 3])
-            .await
-            .unwrap();
-        chunk_writer
-            .write_chunk(&mut cursor, 1, vec![4, 5, 6])
-            .await
-            .unwrap();
-        chunk_writer.flush(&mut cursor).await.unwrap();
-
-        assert_eq!(writer_buf.len(), 14);
-    }
-
-    #[tokio::test]
-    async fn test_write_out_of_order() {
-        let mut writer_buf = Vec::new();
-        let mut cursor = Cursor::new(&mut writer_buf);
-
-        let pool = BufferPool::new(10, CHUNK_SIZE);
-        let mut chunk_writer = StreamWriter::new(Processing::Decryption, pool);
-
-        chunk_writer
-            .write_chunk(&mut cursor, 2, vec![7, 8, 9])
-            .await
-            .unwrap();
-        chunk_writer
-            .write_chunk(&mut cursor, 0, vec![1, 2, 3])
-            .await
-            .unwrap();
-        chunk_writer
-            .write_chunk(&mut cursor, 1, vec![4, 5, 6])
-            .await
-            .unwrap();
-        chunk_writer.flush(&mut cursor).await.unwrap();
-
-        assert_eq!(writer_buf, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 }

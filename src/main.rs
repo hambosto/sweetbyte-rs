@@ -13,6 +13,10 @@ pub mod types;
 pub mod utils;
 
 use anyhow::Result;
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() -> Result<()> {
     app::run()

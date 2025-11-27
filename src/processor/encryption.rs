@@ -1,7 +1,6 @@
 use anyhow::{Result, anyhow};
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
-use tokio::runtime::Runtime;
+use std::fs::File;
+use std::io::Write;
 
 use crate::crypto::{ARGON_SALT_LEN, derive_key, random_bytes};
 use crate::file;
@@ -38,23 +37,18 @@ pub fn encrypt_file(
     // Marshal header
     let header_bytes = header::marshal::marshal(&hdr, &salt, &key)?;
 
-    // Create runtime for async execution
-    let rt = Runtime::new()?;
+    // Open source file
+    let src_file = File::open(src_path)?;
 
-    rt.block_on(async {
-        // Open source file
-        let src_file = File::open(src_path).await?;
+    // Create destination file
+    let mut dest_file = File::create(dest_path)?;
 
-        // Create destination file
-        let mut dest_file = File::create(dest_path).await?;
+    // Write header
+    dest_file.write_all(&header_bytes)?;
 
-        // Write header
-        dest_file.write_all(&header_bytes).await?;
+    // Process file content
+    let processor = Pipeline::new(&key, Processing::Encryption)?;
+    processor.process(src_file, dest_file, original_size)?;
 
-        // Process file content
-        let pipeline = Pipeline::new(&key, Processing::Encryption)?;
-        pipeline.process(src_file, dest_file, original_size).await?;
-
-        Ok(())
-    })
+    Ok(())
 }
