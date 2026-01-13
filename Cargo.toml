@@ -1,0 +1,49 @@
+[package]
+name = "sweetbyte-rs"
+version = "1.0.0"
+edition = "2024"
+description = "Multi-layered file encryption with error correction"
+license = "MIT"
+authors = ["SweetByte Contributors"]
+readme = "README.md"
+keywords = ["encryption", "security", "crypto", "aes", "chacha20"]
+categories = ["cryptography", "command-line-utilities"]
+
+[dependencies]
+# Cryptography
+aes-gcm = "0.10.3"
+chacha20poly1305 = "0.10.1"
+argon2 = "0.5.3"
+hmac = "0.12.1"
+sha2 = "0.10.9"
+rand = "0.9.2"
+
+# Encoding
+reed-solomon-erasure = "6.0.0"
+flate2 = "1.1.8"
+
+# CLI
+clap = { version = "4.5.54", features = ["derive"] }
+
+# TUI
+dialoguer = "0.12.0"
+indicatif = "0.18.3"
+console = "0.16.2"
+comfy-table = "7.2"
+
+# Concurrency
+rayon = "1.11.0"
+crossbeam-channel = "0.5.15"
+
+# Utilities
+anyhow = "1.0.100"
+glob = "0.3.3"
+byteorder = "1.5.0"
+
+[dev-dependencies]
+tempfile = "3.24.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
