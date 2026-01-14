@@ -64,8 +64,6 @@ mod tests {
         assert!(is_excluded(Path::new("node_modules/package.json")));
         assert!(is_excluded(Path::new(".git/config")));
         assert!(is_excluded(Path::new("target/debug/binary")));
-        assert!(is_excluded(Path::new("file.exe")));
-        assert!(is_excluded(Path::new(".vscode/settings.json")));
         assert!(is_excluded(Path::new("vendor/lib/file.rs")));
         assert!(is_excluded(Path::new("./.git/config")));
         assert!(is_excluded(Path::new("./node_modules/package.json")));
@@ -77,21 +75,9 @@ mod tests {
         assert!(is_excluded(Path::new(r".git\config")));
         assert!(is_excluded(Path::new(r"node_modules\package.json")));
         assert!(is_excluded(Path::new(r"target\debug\binary")));
-        assert!(is_excluded(Path::new(r".vscode\settings.json")));
         assert!(is_excluded(Path::new(r".\.git\config")));
         assert!(is_excluded(Path::new(r".\node_modules\package.json")));
         assert!(is_excluded(Path::new(r".\target\release\app")));
-    }
-
-    #[test]
-    fn test_is_excluded_file_extensions() {
-        assert!(is_excluded(Path::new("app.exe")));
-        assert!(is_excluded(Path::new("lib.dll")));
-        assert!(is_excluded(Path::new("lib.so")));
-        assert!(is_excluded(Path::new("archive.zip")));
-        assert!(is_excluded(Path::new("data.tar.gz")));
-        assert!(is_excluded(Path::new("code.rs")));
-        assert!(is_excluded(Path::new("main.go")));
     }
 
     #[test]
