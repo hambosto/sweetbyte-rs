@@ -4,11 +4,9 @@ use anyhow::{Context, Result, bail};
 use byteorder::{BigEndian, WriteBytesExt};
 use crossbeam_channel::Receiver;
 
-use crate::{
-    stream::buffer::SequentialBuffer,
-    types::{Processing, TaskResult},
-    ui::progress::Bar,
-};
+use crate::stream::buffer::SequentialBuffer;
+use crate::types::{Processing, TaskResult};
+use crate::ui::progress::Bar;
 
 pub struct ChunkWriter {
     mode: Processing,
@@ -65,7 +63,7 @@ impl ChunkWriter {
                         bar.add(result.size as u64);
                     }
                 }
-            },
+            }
             Processing::Decryption => {
                 for result in results {
                     output
@@ -76,7 +74,7 @@ impl ChunkWriter {
                         bar.add(result.size as u64);
                     }
                 }
-            },
+            }
         }
 
         Ok(())

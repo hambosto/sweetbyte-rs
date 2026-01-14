@@ -1,14 +1,11 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::{
-    file::{operations::is_encrypted_file, validation::is_excluded},
-    types::ProcessorMode,
-};
+use crate::file::operations::is_encrypted_file;
+use crate::file::validation::is_excluded;
+use crate::types::ProcessorMode;
 
 pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();

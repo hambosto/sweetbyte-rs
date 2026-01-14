@@ -1,11 +1,10 @@
-use std::{sync::Arc, thread};
+use std::sync::Arc;
+use std::thread;
 
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::{
-    stream::processor::DataProcessor,
-    types::{Task, TaskResult},
-};
+use crate::stream::processor::DataProcessor;
+use crate::types::{Task, TaskResult};
 
 pub struct ConcurrentExecutor {
     processor: Arc<DataProcessor>,

@@ -1,14 +1,10 @@
 use anyhow::{Result, bail};
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::{
-    config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE},
-    header::{
-        Header,
-        mac::compute_mac,
-        section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType},
-    },
-};
+use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
+use crate::header::Header;
+use crate::header::mac::compute_mac;
+use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType};
 
 pub struct Serializer<'a> {
     header: &'a Header,

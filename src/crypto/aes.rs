@@ -1,13 +1,9 @@
-use aes_gcm::{
-    Aes256Gcm, Nonce,
-    aead::{Aead, KeyInit},
-};
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Nonce};
 use anyhow::{Result, anyhow, bail};
 
-use crate::{
-    config::{AES_KEY_SIZE, AES_NONCE_SIZE},
-    crypto::derive::random_bytes,
-};
+use crate::config::{AES_KEY_SIZE, AES_NONCE_SIZE};
+use crate::crypto::derive::random_bytes;
 
 pub struct AesCipher {
     aead: Aes256Gcm,

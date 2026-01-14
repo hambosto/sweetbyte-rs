@@ -1,15 +1,14 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use crate::{
-    config::{ARGON_KEY_LEN, ARGON_SALT_LEN},
-    crypto::{derive_key, random_bytes},
-    file::{create_file, get_file_info, open_file},
-    header::Header,
-    stream::Pipeline,
-    types::Processing,
-};
+use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
+use crate::crypto::{derive_key, random_bytes};
+use crate::file::{create_file, get_file_info, open_file};
+use crate::header::Header;
+use crate::stream::Pipeline;
+use crate::types::Processing;
 
 pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> {
     let src_file = open_file(src_path)?;

@@ -1,10 +1,8 @@
 use anyhow::{Context, Result, bail};
 use reed_solomon_erasure::galois_8::ReedSolomon as RsEncoder;
 
-use crate::{
-    config::{DATA_SHARDS, PARITY_SHARDS},
-    encoding::shards::Shards,
-};
+use crate::config::{DATA_SHARDS, PARITY_SHARDS};
+use crate::encoding::shards::Shards;
 
 pub const MAX_DATA_LEN: usize = 1 << 30;
 

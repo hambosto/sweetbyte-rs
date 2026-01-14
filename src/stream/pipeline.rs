@@ -1,20 +1,16 @@
-use std::{
-    io::{Read, Write},
-    thread,
-};
+use std::io::{Read, Write};
+use std::thread;
 
 use anyhow::{Result, anyhow};
 use crossbeam_channel::bounded;
 
-use crate::{
-    config::{ARGON_KEY_LEN, CHUNK_SIZE},
-    stream::{
-        executor::ConcurrentExecutor, processor::DataProcessor, reader::ChunkReader,
-        writer::ChunkWriter,
-    },
-    types::Processing,
-    ui::progress::Bar,
-};
+use crate::config::{ARGON_KEY_LEN, CHUNK_SIZE};
+use crate::stream::executor::ConcurrentExecutor;
+use crate::stream::processor::DataProcessor;
+use crate::stream::reader::ChunkReader;
+use crate::stream::writer::ChunkWriter;
+use crate::types::Processing;
+use crate::ui::progress::Bar;
 
 pub struct Pipeline {
     processor: DataProcessor,

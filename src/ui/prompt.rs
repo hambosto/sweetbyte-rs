@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow, bail};
-use dialoguer::{Confirm, Password, Select, theme::ColorfulTheme};
+use dialoguer::theme::ColorfulTheme;
+use dialoguer::{Confirm, Password, Select};
 
-use crate::{config::PASSWORD_MIN_LENGTH, types::ProcessorMode};
+use crate::config::PASSWORD_MIN_LENGTH;
+use crate::types::ProcessorMode;
 
 pub fn get_encryption_password() -> Result<String> {
     let password: String = Password::with_theme(&ColorfulTheme::default())

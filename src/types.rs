@@ -1,7 +1,5 @@
-use std::{
-    fmt::{Display, Formatter, Result},
-    path::PathBuf,
-};
+use std::fmt::{Display, Formatter, Result};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessorMode {

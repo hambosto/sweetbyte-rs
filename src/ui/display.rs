@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use anyhow::{Result, anyhow};
-use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL};
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Cell, Color, ContentArrangement, Table};
 use console::{Term, style};
 use figlet_rs::FIGfont;
 

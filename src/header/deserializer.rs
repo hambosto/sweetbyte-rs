@@ -1,17 +1,14 @@
-use std::{collections::HashMap, io::Read};
+use std::collections::HashMap;
+use std::io::Read;
 
 use anyhow::{Context, Result, bail};
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::{
-    config::{HEADER_DATA_SIZE, MAGIC_SIZE},
-    header::{
-        Header,
-        mac::verify_magic,
-        section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType},
-        serializer::magic_bytes,
-    },
-};
+use crate::config::{HEADER_DATA_SIZE, MAGIC_SIZE};
+use crate::header::Header;
+use crate::header::mac::verify_magic;
+use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType};
+use crate::header::serializer::magic_bytes;
 
 pub struct Deserializer<'a> {
     header: &'a mut Header,

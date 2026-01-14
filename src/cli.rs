@@ -1,25 +1,17 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs::{metadata, remove_file};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
-use crate::{
-    file::{
-        discovery::find_eligible_files,
-        operations::{get_output_path, is_encrypted_file},
-    },
-    processor,
-    types::{FileInfo, ProcessorMode},
-    ui::{
-        display::{print_banner, show_file_info, show_source_deleted, show_success},
-        prompt::{
-            choose_file, confirm_removal, get_decryption_password, get_encryption_password,
-            get_processing_mode,
-        },
-    },
+use crate::file::discovery::find_eligible_files;
+use crate::file::operations::{get_output_path, is_encrypted_file};
+use crate::processor;
+use crate::types::{FileInfo, ProcessorMode};
+use crate::ui::display::{print_banner, show_file_info, show_source_deleted, show_success};
+use crate::ui::prompt::{
+    choose_file, confirm_removal, get_decryption_password, get_encryption_password,
+    get_processing_mode,
 };
 
 #[derive(Parser)]
@@ -135,7 +127,7 @@ pub fn run_interactive() -> Result<()> {
         .iter()
         .map(|p| FileInfo {
             path: p.clone(),
-            size: fs::metadata(p).map(|m| m.len()).unwrap_or(0),
+            size: metadata(p).map(|m| m.len()).unwrap_or(0),
             is_encrypted: is_encrypted_file(p),
         })
         .collect();
@@ -153,11 +145,11 @@ pub fn run_interactive() -> Result<()> {
 
             show_success(mode, &output);
             if confirm_removal(&selected, "original")? {
-                fs::remove_file(&selected)
+                remove_file(&selected)
                     .with_context(|| format!("failed to remove {}", selected.display()))?;
                 show_source_deleted(&selected);
             }
-        },
+        }
         ProcessorMode::Decrypt => {
             let password = get_decryption_password()?;
 
@@ -166,11 +158,11 @@ pub fn run_interactive() -> Result<()> {
 
             show_success(mode, &output);
             if confirm_removal(&selected, "encrypted")? {
-                fs::remove_file(&selected)
+                remove_file(&selected)
                     .with_context(|| format!("failed to remove {}", selected.display()))?;
                 show_source_deleted(&selected);
             }
-        },
+        }
     }
 
     Ok(())

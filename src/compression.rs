@@ -1,7 +1,9 @@
 use std::io::{Read, Write};
 
 use anyhow::{Context, Result, bail};
-use flate2::{Compression, read::ZlibDecoder, write::ZlibEncoder};
+use flate2::Compression;
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompressionLevel {

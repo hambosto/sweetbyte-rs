@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
 
-use crate::{
-    config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE},
-    crypto::{aes::AesCipher, chacha::ChachaCipher},
-};
+use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};
+use crate::crypto::aes::AesCipher;
+use crate::crypto::chacha::ChachaCipher;
 
 pub struct Cipher {
     aes: AesCipher,

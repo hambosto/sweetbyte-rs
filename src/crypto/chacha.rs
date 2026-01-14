@@ -1,13 +1,9 @@
 use anyhow::{Result, anyhow, bail};
-use chacha20poly1305::{
-    XChaCha20Poly1305, XNonce,
-    aead::{Aead, KeyInit},
-};
+use chacha20poly1305::aead::{Aead, KeyInit};
+use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 
-use crate::{
-    config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE},
-    crypto::derive::random_bytes,
-};
+use crate::config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE};
+use crate::crypto::derive::random_bytes;
 
 pub struct ChachaCipher {
     aead: XChaCha20Poly1305,
