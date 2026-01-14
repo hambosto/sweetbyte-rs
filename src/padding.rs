@@ -54,7 +54,7 @@ mod tests {
         let data = b"Hello, World!";
 
         let padded = padding.pad(data).unwrap();
-        assert_eq!(padded.len() % BLOCK_SIZE as usize, 0);
+        assert_eq!(padded.len() % BLOCK_SIZE, 0);
 
         let unpadded = padding.unpad(&padded).unwrap();
         assert_eq!(unpadded, data);
