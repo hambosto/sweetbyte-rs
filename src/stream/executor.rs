@@ -1,9 +1,11 @@
-use crossbeam_channel::{Receiver, Sender};
-use std::sync::Arc;
-use std::thread;
+use std::{sync::Arc, thread};
 
-use crate::stream::processor::DataProcessor;
-use crate::types::{Task, TaskResult};
+use crossbeam_channel::{Receiver, Sender};
+
+use crate::{
+    stream::processor::DataProcessor,
+    types::{Task, TaskResult},
+};
 
 pub struct ConcurrentExecutor {
     processor: Arc<DataProcessor>,
@@ -24,7 +26,6 @@ impl ConcurrentExecutor {
             let processor = Arc::clone(&self.processor);
             let tasks = tasks.clone();
             let results = results.clone();
-
             let handle = thread::spawn(move || {
                 for task in tasks {
                     let result = processor.process(task);

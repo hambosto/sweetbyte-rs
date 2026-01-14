@@ -1,20 +1,21 @@
-use anyhow::{Context, Result, bail};
-use std::io::Write;
-use std::path::Path;
+use std::{io::Write, path::Path};
 
-use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
-use crate::crypto::{derive_key, random_bytes};
-use crate::file::{create_file, get_file_info, open_file};
-use crate::header::Header;
-use crate::stream::Pipeline;
-use crate::types::Processing;
+use anyhow::{Context, Result, bail};
+
+use crate::{
+    config::{ARGON_KEY_LEN, ARGON_SALT_LEN},
+    crypto::{derive_key, random_bytes},
+    file::{create_file, get_file_info, open_file},
+    header::Header,
+    stream::Pipeline,
+    types::Processing,
+};
 
 pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> {
     let src_file = open_file(src_path)?;
-
     let src_info = get_file_info(src_path)?.context("source file not found")?;
-
     let original_size = src_info.size;
+
     if original_size == 0 {
         bail!("cannot encrypt a file with zero size");
     }
@@ -40,13 +41,11 @@ pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
 
 pub fn decrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> {
     let mut src_file = open_file(src_path)?;
-
     let mut header = Header::new();
     header.unmarshal(&mut src_file)?;
 
     let salt = header.salt()?;
     let key = derive_key(password.as_bytes(), salt)?;
-
     header
         .verify(&key)
         .context("incorrect password or corrupt file")?;
@@ -61,7 +60,6 @@ pub fn decrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
     }
 
     let dest_file = create_file(dest_path)?;
-
     let key_array: [u8; ARGON_KEY_LEN] = key;
     let pipeline = Pipeline::new(&key_array, Processing::Decryption)?;
     pipeline.process(src_file, dest_file, original_size)?;
@@ -71,9 +69,11 @@ pub fn decrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
@@ -81,8 +81,8 @@ mod tests {
         let src_path = dir.path().join("source.txt");
         let enc_path = dir.path().join("encrypted.swx");
         let dec_path = dir.path().join("decrypted.txt");
-
         let original_content = b"Hello, World! This is a test file for encryption.";
+
         fs::write(&src_path, original_content).unwrap();
 
         encrypt(&src_path, &enc_path, "test_password_123").unwrap();

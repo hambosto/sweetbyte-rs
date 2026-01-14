@@ -1,14 +1,15 @@
-use anyhow::{Context, Result, bail};
-use std::collections::HashMap;
-use std::io::Read;
+use std::{collections::HashMap, io::Read};
 
-use crate::config::{
-    ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE,
+use anyhow::{Context, Result, bail};
+
+use crate::{
+    config::{
+        ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE,
+    },
+    header::{
+        deserializer::Deserializer, mac::verify_mac, section::SectionType, serializer::Serializer,
+    },
 };
-use crate::header::deserializer::Deserializer;
-use crate::header::mac::verify_mac;
-use crate::header::section::SectionType;
-use crate::header::serializer::Serializer;
 
 pub mod deserializer;
 pub mod mac;
@@ -126,9 +127,10 @@ impl Default for Header {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use super::*;
     use crate::crypto::{derive_key, random_bytes};
-    use std::io::Cursor;
 
     #[test]
     fn test_header_new() {

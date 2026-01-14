@@ -1,23 +1,33 @@
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
-use std::fs;
-use std::path::{Path, PathBuf};
 
-use crate::file::discovery::find_eligible_files;
-use crate::file::operations::{get_output_path, is_encrypted_file};
-use crate::processor;
-use crate::types::{FileInfo, ProcessorMode};
-use crate::ui::display::{print_banner, show_file_info, show_source_deleted, show_success};
-use crate::ui::prompt::{
-    choose_file, confirm_removal, get_decryption_password, get_encryption_password,
-    get_processing_mode,
+use crate::{
+    file::{
+        discovery::find_eligible_files,
+        operations::{get_output_path, is_encrypted_file},
+    },
+    processor,
+    types::{FileInfo, ProcessorMode},
+    ui::{
+        display::{print_banner, show_file_info, show_source_deleted, show_success},
+        prompt::{
+            choose_file, confirm_removal, get_decryption_password, get_encryption_password,
+            get_processing_mode,
+        },
+    },
 };
 
 #[derive(Parser)]
 #[command(name = "sweetbyte-rs")]
 #[command(version = "1.0")]
 #[command(
-    about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction. Run without arguments for interactive mode."
+    about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error \
+             correction. Run without arguments for interactive mode."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -84,7 +94,6 @@ pub fn run_command(cmd: Commands) -> Result<()> {
 
 fn encrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>) -> Result<()> {
     let output = output.unwrap_or_else(|| get_output_path(input, ProcessorMode::Encrypt));
-
     let password = match password {
         Some(p) => p,
         None => get_encryption_password()?,
@@ -143,13 +152,12 @@ pub fn run_interactive() -> Result<()> {
                 .with_context(|| format!("encryption failed for {}", selected.display()))?;
 
             show_success(mode, &output);
-
             if confirm_removal(&selected, "original")? {
                 fs::remove_file(&selected)
                     .with_context(|| format!("failed to remove {}", selected.display()))?;
                 show_source_deleted(&selected);
             }
-        }
+        },
         ProcessorMode::Decrypt => {
             let password = get_decryption_password()?;
 
@@ -157,13 +165,12 @@ pub fn run_interactive() -> Result<()> {
                 .with_context(|| format!("decryption failed for {}", selected.display()))?;
 
             show_success(mode, &output);
-
             if confirm_removal(&selected, "encrypted")? {
                 fs::remove_file(&selected)
                     .with_context(|| format!("failed to remove {}", selected.display()))?;
                 show_source_deleted(&selected);
             }
-        }
+        },
     }
 
     Ok(())

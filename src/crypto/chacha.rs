@@ -4,8 +4,10 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
 };
 
-use crate::config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE};
-use crate::crypto::derive::random_bytes;
+use crate::{
+    config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE},
+    crypto::derive::random_bytes,
+};
 
 pub struct ChachaCipher {
     aead: XChaCha20Poly1305,
@@ -67,11 +69,9 @@ mod tests {
     fn test_encrypt_decrypt() {
         let key = [0u8; CHACHA_KEY_SIZE];
         let cipher = ChachaCipher::new(&key);
-
         let plaintext = b"Hello, World!";
         let ciphertext = cipher.encrypt(plaintext).unwrap();
         let decrypted = cipher.decrypt(&ciphertext).unwrap();
-
         assert_eq!(decrypted, plaintext);
     }
 
@@ -79,7 +79,6 @@ mod tests {
     fn test_encrypt_empty() {
         let key = [0u8; CHACHA_KEY_SIZE];
         let cipher = ChachaCipher::new(&key);
-
         assert!(cipher.encrypt(b"").is_err());
     }
 
@@ -87,7 +86,6 @@ mod tests {
     fn test_decrypt_empty() {
         let key = [0u8; CHACHA_KEY_SIZE];
         let cipher = ChachaCipher::new(&key);
-
         assert!(cipher.decrypt(&[]).is_err());
     }
 
@@ -95,7 +93,6 @@ mod tests {
     fn test_decrypt_too_short() {
         let key = [0u8; CHACHA_KEY_SIZE];
         let cipher = ChachaCipher::new(&key);
-
         assert!(cipher.decrypt(&[0u8; CHACHA_NONCE_SIZE - 1]).is_err());
     }
 
@@ -103,10 +100,8 @@ mod tests {
     fn test_decrypt_tampered() {
         let key = [0u8; CHACHA_KEY_SIZE];
         let cipher = ChachaCipher::new(&key);
-
         let plaintext = b"Hello, World!";
         let mut ciphertext = cipher.encrypt(plaintext).unwrap();
-
         if let Some(last) = ciphertext.last_mut() {
             *last ^= 0xFF;
         }

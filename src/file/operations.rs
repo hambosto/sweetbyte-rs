@@ -1,10 +1,15 @@
-use anyhow::{Context, Result, anyhow, bail};
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufReader, BufWriter, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{BufReader, BufWriter, ErrorKind},
+    path::{Path, PathBuf},
+};
 
-use crate::config::FILE_EXTENSION;
-use crate::types::{FileInfo, ProcessorMode};
+use anyhow::{Context, Result, anyhow, bail};
+
+use crate::{
+    config::FILE_EXTENSION,
+    types::{FileInfo, ProcessorMode},
+};
 
 pub fn open_file(path: &Path) -> Result<BufReader<File>> {
     let file =
@@ -45,7 +50,7 @@ pub fn get_file_info(path: &Path) -> Result<Option<FileInfo>> {
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
         Err(e) => {
             return Err(e).with_context(|| format!("failed to get metadata: {}", path.display()));
-        }
+        },
     };
 
     Ok(Some(FileInfo {
@@ -61,7 +66,7 @@ pub fn get_output_path(input: &Path, mode: ProcessorMode) -> PathBuf {
             let mut path = input.as_os_str().to_owned();
             path.push(FILE_EXTENSION);
             PathBuf::from(path)
-        }
+        },
         ProcessorMode::Decrypt => {
             let path_str = input.to_string_lossy();
             if let Some(stripped) = path_str.strip_suffix(FILE_EXTENSION) {
@@ -69,7 +74,7 @@ pub fn get_output_path(input: &Path, mode: ProcessorMode) -> PathBuf {
             } else {
                 input.to_path_buf()
             }
-        }
+        },
     }
 }
 
@@ -94,9 +99,11 @@ pub fn get_file_info_list(paths: &[PathBuf]) -> Result<Vec<FileInfo>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::{Read, Write};
+
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn test_create_and_open_file() {

@@ -1,8 +1,10 @@
 use anyhow::{Result, bail};
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::config::{DATA_SHARDS, PARITY_SHARDS};
-use crate::encoding::ReedSolomon;
+use crate::{
+    config::{DATA_SHARDS, PARITY_SHARDS},
+    encoding::ReedSolomon,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SectionType {

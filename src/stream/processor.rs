@@ -1,11 +1,13 @@
 use anyhow::Result;
 
-use crate::compression::{CompressionLevel, Compressor};
-use crate::config::{ARGON_KEY_LEN, BLOCK_SIZE, DATA_SHARDS, PARITY_SHARDS};
-use crate::crypto::Cipher;
-use crate::encoding::ReedSolomon;
-use crate::padding::Padding;
-use crate::types::{Processing, Task, TaskResult};
+use crate::{
+    compression::{CompressionLevel, Compressor},
+    config::{ARGON_KEY_LEN, BLOCK_SIZE, DATA_SHARDS, PARITY_SHARDS},
+    crypto::Cipher,
+    encoding::ReedSolomon,
+    padding::Padding,
+    types::{Processing, Task, TaskResult},
+};
 
 pub struct DataProcessor {
     cipher: Cipher,
@@ -74,14 +76,14 @@ impl DataProcessor {
             Ok(data) => data,
             Err(e) => {
                 return TaskResult::failure(task.index, e.context("Reed-Solomon decoding failed"));
-            }
+            },
         };
 
         let chacha_decrypted = match self.cipher.decrypt_chacha(&decoded) {
             Ok(data) => data,
             Err(e) => {
                 return TaskResult::failure(task.index, e.context("ChaCha decryption failed"));
-            }
+            },
         };
 
         let aes_decrypted = match self.cipher.decrypt_aes(&chacha_decrypted) {
@@ -93,7 +95,7 @@ impl DataProcessor {
             Ok(data) => data,
             Err(e) => {
                 return TaskResult::failure(task.index, e.context("padding validation failed"));
-            }
+            },
         };
 
         let decompressed = match self.compressor.decompress(&unpadded) {

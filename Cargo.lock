@@ -965,6 +965,7 @@ dependencies = [
  "rand",
  "reed-solomon-erasure",
  "sha2",
+ "subtle",
  "tempfile",
 ]
 

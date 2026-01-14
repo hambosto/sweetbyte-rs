@@ -1,8 +1,9 @@
+use std::path::Path;
+
 use anyhow::{Result, anyhow};
-use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL_CONDENSED};
+use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL};
 use console::{Term, style};
 use figlet_rs::FIGfont;
-use std::path::Path;
 
 use crate::types::{FileInfo, ProcessorMode};
 
@@ -45,7 +46,7 @@ pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
 
     let mut table = Table::new();
     table
-        .load_preset(UTF8_FULL_CONDENSED)
+        .load_preset(UTF8_FULL)
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
             Cell::new("No").fg(Color::White),

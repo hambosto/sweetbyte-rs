@@ -1,10 +1,9 @@
+use std::{path::Path, sync::OnceLock};
+
 use anyhow::{Result, bail};
 use glob::Pattern;
-use std::path::Path;
-use std::sync::OnceLock;
 
-use crate::config::EXCLUDED_PATTERNS;
-use crate::file::operations::get_file_info;
+use crate::{config::EXCLUDED_PATTERNS, file::operations::get_file_info};
 
 static COMPILED_PATTERNS: OnceLock<Vec<Pattern>> = OnceLock::new();
 
@@ -36,11 +35,11 @@ pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {
         match info {
             Some(info) if info.size == 0 => {
                 bail!("file is empty: {}", path.display());
-            }
+            },
             None => {
                 bail!("file not found: {}", path.display());
-            }
-            _ => {}
+            },
+            _ => {},
         }
         if path.is_dir() {
             bail!("path is a directory: {}", path.display());
@@ -54,8 +53,9 @@ pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_is_excluded_unix_paths() {
