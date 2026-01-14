@@ -39,7 +39,6 @@ impl ChunkReader {
 
         loop {
             let n = reader.read(&mut buffer).context("failed to read chunk")?;
-
             if n == 0 {
                 break;
             }
@@ -50,7 +49,6 @@ impl ChunkReader {
             };
 
             sender.send(task).map_err(|_| anyhow!("channel closed"))?;
-
             index += 1;
         }
 
@@ -77,11 +75,7 @@ impl ChunkReader {
                 .context("failed to read chunk data")?;
 
             let task = Task { data, index };
-
-            sender
-                .send(task)
-                .map_err(|_| anyhow::anyhow!("channel closed"))?;
-
+            sender.send(task).map_err(|_| anyhow!("channel closed"))?;
             index += 1;
         }
 

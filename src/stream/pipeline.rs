@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use crossbeam_channel::bounded;
 use std::io::{Read, Write};
 use std::thread;
@@ -9,7 +9,7 @@ use crate::stream::processor::DataProcessor;
 use crate::stream::reader::ChunkReader;
 use crate::stream::writer::ChunkWriter;
 use crate::types::Processing;
-use crate::ui::progress::ProgressBar;
+use crate::ui::progress::Bar;
 
 pub struct Pipeline {
     processor: DataProcessor,
@@ -37,7 +37,7 @@ impl Pipeline {
         output: W,
         total_size: u64,
     ) -> Result<()> {
-        let progress = ProgressBar::new(total_size, self.mode.description());
+        let progress = Bar::new(total_size, self.mode.description());
 
         let (task_sender, task_receiver) = bounded(self.concurrency * 2);
         let (result_sender, result_receiver) = bounded(self.concurrency * 2);
@@ -56,11 +56,11 @@ impl Pipeline {
 
         let read_result = reader_handle
             .join()
-            .map_err(|_| anyhow::anyhow!("reader thread panicked"))?;
+            .map_err(|_| anyhow!("reader thread panicked"))?;
 
         executor_handle
             .join()
-            .map_err(|_| anyhow::anyhow!("executor thread panicked"))?;
+            .map_err(|_| anyhow!("executor thread panicked"))?;
 
         progress.finish();
 

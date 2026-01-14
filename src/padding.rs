@@ -40,7 +40,7 @@ impl Padding {
 
 impl Default for Padding {
     fn default() -> Self {
-        Self::new(BLOCK_SIZE as usize).expect("valid default block size")
+        Self::new(BLOCK_SIZE).expect("valid default block size")
     }
 }
 

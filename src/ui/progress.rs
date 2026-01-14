@@ -1,13 +1,12 @@
-use indicatif::{ProgressBar as IndicatifBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 
-pub struct ProgressBar {
-    bar: IndicatifBar,
+pub struct Bar {
+    bar: ProgressBar,
 }
 
-impl ProgressBar {
+impl Bar {
     pub fn new(total: u64, description: &str) -> Self {
-        let bar = IndicatifBar::new(total);
-
+        let bar = ProgressBar::new(total);
         let style = ProgressStyle::default_bar()
             .template("{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
             .expect("valid template")
@@ -32,7 +31,7 @@ impl ProgressBar {
     }
 }
 
-impl Drop for ProgressBar {
+impl Drop for Bar {
     fn drop(&mut self) {
         if !self.bar.is_finished() {
             self.bar.finish();

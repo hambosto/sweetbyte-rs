@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL_CONDENSED};
 use console::{Term, style};
 use figlet_rs::FIGfont;
@@ -110,7 +110,7 @@ pub fn show_source_deleted(path: &std::path::Path) {
 pub fn clear_screen() -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()
-        .map_err(|e| anyhow::anyhow!("failed to clear screen: {}", e))
+        .map_err(|e| anyhow!("failed to clear screen: {}", e))
 }
 
 pub fn print_banner() {

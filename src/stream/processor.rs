@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::compression::{CompressionLevel, Compressor};
-use crate::config::ARGON_KEY_LEN;
+use crate::config::{ARGON_KEY_LEN, BLOCK_SIZE, DATA_SHARDS, PARITY_SHARDS};
 use crate::crypto::Cipher;
 use crate::encoding::ReedSolomon;
 use crate::padding::Padding;
@@ -18,9 +18,9 @@ pub struct DataProcessor {
 impl DataProcessor {
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
         let cipher = Cipher::new(key)?;
-        let encoder = ReedSolomon::default();
+        let encoder = ReedSolomon::new(DATA_SHARDS, PARITY_SHARDS)?;
         let compressor = Compressor::new(CompressionLevel::Fast);
-        let padding = Padding::default();
+        let padding = Padding::new(BLOCK_SIZE)?;
 
         Ok(Self {
             cipher,

@@ -37,7 +37,7 @@ pub const TOTAL_SHARDS: usize = DATA_SHARDS + PARITY_SHARDS;
 
 // Padding parameters
 /// PKCS7 block size.
-pub const BLOCK_SIZE: u8 = 128;
+pub const BLOCK_SIZE: usize = 128;
 
 // Streaming parameters
 /// Default chunk size for streaming (256 KB).

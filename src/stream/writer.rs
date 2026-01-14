@@ -5,7 +5,7 @@ use std::io::Write;
 
 use crate::stream::buffer::SequentialBuffer;
 use crate::types::{Processing, TaskResult};
-use crate::ui::progress::ProgressBar;
+use crate::ui::progress::Bar;
 
 pub struct ChunkWriter {
     mode: Processing,
@@ -24,7 +24,7 @@ impl ChunkWriter {
         &mut self,
         mut output: W,
         receiver: Receiver<TaskResult>,
-        progress: Option<&ProgressBar>,
+        progress: Option<&Bar>,
     ) -> Result<()> {
         for result in receiver {
             if let Some(ref err) = result.error {
@@ -45,7 +45,7 @@ impl ChunkWriter {
         &self,
         output: &mut W,
         results: &[TaskResult],
-        progress: Option<&ProgressBar>,
+        progress: Option<&Bar>,
     ) -> Result<()> {
         match self.mode {
             Processing::Encryption => {
