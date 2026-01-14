@@ -4,6 +4,11 @@ use crate::cipher::aes::AesCipher;
 use crate::cipher::chacha::ChachaCipher;
 use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};
 
+pub mod algorithm {
+    pub struct AESGcm;
+    pub struct XChaCha20Poly1305;
+}
+
 pub struct Cipher {
     aes: AesCipher,
     chacha: ChachaCipher,
@@ -24,20 +29,37 @@ impl Cipher {
         })
     }
 
-    pub fn encrypt_aes(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        self.aes.encrypt(plaintext)
+    pub fn encrypt<T: CipherSelector>(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        T::encrypt(self, plaintext)
     }
 
-    pub fn decrypt_aes(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        self.aes.decrypt(ciphertext)
+    pub fn decrypt<T: CipherSelector>(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        T::decrypt(self, ciphertext)
+    }
+}
+
+pub trait CipherSelector {
+    fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>>;
+    fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>>;
+}
+
+impl CipherSelector for algorithm::AESGcm {
+    fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
+        cipher.aes.encrypt(plaintext)
     }
 
-    pub fn encrypt_chacha(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        self.chacha.encrypt(plaintext)
+    fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        cipher.aes.decrypt(ciphertext)
+    }
+}
+
+impl CipherSelector for algorithm::XChaCha20Poly1305 {
+    fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
+        cipher.chacha.encrypt(plaintext)
     }
 
-    pub fn decrypt_chacha(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        self.chacha.decrypt(ciphertext)
+    fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        cipher.chacha.decrypt(ciphertext)
     }
 }
 
@@ -57,8 +79,8 @@ mod tests {
         let cipher = Cipher::new(&key).unwrap();
 
         let plaintext = b"Hello, World!";
-        let ciphertext = cipher.encrypt_aes(plaintext).unwrap();
-        let decrypted = cipher.decrypt_aes(&ciphertext).unwrap();
+        let ciphertext = cipher.encrypt::<algorithm::AESGcm>(plaintext).unwrap();
+        let decrypted = cipher.decrypt::<algorithm::AESGcm>(&ciphertext).unwrap();
 
         assert_eq!(decrypted, plaintext);
     }
@@ -69,8 +91,12 @@ mod tests {
         let cipher = Cipher::new(&key).unwrap();
 
         let plaintext = b"Hello, World!";
-        let ciphertext = cipher.encrypt_chacha(plaintext).unwrap();
-        let decrypted = cipher.decrypt_chacha(&ciphertext).unwrap();
+        let ciphertext = cipher
+            .encrypt::<algorithm::XChaCha20Poly1305>(plaintext)
+            .unwrap();
+        let decrypted = cipher
+            .decrypt::<algorithm::XChaCha20Poly1305>(&ciphertext)
+            .unwrap();
 
         assert_eq!(decrypted, plaintext);
     }
@@ -82,11 +108,17 @@ mod tests {
 
         let plaintext = b"Hello, World!";
 
-        let aes_encrypted = cipher.encrypt_aes(plaintext).unwrap();
-        let dual_encrypted = cipher.encrypt_chacha(&aes_encrypted).unwrap();
+        let aes_encrypted = cipher.encrypt::<algorithm::AESGcm>(plaintext).unwrap();
+        let dual_encrypted = cipher
+            .encrypt::<algorithm::XChaCha20Poly1305>(&aes_encrypted)
+            .unwrap();
 
-        let chacha_decrypted = cipher.decrypt_chacha(&dual_encrypted).unwrap();
-        let decrypted = cipher.decrypt_aes(&chacha_decrypted).unwrap();
+        let chacha_decrypted = cipher
+            .decrypt::<algorithm::XChaCha20Poly1305>(&dual_encrypted)
+            .unwrap();
+        let decrypted = cipher
+            .decrypt::<algorithm::AESGcm>(&chacha_decrypted)
+            .unwrap();
 
         assert_eq!(decrypted, plaintext);
     }

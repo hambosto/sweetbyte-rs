@@ -1,15 +1,15 @@
 use anyhow::Result;
 
-use crate::cipher::Cipher;
+use crate::cipher::{Cipher, algorithm};
 use crate::compression::{CompressionLevel, Compressor};
 use crate::config::{ARGON_KEY_LEN, BLOCK_SIZE, DATA_SHARDS, PARITY_SHARDS};
-use crate::encoding::ReedSolomonEncoder;
+use crate::encoding::Encoding;
 use crate::padding::Padding;
 use crate::types::{Processing, Task, TaskResult};
 
 pub struct DataProcessor {
     cipher: Cipher,
-    encoder: ReedSolomonEncoder,
+    encoder: Encoding,
     compressor: Compressor,
     padding: Padding,
     mode: Processing,
@@ -18,7 +18,7 @@ pub struct DataProcessor {
 impl DataProcessor {
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
         let cipher = Cipher::new(key)?;
-        let encoder = ReedSolomonEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
+        let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
         let compressor = Compressor::new(CompressionLevel::Fast);
         let padding = Padding::new(BLOCK_SIZE)?;
 
@@ -51,12 +51,15 @@ impl DataProcessor {
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let aes_encrypted = match self.cipher.encrypt_aes(&padded) {
+        let aes_encrypted = match self.cipher.encrypt::<algorithm::AESGcm>(&padded) {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let chacha_encrypted = match self.cipher.encrypt_chacha(&aes_encrypted) {
+        let chacha_encrypted = match self
+            .cipher
+            .encrypt::<algorithm::XChaCha20Poly1305>(&aes_encrypted)
+        {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e),
         };
@@ -77,14 +80,17 @@ impl DataProcessor {
             }
         };
 
-        let chacha_decrypted = match self.cipher.decrypt_chacha(&decoded) {
+        let chacha_decrypted = match self
+            .cipher
+            .decrypt::<algorithm::XChaCha20Poly1305>(&decoded)
+        {
             Ok(data) => data,
             Err(e) => {
                 return TaskResult::failure(task.index, e.context("ChaCha decryption failed"));
             }
         };
 
-        let aes_decrypted = match self.cipher.decrypt_aes(&chacha_decrypted) {
+        let aes_decrypted = match self.cipher.decrypt::<algorithm::AESGcm>(&chacha_decrypted) {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e.context("AES decryption failed")),
         };

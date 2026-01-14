@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use byteorder::{BigEndian, ByteOrder};
 
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
-use crate::encoding::ReedSolomonEncoder;
+use crate::encoding::Encoding;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SectionType {
@@ -26,12 +26,12 @@ pub struct EncodedSection {
 }
 
 pub struct SectionEncoder {
-    rs: ReedSolomonEncoder,
+    rs: Encoding,
 }
 
 impl SectionEncoder {
     pub fn new() -> Result<Self> {
-        let rs = ReedSolomonEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
+        let rs = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
         Ok(Self { rs })
     }
 

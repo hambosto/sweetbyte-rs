@@ -1,5 +1,5 @@
-pub mod reed_solomon;
+pub mod encoding;
 pub mod shards;
 
-pub use reed_solomon::ReedSolomonEncoder;
+pub use encoding::Encoding;
 pub use shards::Shards;

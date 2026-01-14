@@ -47,14 +47,12 @@ impl Pipeline {
         let mut writer = ChunkWriter::new(self.mode);
 
         let reader_handle = thread::spawn(move || reader.read_all(input, task_sender));
-
         let executor = ConcurrentExecutor::new(self.processor, self.concurrency);
         let executor_handle = thread::spawn(move || {
             executor.process(task_receiver, result_sender);
         });
 
         let write_result = writer.write_all(output, result_receiver, Some(&progress));
-
         let read_result = reader_handle
             .join()
             .map_err(|_| anyhow!("reader thread panicked"))?;

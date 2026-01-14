@@ -6,12 +6,12 @@ use crate::encoding::shards::Shards;
 
 pub const MAX_DATA_LEN: usize = 1 << 30;
 
-pub struct ReedSolomonEncoder {
+pub struct Encoding {
     encoder: ReedSolomon,
     shards: Shards,
 }
 
-impl ReedSolomonEncoder {
+impl Encoding {
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
         let encoder = ReedSolomon::new(data_shards, parity_shards)
             .context("failed to create Reed-Solomon encoder")?;
@@ -75,7 +75,7 @@ impl ReedSolomonEncoder {
     }
 }
 
-impl Default for ReedSolomonEncoder {
+impl Default for Encoding {
     fn default() -> Self {
         Self::new(DATA_SHARDS, PARITY_SHARDS).expect("valid default parameters")
     }
@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode() {
-        let rs = ReedSolomonEncoder::default();
+        let rs = Encoding::default();
         let data = b"Hello, World! This is some test data for Reed-Solomon.";
         let encoded = rs.encode(data).unwrap();
         let decoded = rs.decode(&encoded).unwrap();
@@ -96,19 +96,19 @@ mod tests {
 
     #[test]
     fn test_encode_empty() {
-        let rs = ReedSolomonEncoder::default();
+        let rs = Encoding::default();
         assert!(rs.encode(b"").is_err());
     }
 
     #[test]
     fn test_decode_empty() {
-        let rs = ReedSolomonEncoder::default();
+        let rs = Encoding::default();
         assert!(rs.decode(&[]).is_err());
     }
 
     #[test]
     fn test_decode_invalid_length() {
-        let rs = ReedSolomonEncoder::default();
+        let rs = Encoding::default();
         assert!(rs.decode(&[0u8; 15]).is_err());
     }
 }
