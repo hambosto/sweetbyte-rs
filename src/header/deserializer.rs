@@ -1,10 +1,7 @@
-//! Header deserialization.
-
-use std::collections::HashMap;
-use std::io::Read;
-
 use anyhow::{Context, Result, bail};
 use byteorder::{BigEndian, ByteOrder};
+use std::collections::HashMap;
+use std::io::Read;
 
 use crate::config::{HEADER_DATA_SIZE, MAGIC_SIZE};
 use crate::header::Header;
@@ -12,38 +9,28 @@ use crate::header::mac::verify_magic;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType};
 use crate::header::serializer::magic_bytes;
 
-/// Deserializes a header from bytes.
 pub struct Deserializer<'a> {
     header: &'a mut Header,
     encoder: SectionEncoder,
 }
 
 impl<'a> Deserializer<'a> {
-    /// Creates a new deserializer for the given header.
     pub fn new(header: &'a mut Header) -> Result<Self> {
         let encoder = SectionEncoder::new()?;
         Ok(Self { header, encoder })
     }
 
-    /// Deserializes the header from a reader.
-    ///
-    /// # Arguments
-    /// * `reader` - The input reader
     pub fn unmarshal<R: Read>(&mut self, mut reader: R) -> Result<()> {
         let length_sizes = self.read_length_sizes(&mut reader)?;
         let section_lengths = self.read_and_decode_lengths(&mut reader, &length_sizes)?;
         let decoded_sections = self.read_and_decode_data(&mut reader, &section_lengths)?;
-
         self.header.decoded_sections = Some(decoded_sections);
 
-        // Verify magic bytes
         let magic = self.header.get_section(SectionType::Magic, MAGIC_SIZE)?;
-
         if !verify_magic(magic, &magic_bytes()) {
             bail!("invalid magic bytes");
         }
 
-        // Deserialize header data - copy to avoid borrow issues
         let header_data: Vec<u8> = self
             .header
             .get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?
@@ -152,7 +139,6 @@ impl<'a> Deserializer<'a> {
         self.header.version = BigEndian::read_u16(&data[0..2]);
         self.header.flags = BigEndian::read_u32(&data[2..6]);
         self.header.original_size = BigEndian::read_u64(&data[6..14]);
-
         Ok(())
     }
 }

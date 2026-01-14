@@ -1,5 +1,3 @@
-//! User interface modules for SweetByte.
-
 pub mod display;
 pub mod progress;
 pub mod prompt;

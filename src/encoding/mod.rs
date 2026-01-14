@@ -1,5 +1,3 @@
-//! Encoding modules for SweetByte.
-
 pub mod reed_solomon;
 pub mod shards;
 

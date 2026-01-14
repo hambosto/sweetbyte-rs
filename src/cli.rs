@@ -1,16 +1,17 @@
-//! CLI commands and argument parsing.
-
+use anyhow::{Context, Result, bail};
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-
-use crate::file::operations::get_output_path;
+use crate::file::discovery::find_eligible_files;
+use crate::file::operations::{get_output_path, is_encrypted_file};
 use crate::processor;
-use crate::types::ProcessorMode;
-use crate::ui::prompt::{get_decryption_password, get_encryption_password};
+use crate::types::{FileInfo, ProcessorMode};
+use crate::ui::display::{print_banner, show_file_info, show_source_deleted, show_success};
+use crate::ui::prompt::{
+    choose_file, confirm_removal, get_decryption_password, get_encryption_password,
+    get_processing_mode,
+};
 
-/// SweetByte - Multi-layered file encryption with error correction.
 #[derive(Parser)]
 #[command(name = "sweetbyte-rs")]
 #[command(version = "1.0")]
@@ -22,7 +23,6 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
-/// Available CLI commands.
 #[derive(Subcommand)]
 pub enum Commands {
     /// Encrypt a file with multi-layered encryption.
@@ -59,15 +59,10 @@ pub enum Commands {
     Interactive,
 }
 
-/// Parses CLI arguments.
 pub fn parse() -> Cli {
     Cli::parse()
 }
 
-/// Runs a CLI command.
-///
-/// # Arguments
-/// * `cmd` - The command to run
 pub fn run_command(cmd: Commands) -> Result<()> {
     match cmd {
         Commands::Encrypt {
@@ -82,7 +77,7 @@ pub fn run_command(cmd: Commands) -> Result<()> {
             password,
         } => decrypt_file(&input, output, password),
 
-        Commands::Interactive => crate::interactive::run(),
+        Commands::Interactive => run_interactive(),
     }
 }
 
@@ -112,7 +107,6 @@ fn decrypt_file(
     password: Option<String>,
 ) -> Result<()> {
     let output = output.unwrap_or_else(|| get_output_path(input, ProcessorMode::Decrypt));
-
     let password = match password {
         Some(p) => p,
         None => get_decryption_password()?,
@@ -122,6 +116,62 @@ fn decrypt_file(
         .with_context(|| format!("decryption failed for {}", input.display()))?;
 
     println!("✓ Decrypted: {} -> {}", input.display(), output.display());
+
+    Ok(())
+}
+
+pub fn run_interactive() -> Result<()> {
+    print_banner();
+
+    let mode = get_processing_mode()?;
+    let files = find_eligible_files(mode)?;
+    if files.is_empty() {
+        bail!("No eligible files found for {}", mode);
+    }
+
+    let file_infos: Vec<_> = files
+        .iter()
+        .map(|p| FileInfo {
+            path: p.clone(),
+            size: std::fs::metadata(p).map(|m| m.len()).unwrap_or(0),
+            is_encrypted: is_encrypted_file(p),
+        })
+        .collect();
+
+    show_file_info(&file_infos)?;
+    let selected = choose_file(&files)?;
+    let output = get_output_path(&selected, mode);
+
+    match mode {
+        ProcessorMode::Encrypt => {
+            let password = get_encryption_password()?;
+
+            processor::encrypt(&selected, &output, &password)
+                .with_context(|| format!("encryption failed for {}", selected.display()))?;
+
+            show_success(mode, &output);
+
+            if confirm_removal(&selected, "original")? {
+                std::fs::remove_file(&selected)
+                    .with_context(|| format!("failed to remove {}", selected.display()))?;
+                show_source_deleted(&selected);
+            }
+        }
+        ProcessorMode::Decrypt => {
+            let password = get_decryption_password()?;
+
+            processor::decrypt(&selected, &output, &password)
+                .with_context(|| format!("decryption failed for {}", selected.display()))?;
+
+            show_success(mode, &output);
+
+            if confirm_removal(&selected, "encrypted")? {
+                std::fs::remove_file(&selected)
+                    .with_context(|| format!("failed to remove {}", selected.display()))?;
+                show_source_deleted(&selected);
+            }
+        }
+    }
 
     Ok(())
 }

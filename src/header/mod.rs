@@ -1,9 +1,6 @@
-//! File header for SweetByte encrypted files.
-
+use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::io::Read;
-
-use anyhow::{Context, Result, bail};
 
 use crate::config::{
     ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE,
@@ -18,21 +15,15 @@ pub mod mac;
 pub mod section;
 pub mod serializer;
 
-/// File header containing metadata and authentication.
 #[derive(Debug)]
 pub struct Header {
-    /// File format version.
     pub version: u16,
-    /// Header flags.
     pub flags: u32,
-    /// Original file size before encryption.
     pub original_size: u64,
-    /// Decoded header sections (populated after unmarshal).
     pub(crate) decoded_sections: Option<HashMap<SectionType, Vec<u8>>>,
 }
 
 impl Header {
-    /// Creates a new header with default values.
     pub fn new() -> Self {
         Self {
             version: CURRENT_VERSION,
@@ -42,22 +33,18 @@ impl Header {
         }
     }
 
-    /// Returns the original file size.
     pub fn original_size(&self) -> u64 {
         self.original_size
     }
 
-    /// Sets the original file size.
     pub fn set_original_size(&mut self, size: u64) {
         self.original_size = size;
     }
 
-    /// Returns true if the file is protected.
     pub fn is_protected(&self) -> bool {
         self.flags & FLAG_PROTECTED != 0
     }
 
-    /// Sets the protected flag.
     pub fn set_protected(&mut self, protected: bool) {
         if protected {
             self.flags |= FLAG_PROTECTED;
@@ -66,7 +53,6 @@ impl Header {
         }
     }
 
-    /// Validates the header.
     pub fn validate(&self) -> Result<()> {
         if self.version > CURRENT_VERSION {
             bail!(
@@ -83,39 +69,24 @@ impl Header {
         Ok(())
     }
 
-    /// Serializes the header to bytes.
-    ///
-    /// # Arguments
-    /// * `salt` - The salt used for key derivation
-    /// * `key` - The derived key for MAC computation
     pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         let serializer = Serializer::new(self)?;
         serializer.marshal(salt, key)
     }
 
-    /// Deserializes the header from a reader.
-    ///
-    /// # Arguments
-    /// * `reader` - The input reader
     pub fn unmarshal<R: Read>(&mut self, reader: R) -> Result<()> {
         let mut deserializer = Deserializer::new(self)?;
         deserializer.unmarshal(reader)
     }
 
-    /// Returns the salt from the header.
     pub fn salt(&self) -> Result<&[u8]> {
         self.get_section(SectionType::Salt, ARGON_SALT_LEN)
     }
 
-    /// Returns the magic bytes from the header.
     pub fn magic(&self) -> Result<&[u8]> {
         self.get_section(SectionType::Magic, MAGIC_SIZE)
     }
 
-    /// Verifies the header MAC.
-    ///
-    /// # Arguments
-    /// * `key` - The derived key for MAC verification
     pub fn verify(&self, key: &[u8]) -> Result<()> {
         if key.is_empty() {
             bail!("key cannot be empty");
@@ -129,7 +100,6 @@ impl Header {
         verify_mac(key, expected_mac, &[magic, salt, header_data])
     }
 
-    /// Gets a section from decoded sections.
     pub(crate) fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
         let sections = self
             .decoded_sections
@@ -157,7 +127,7 @@ impl Default for Header {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::{derive_key, generate_salt};
+    use crate::crypto::{derive_key, random_bytes};
 
     #[test]
     fn test_header_new() {
@@ -181,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_header_marshal_unmarshal() {
-        let salt = generate_salt().unwrap();
+        let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
         let key = derive_key(b"password", &salt).unwrap();
 
         let mut header = Header::new();
@@ -202,15 +172,14 @@ mod tests {
 
     #[test]
     fn test_header_verify() {
-        let salt = generate_salt().unwrap();
+        let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
         let key = derive_key(b"password", &salt).unwrap();
-
         let mut header = Header::new();
+
         header.set_original_size(12345);
         header.set_protected(true);
 
         let serialized = header.marshal(&salt, &key).unwrap();
-
         let mut new_header = Header::new();
         new_header
             .unmarshal(std::io::Cursor::new(&serialized))
@@ -221,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_header_verify_wrong_key() {
-        let salt = generate_salt().unwrap();
+        let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
         let key = derive_key(b"password", &salt).unwrap();
         let wrong_key = derive_key(b"wrong_password", &salt).unwrap();
 

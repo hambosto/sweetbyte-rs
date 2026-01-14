@@ -1,12 +1,10 @@
-//! Display utilities for file information.
-
 use anyhow::Result;
 use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL_CONDENSED};
 use console::{Term, style};
+use figlet_rs::FIGfont;
 
 use crate::types::{FileInfo, ProcessorMode};
 
-/// Formats bytes into human-readable string.
 pub fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB", "PB"];
     const UNIT: u64 = 1024;
@@ -30,10 +28,6 @@ pub fn format_bytes(bytes: u64) -> String {
     format!("{:.1} {}", size, UNITS[unit_idx])
 }
 
-/// Displays file information in a table.
-///
-/// # Arguments
-/// * `files` - List of file info
 pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
     if files.is_empty() {
         println!("{}", style("No files found").yellow());
@@ -91,11 +85,6 @@ pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
     Ok(())
 }
 
-/// Displays success message.
-///
-/// # Arguments
-/// * `mode` - The processing mode
-/// * `path` - The output path
 pub fn show_success(mode: ProcessorMode, path: &std::path::Path) {
     let action = match mode {
         ProcessorMode::Encrypt => "encrypted",
@@ -110,10 +99,6 @@ pub fn show_success(mode: ProcessorMode, path: &std::path::Path) {
     );
 }
 
-/// Displays source deleted message.
-///
-/// # Arguments
-/// * `path` - The deleted file path
 pub fn show_source_deleted(path: &std::path::Path) {
     println!(
         "{} {}",
@@ -122,25 +107,17 @@ pub fn show_source_deleted(path: &std::path::Path) {
     );
 }
 
-/// Clears the terminal screen.
 pub fn clear_screen() -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()
         .map_err(|e| anyhow::anyhow!("failed to clear screen: {}", e))
 }
 
-/// Prints the application banner.
 pub fn print_banner() {
-    let banner = r#"
-   _____                     __  __          __
-  / ___/  _____  ___  / /_/ /_ __  __/ /____
-  \__ \ | /| / / _ \/ _ \/ __/ __ \/ / / / __/ _ \
- ___/ / |/ |/ /  __/  __/ /_/ /_/ / /_/ / /_/  __/
-/____/|__/|__/\___/\___/\__/_.___/\__, /\__/\___/
-                                 /____/
-"#;
-
-    println!("{}", style(banner).green().bold());
+    let standard_font = FIGfont::standard().unwrap();
+    if let Some(figure) = standard_font.convert("SweetByte") {
+        println!("{}", style(figure).green().bold());
+    }
 }
 
 #[cfg(test)]

@@ -1,13 +1,9 @@
-//! PKCS7 padding implementation.
-
 use anyhow::{Result, bail};
 
 use crate::config::BLOCK_SIZE;
 
-/// Maximum allowed block size for PKCS7 padding.
 pub const MAX_BLOCK_SIZE: usize = 255;
 
-/// PKCS7 padding handler.
 pub struct Padding {
     block_size: usize,
 }
@@ -15,7 +11,7 @@ pub struct Padding {
 impl Padding {
     pub fn new(block_size: usize) -> Result<Padding> {
         if block_size == 0 || block_size > MAX_BLOCK_SIZE {
-            anyhow::bail!("block size must be between 1 and 255, got {}", block_size);
+            bail!("block size must be between 1 and 255, got {}", block_size);
         }
         Ok(Padding { block_size })
     }
@@ -33,7 +29,7 @@ impl Padding {
 
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
-            anyhow::bail!("data cannot be empty");
+            bail!("data cannot be empty");
         }
 
         let data_len = data.len();
@@ -67,12 +63,10 @@ mod tests {
     #[test]
     fn test_pad_exact_block() {
         let padding = Padding::new(16).unwrap();
-        let data = vec![0u8; 16]; // Exactly one block
-
+        let data = vec![0u8; 16];
         let padded = padding.pad(&data).unwrap();
-        // Should add a full block of padding
-        assert_eq!(padded.len(), 32);
 
+        assert_eq!(padded.len(), 32);
         let unpadded = padding.unpad(&padded).unwrap();
         assert_eq!(unpadded, data);
     }
@@ -82,7 +76,6 @@ mod tests {
         let padding = Padding::new(16).unwrap();
         let data = b"";
 
-        // Empty data now returns an error
         assert!(padding.pad(data).is_err());
     }
 
@@ -95,9 +88,6 @@ mod tests {
     #[test]
     fn test_unpad_invalid_padding() {
         let padding = Padding::new(16).unwrap();
-        // Note: The simplified unpad doesn't validate padding bytes,
-        // it just reads the last byte as the padding length.
-        // This test now verifies basic unpad behavior.
         let valid = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1];
         let unpadded = padding.unpad(&valid).unwrap();
         assert_eq!(unpadded.len(), 15);

@@ -1,38 +1,22 @@
-//! AES-256-GCM encryption.
-
 use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, KeyInit},
 };
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 use crate::config::{AES_KEY_SIZE, AES_NONCE_SIZE};
 use crate::crypto::derive::random_bytes;
 
-/// AES-256-GCM cipher.
 pub struct AesCipher {
     aead: Aes256Gcm,
 }
 
 impl AesCipher {
-    /// Creates a new AES cipher with the given key.
-    ///
-    /// # Arguments
-    /// * `key` - A 32-byte key
     pub fn new(key: &[u8; AES_KEY_SIZE]) -> Self {
         let aead = Aes256Gcm::new_from_slice(key).expect("valid key size");
         Self { aead }
     }
 
-    /// Encrypts plaintext using AES-256-GCM.
-    ///
-    /// The nonce is prepended to the ciphertext.
-    ///
-    /// # Arguments
-    /// * `plaintext` - The data to encrypt
-    ///
-    /// # Returns
-    /// Nonce + ciphertext + authentication tag
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         if plaintext.is_empty() {
             bail!("plaintext cannot be empty");
@@ -44,9 +28,8 @@ impl AesCipher {
         let ciphertext = self
             .aead
             .encrypt(nonce, plaintext)
-            .map_err(|e| anyhow::anyhow!("AES encryption failed: {}", e))?;
+            .map_err(|e| anyhow!("AES encryption failed: {}", e))?;
 
-        // Prepend nonce to ciphertext
         let mut result = Vec::with_capacity(AES_NONCE_SIZE + ciphertext.len());
         result.extend_from_slice(&nonce_bytes);
         result.extend_from_slice(&ciphertext);
@@ -54,15 +37,6 @@ impl AesCipher {
         Ok(result)
     }
 
-    /// Decrypts ciphertext using AES-256-GCM.
-    ///
-    /// Expects the nonce to be prepended to the ciphertext.
-    ///
-    /// # Arguments
-    /// * `ciphertext` - Nonce + ciphertext + authentication tag
-    ///
-    /// # Returns
-    /// The decrypted plaintext
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         if ciphertext.is_empty() {
             bail!("ciphertext cannot be empty");
@@ -81,7 +55,7 @@ impl AesCipher {
 
         self.aead
             .decrypt(nonce, encrypted)
-            .map_err(|_| anyhow::anyhow!("AES authentication failed"))
+            .map_err(|_| anyhow!("AES authentication failed"))
     }
 }
 
@@ -133,7 +107,6 @@ mod tests {
         let plaintext = b"Hello, World!";
         let mut ciphertext = cipher.encrypt(plaintext).unwrap();
 
-        // Tamper with ciphertext
         if let Some(last) = ciphertext.last_mut() {
             *last ^= 0xFF;
         }

@@ -1,22 +1,13 @@
-//! High-level file encryption and decryption operations.
-
+use anyhow::{Context, Result, bail};
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
-
-use crate::config::ARGON_KEY_LEN;
-use crate::crypto::{derive_key, generate_salt};
+use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
+use crate::crypto::{derive_key, random_bytes};
 use crate::file::{create_file, get_file_info, open_file};
 use crate::header::Header;
 use crate::stream::Pipeline;
 use crate::types::Processing;
 
-/// Encrypts a file.
-///
-/// # Arguments
-/// * `src_path` - Source file path
-/// * `dest_path` - Destination file path
-/// * `password` - Encryption password
 pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> {
     let src_file = open_file(src_path)?;
 
@@ -27,7 +18,7 @@ pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
         bail!("cannot encrypt a file with zero size");
     }
 
-    let salt = generate_salt()?;
+    let salt: [u8; ARGON_SALT_LEN] = random_bytes()?;
     let key = derive_key(password.as_bytes(), &salt)?;
 
     let mut header = Header::new();
@@ -35,13 +26,10 @@ pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
     header.set_protected(true);
 
     let header_bytes = header.marshal(&salt, &key)?;
-
     let mut dest_file = create_file(dest_path)?;
 
-    // Write header
     std::io::Write::write_all(&mut dest_file, &header_bytes)?;
 
-    // Process file through pipeline
     let key_array: [u8; ARGON_KEY_LEN] = key;
     let pipeline = Pipeline::new(&key_array, Processing::Encryption)?;
     pipeline.process(src_file, dest_file, original_size)?;
@@ -49,12 +37,6 @@ pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
     Ok(())
 }
 
-/// Decrypts a file.
-///
-/// # Arguments
-/// * `src_path` - Source file path
-/// * `dest_path` - Destination file path
-/// * `password` - Decryption password
 pub fn decrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> {
     let mut src_file = open_file(src_path)?;
 
@@ -79,7 +61,6 @@ pub fn decrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
 
     let dest_file = create_file(dest_path)?;
 
-    // Process file through pipeline
     let key_array: [u8; ARGON_KEY_LEN] = key;
     let pipeline = Pipeline::new(&key_array, Processing::Decryption)?;
     pipeline.process(src_file, dest_file, original_size)?;
@@ -102,15 +83,12 @@ mod tests {
         let original_content = b"Hello, World! This is a test file for encryption.";
         std::fs::write(&src_path, original_content).unwrap();
 
-        // Encrypt
         encrypt(&src_path, &enc_path, "test_password_123").unwrap();
         assert!(enc_path.exists());
 
-        // Decrypt
         decrypt(&enc_path, &dec_path, "test_password_123").unwrap();
         assert!(dec_path.exists());
 
-        // Compare
         let decrypted_content = std::fs::read(&dec_path).unwrap();
         assert_eq!(decrypted_content, original_content);
     }

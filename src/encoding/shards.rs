@@ -1,17 +1,13 @@
-//! Shard manipulation for Reed-Solomon encoding.
-
 use anyhow::{Result, bail};
 
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 
-/// Handles splitting and combining data into shards.
 pub struct Shards {
     data_shards: usize,
     total_shards: usize,
 }
 
 impl Shards {
-    /// Creates a new Shards instance with the given shard counts.
     pub fn new(data_shards: usize, parity_shards: usize) -> Self {
         Self {
             data_shards,
@@ -19,9 +15,6 @@ impl Shards {
         }
     }
 
-    /// Splits data into shards for encoding.
-    ///
-    /// Returns a vector of shards, each with equal size.
     pub fn split(&self, data: &[u8]) -> Vec<Vec<u8>> {
         let shard_size = data.len().div_ceil(self.data_shards);
         let mut shards: Vec<Vec<u8>> = (0..self.total_shards)
@@ -39,7 +32,6 @@ impl Shards {
         shards
     }
 
-    /// Splits encoded data back into shards for decoding.
     pub fn split_encoded(&self, data: &[u8]) -> Vec<Vec<u8>> {
         let shard_size = data.len() / self.total_shards;
         let mut shards = Vec::with_capacity(self.total_shards);
@@ -53,7 +45,6 @@ impl Shards {
         shards
     }
 
-    /// Combines shards into a single byte vector.
     pub fn combine(&self, shards: &[Vec<u8>]) -> Vec<u8> {
         if shards.is_empty() {
             return Vec::new();
@@ -70,7 +61,6 @@ impl Shards {
         result
     }
 
-    /// Extracts original data from reconstructed shards.
     pub fn extract(&self, shards: &[Vec<u8>]) -> Result<Vec<u8>> {
         if shards.len() < self.data_shards {
             bail!(
@@ -110,7 +100,6 @@ mod tests {
         let shards = shards_handler.split(data);
         assert_eq!(shards.len(), TOTAL_SHARDS);
 
-        // All shards should have the same size
         let shard_size = shards[0].len();
         for shard in &shards {
             assert_eq!(shard.len(), shard_size);
@@ -130,7 +119,6 @@ mod tests {
     fn test_split_encoded_roundtrip() {
         let shards_handler = Shards::new(4, 10);
 
-        // Create encoded data (14 shards * 4 bytes each)
         let encoded: Vec<u8> = (0..56).collect();
 
         let shards = shards_handler.split_encoded(&encoded);

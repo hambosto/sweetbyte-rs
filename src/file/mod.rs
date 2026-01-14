@@ -1,5 +1,3 @@
-//! File operations module for SweetByte.
-
 pub mod discovery;
 pub mod operations;
 pub mod validation;

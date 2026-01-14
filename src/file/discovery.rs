@@ -1,20 +1,10 @@
-//! File discovery for finding eligible files.
-
-use std::path::PathBuf;
-
 use anyhow::Result;
+use std::path::PathBuf;
 
 use crate::file::operations::is_encrypted_file;
 use crate::file::validation::is_excluded;
 use crate::types::ProcessorMode;
 
-/// Finds files eligible for encryption or decryption.
-///
-/// # Arguments
-/// * `mode` - The processing mode
-///
-/// # Returns
-/// A list of eligible file paths
 pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
 
@@ -27,7 +17,6 @@ pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-/// Walks a directory recursively.
 fn walk_directory<F>(dir: &str, mut callback: F) -> Result<()>
 where
     F: FnMut(&std::path::Path),
@@ -38,12 +27,11 @@ where
     {
         let entries = match std::fs::read_dir(dir) {
             Ok(entries) => entries,
-            Err(_) => return Ok(()), // Skip unreadable directories
+            Err(_) => return Ok(()),
         };
 
         for entry in entries.flatten() {
             let path = entry.path();
-
             if path.is_dir() {
                 walk_inner(&path, callback)?;
             } else {
@@ -57,22 +45,18 @@ where
     walk_inner(std::path::Path::new(dir), &mut callback)
 }
 
-/// Checks if a file is eligible for processing.
 fn is_eligible(path: &std::path::Path, mode: ProcessorMode) -> bool {
-    // Skip hidden files
     if let Some(name) = path.file_name()
         && name.to_string_lossy().starts_with('.')
     {
         return false;
     }
 
-    // Skip excluded patterns
     if is_excluded(path) {
         return false;
     }
 
     let is_encrypted = is_encrypted_file(path);
-
     match mode {
         ProcessorMode::Encrypt => !is_encrypted,
         ProcessorMode::Decrypt => is_encrypted,

@@ -1,22 +1,15 @@
-//! Dual-layer cipher combining AES-256-GCM and XChaCha20-Poly1305.
-
 use anyhow::{Context, Result};
 
 use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};
 use crate::crypto::aes::AesCipher;
 use crate::crypto::chacha::ChachaCipher;
 
-/// Dual-layer cipher that chains AES-256-GCM and XChaCha20-Poly1305.
 pub struct Cipher {
     aes: AesCipher,
     chacha: ChachaCipher,
 }
 
 impl Cipher {
-    /// Creates a new dual-layer cipher.
-    ///
-    /// # Arguments
-    /// * `key` - A 64-byte key (first 32 for AES, last 32 for ChaCha)
     pub fn new(key: &[u8; ARGON_KEY_LEN]) -> Result<Self> {
         let aes_key: [u8; AES_KEY_SIZE] =
             key[..AES_KEY_SIZE].try_into().context("invalid AES key")?;
@@ -31,22 +24,18 @@ impl Cipher {
         })
     }
 
-    /// Encrypts plaintext using AES-256-GCM.
     pub fn encrypt_aes(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         self.aes.encrypt(plaintext)
     }
 
-    /// Decrypts ciphertext using AES-256-GCM.
     pub fn decrypt_aes(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         self.aes.decrypt(ciphertext)
     }
 
-    /// Encrypts plaintext using XChaCha20-Poly1305.
     pub fn encrypt_chacha(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         self.chacha.encrypt(plaintext)
     }
 
-    /// Decrypts ciphertext using XChaCha20-Poly1305.
     pub fn decrypt_chacha(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         self.chacha.decrypt(ciphertext)
     }
@@ -93,11 +82,9 @@ mod tests {
 
         let plaintext = b"Hello, World!";
 
-        // Encrypt with AES, then ChaCha
         let aes_encrypted = cipher.encrypt_aes(plaintext).unwrap();
         let dual_encrypted = cipher.encrypt_chacha(&aes_encrypted).unwrap();
 
-        // Decrypt with ChaCha, then AES
         let chacha_decrypted = cipher.decrypt_chacha(&dual_encrypted).unwrap();
         let decrypted = cipher.decrypt_aes(&chacha_decrypted).unwrap();
 

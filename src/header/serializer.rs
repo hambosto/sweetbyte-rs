@@ -1,5 +1,3 @@
-//! Header serialization.
-
 use anyhow::{Result, bail};
 use byteorder::{BigEndian, ByteOrder};
 
@@ -8,27 +6,17 @@ use crate::header::Header;
 use crate::header::mac::compute_mac;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType};
 
-/// Serializes a header to bytes.
 pub struct Serializer<'a> {
     header: &'a Header,
     encoder: SectionEncoder,
 }
 
 impl<'a> Serializer<'a> {
-    /// Creates a new serializer for the given header.
     pub fn new(header: &'a Header) -> Result<Self> {
         let encoder = SectionEncoder::new()?;
         Ok(Self { header, encoder })
     }
 
-    /// Serializes the header to bytes.
-    ///
-    /// # Arguments
-    /// * `salt` - The salt used for key derivation
-    /// * `key` - The derived key for MAC computation
-    ///
-    /// # Returns
-    /// The serialized header bytes
     pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         self.validate_inputs(salt, key)?;
 
@@ -129,10 +117,8 @@ impl<'a> Serializer<'a> {
     ) -> Vec<u8> {
         let mut result = Vec::new();
 
-        // 1. Lengths header (16 bytes)
         result.extend_from_slice(lengths_header);
 
-        // 2. Encoded length prefixes
         for section_type in SECTION_ORDER {
             let section = length_sections
                 .iter()
@@ -141,7 +127,6 @@ impl<'a> Serializer<'a> {
             result.extend_from_slice(&section.1.data);
         }
 
-        // 3. Encoded data sections
         for section_type in SECTION_ORDER {
             let section = sections
                 .iter()
@@ -180,7 +165,6 @@ fn to_bytes_u64(value: u64) -> [u8; 8] {
     bytes
 }
 
-/// Converts magic bytes to a byte array for comparison.
 pub fn magic_bytes() -> [u8; MAGIC_SIZE] {
     to_bytes_u32(MAGIC_BYTES)
 }

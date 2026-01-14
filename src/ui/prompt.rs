@@ -1,14 +1,10 @@
-//! User prompts and input.
-
-use std::path::{Path, PathBuf};
-
 use anyhow::{Result, bail};
 use dialoguer::{Confirm, Password, Select, theme::ColorfulTheme};
+use std::path::{Path, PathBuf};
 
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::types::ProcessorMode;
 
-/// Gets the encryption password with confirmation.
 pub fn get_encryption_password() -> Result<String> {
     let password: String = Password::with_theme(&ColorfulTheme::default())
         .with_prompt("Enter encryption password")
@@ -38,7 +34,6 @@ pub fn get_encryption_password() -> Result<String> {
     Ok(password)
 }
 
-/// Gets the decryption password.
 pub fn get_decryption_password() -> Result<String> {
     let password: String = Password::with_theme(&ColorfulTheme::default())
         .with_prompt("Enter decryption password")
@@ -52,10 +47,6 @@ pub fn get_decryption_password() -> Result<String> {
     Ok(password)
 }
 
-/// Confirms file overwrite.
-///
-/// # Arguments
-/// * `path` - The file path to potentially overwrite
 pub fn confirm_overwrite(path: &Path) -> Result<bool> {
     let result = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(format!(
@@ -69,11 +60,6 @@ pub fn confirm_overwrite(path: &Path) -> Result<bool> {
     Ok(result)
 }
 
-/// Confirms file removal.
-///
-/// # Arguments
-/// * `path` - The file path
-/// * `file_type` - Description of the file type (e.g., "original", "encrypted")
 pub fn confirm_removal(path: &Path, file_type: &str) -> Result<bool> {
     let result = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(format!("Delete {} file {}?", file_type, path.display()))
@@ -84,7 +70,6 @@ pub fn confirm_removal(path: &Path, file_type: &str) -> Result<bool> {
     Ok(result)
 }
 
-/// Gets the processing mode from the user.
 pub fn get_processing_mode() -> Result<ProcessorMode> {
     let options = vec!["Encrypt", "Decrypt"];
 
@@ -102,17 +87,12 @@ pub fn get_processing_mode() -> Result<ProcessorMode> {
     }
 }
 
-/// Lets the user choose a file from a list.
-///
-/// # Arguments
-/// * `files` - List of available files
 pub fn choose_file(files: &[PathBuf]) -> Result<PathBuf> {
     if files.is_empty() {
         bail!("no files available");
     }
 
     let display_names: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
-
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select file")
         .items(&display_names)

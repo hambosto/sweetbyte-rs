@@ -1,5 +1,3 @@
-//! HMAC-SHA256 for header authentication.
-
 use anyhow::{Context, Result, bail};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -8,19 +6,10 @@ use crate::config::MAC_SIZE;
 
 type HmacSha256 = Hmac<Sha256>;
 
-/// Computes HMAC-SHA256 over the given parts.
-///
-/// # Arguments
-/// * `key` - The HMAC key
-/// * `parts` - The data parts to authenticate
-///
-/// # Returns
-/// The 32-byte MAC
 pub fn compute_mac(key: &[u8], parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
     if key.is_empty() {
         bail!("key cannot be empty");
     }
-
     let mut mac = HmacSha256::new_from_slice(key).context("HMAC initialization failed")?;
 
     for part in parts {
@@ -35,18 +24,8 @@ pub fn compute_mac(key: &[u8], parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
     Ok(bytes)
 }
 
-/// Verifies HMAC-SHA256 against an expected value.
-///
-/// Uses constant-time comparison to prevent timing attacks.
-///
-/// # Arguments
-/// * `key` - The HMAC key
-/// * `expected` - The expected MAC value
-/// * `parts` - The data parts to verify
 pub fn verify_mac(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
     let computed = compute_mac(key, parts)?;
-
-    // Constant-time comparison
     if !constant_time_eq(&computed, expected) {
         bail!("MAC verification failed");
     }
@@ -54,7 +33,6 @@ pub fn verify_mac(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
     Ok(())
 }
 
-/// Constant-time equality comparison to prevent timing attacks.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
@@ -68,11 +46,6 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     result == 0
 }
 
-/// Verifies magic bytes against the expected value.
-///
-/// # Arguments
-/// * `magic` - The magic bytes to verify
-/// * `expected` - The expected magic value as bytes
 pub fn verify_magic(magic: &[u8], expected: &[u8]) -> bool {
     magic == expected
 }
@@ -115,7 +88,7 @@ mod tests {
         let data = [b"Hello".as_slice()];
 
         let mut mac = compute_mac(key, &data).unwrap();
-        mac[0] ^= 0xFF; // Tamper with MAC
+        mac[0] ^= 0xFF;
 
         assert!(verify_mac(key, &mac, &data).is_err());
     }
