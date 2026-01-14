@@ -12,7 +12,7 @@ use crate::ui::prompt::{get_decryption_password, get_encryption_password};
 
 /// SweetByte - Multi-layered file encryption with error correction.
 #[derive(Parser)]
-#[command(name = "sweetbyte")]
+#[command(name = "sweetbyte-rs")]
 #[command(version = "1.0")]
 #[command(
     about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction. Run without arguments for interactive mode."

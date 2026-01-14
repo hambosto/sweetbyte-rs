@@ -1,6 +1,7 @@
 //! Display utilities for file information.
 
 use anyhow::Result;
+use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL_CONDENSED};
 use console::{Term, style};
 
 use crate::types::{FileInfo, ProcessorMode};
@@ -47,17 +48,17 @@ pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
     );
     println!();
 
-    // Print header
-    println!(
-        "  {:>4}  {:28}  {:>10}  {:12}",
-        style("No").bold(),
-        style("Name").bold(),
-        style("Size").bold(),
-        style("Status").bold()
-    );
-    println!("  {}", "-".repeat(60));
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL_CONDENSED)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("No").fg(Color::White),
+            Cell::new("Name").fg(Color::White),
+            Cell::new("Size").fg(Color::White),
+            Cell::new("Status").fg(Color::White),
+        ]);
 
-    // Print files
     for (i, file) in files.iter().enumerate() {
         let filename = file
             .path
@@ -71,21 +72,21 @@ pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
             filename.to_string()
         };
 
-        let status = if file.is_encrypted {
-            style("encrypted").cyan()
+        let (status_text, status_color) = if file.is_encrypted {
+            ("encrypted", Color::Cyan)
         } else {
-            style("unencrypted").green()
+            ("unencrypted", Color::Green)
         };
 
-        println!(
-            "  {:>4}  {:28}  {:>10}  {}",
-            style(i + 1).bold(),
-            style(&display_name).green(),
-            format_bytes(file.size),
-            status
-        );
+        table.add_row(vec![
+            Cell::new(i + 1),
+            Cell::new(&display_name).fg(Color::Green),
+            Cell::new(format_bytes(file.size)),
+            Cell::new(status_text).fg(status_color),
+        ]);
     }
 
+    println!("{table}");
     println!();
     Ok(())
 }

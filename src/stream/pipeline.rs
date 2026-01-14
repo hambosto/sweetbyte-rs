@@ -29,7 +29,9 @@ impl Pipeline {
     /// * `mode` - The processing mode
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
         let processor = DataProcessor::new(key, mode)?;
-        let concurrency = num_cpus();
+        let concurrency = thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(4);
 
         Ok(Self {
             processor,
@@ -88,11 +90,4 @@ impl Pipeline {
 
         Ok(())
     }
-}
-
-/// Returns the number of CPU cores.
-fn num_cpus() -> usize {
-    thread::available_parallelism()
-        .map(|p| p.get())
-        .unwrap_or(4)
 }

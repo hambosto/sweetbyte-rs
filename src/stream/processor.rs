@@ -57,7 +57,10 @@ impl DataProcessor {
         };
 
         // 2. Pad
-        let padded = self.padding.pad(&compressed);
+        let padded = match self.padding.pad(&compressed) {
+            Ok(data) => data,
+            Err(e) => return TaskResult::failure(task.index, e),
+        };
 
         // 3. Encrypt with AES
         let aes_encrypted = match self.cipher.encrypt_aes(&padded) {
