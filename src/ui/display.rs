@@ -6,6 +6,7 @@ use comfy_table::{Cell, Color, ContentArrangement, Table};
 use console::{Term, style};
 use figlet_rs::FIGfont;
 
+use crate::config::APP_NAME;
 use crate::types::{FileInfo, ProcessorMode};
 
 pub fn format_bytes(bytes: u64) -> String {
@@ -118,7 +119,7 @@ pub fn clear_screen() -> Result<()> {
 
 pub fn print_banner() {
     let standard_font = FIGfont::standard().unwrap();
-    if let Some(figure) = standard_font.convert("SweetByte") {
+    if let Some(figure) = standard_font.convert(APP_NAME) {
         println!("{}", style(figure).green().bold());
     }
 }
