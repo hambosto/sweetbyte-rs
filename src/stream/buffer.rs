@@ -1,13 +1,22 @@
-use hashbrown::HashMap;
+//! Sequential buffer for ordering task results.
+
+use std::collections::HashMap;
 
 use crate::types::TaskResult;
 
+/// Buffer that maintains sequential ordering of task results.
+///
+/// Results may arrive out of order but are released in order.
 pub struct SequentialBuffer {
     buffer: HashMap<u64, TaskResult>,
     next_idx: u64,
 }
 
 impl SequentialBuffer {
+    /// Creates a new sequential buffer.
+    ///
+    /// # Arguments
+    /// * `start` - The starting index
     pub fn new(start: u64) -> Self {
         Self {
             buffer: HashMap::new(),
@@ -15,10 +24,13 @@ impl SequentialBuffer {
         }
     }
 
+    /// Adds a result to the buffer and returns any results ready for output.
+    ///
+    /// Results are ready when they are the next expected index.
     pub fn add(&mut self, result: TaskResult) -> Vec<TaskResult> {
         self.buffer.insert(result.index, result);
-        let mut ready = Vec::new();
 
+        let mut ready = Vec::new();
         while let Some(result) = self.buffer.remove(&self.next_idx) {
             ready.push(result);
             self.next_idx += 1;
@@ -27,6 +39,7 @@ impl SequentialBuffer {
         ready
     }
 
+    /// Flushes all remaining results, sorted by index.
     pub fn flush(&mut self) -> Vec<TaskResult> {
         if self.buffer.is_empty() {
             return Vec::new();
@@ -46,6 +59,7 @@ impl SequentialBuffer {
         results
     }
 
+    /// Returns true if the buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
