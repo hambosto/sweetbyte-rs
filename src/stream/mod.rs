@@ -1,5 +1,3 @@
-//! Stream processing modules for SweetByte.
-
 pub mod buffer;
 pub mod executor;
 pub mod pipeline;

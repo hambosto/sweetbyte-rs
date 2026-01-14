@@ -1,3 +1,4 @@
+pub mod allocator;
 pub mod cli;
 pub mod compression;
 pub mod config;
@@ -11,4 +12,3 @@ pub mod processor;
 pub mod stream;
 pub mod types;
 pub mod ui;
-mod allocator;
