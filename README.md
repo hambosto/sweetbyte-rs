@@ -134,7 +134,7 @@ src/
   padding.rs      - PKCS7 padding implementation
   config.rs       - Constants and parameters
   types.rs        - Shared type definitions
-  crypto/
+  cipher/
     aes.rs        - AES-256-GCM implementation
     chacha.rs     - XChaCha20-Poly1305 implementation
     cipher.rs     - Cipher abstraction layer
