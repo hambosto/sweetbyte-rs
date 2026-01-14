@@ -130,7 +130,7 @@ mod tests {
     use std::io::Cursor;
 
     use super::*;
-    use crate::crypto::{derive_key, random_bytes};
+    use crate::cipher::{derive_key, random_bytes};
 
     #[test]
     fn test_header_new() {

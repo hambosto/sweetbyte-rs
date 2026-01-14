@@ -3,8 +3,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
+use crate::cipher::{derive_key, random_bytes};
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
-use crate::crypto::{derive_key, random_bytes};
 use crate::file::{create_file, get_file_info, open_file};
 use crate::header::Header;
 use crate::stream::Pipeline;
