@@ -12,6 +12,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -20,7 +21,7 @@ jobs:
           override: true
 
       - name: Install cargo-nextest
-	      uses: taiki-e/install-action@cargo-nextest
+        uses: taiki-e/install-action@cargo-nextest
 
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
