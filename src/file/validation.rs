@@ -1,11 +1,12 @@
 use anyhow::{Result, bail};
 use glob::Pattern;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use crate::config::EXCLUDED_PATTERNS;
 use crate::file::operations::get_file_info;
 
-static COMPILED_PATTERNS: std::sync::OnceLock<Vec<Pattern>> = std::sync::OnceLock::new();
+static COMPILED_PATTERNS: OnceLock<Vec<Pattern>> = OnceLock::new();
 
 fn get_exclusion_patterns() -> &'static [Pattern] {
     COMPILED_PATTERNS.get_or_init(|| {
@@ -33,21 +34,19 @@ pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {
     let info = get_file_info(path)?;
     if must_exist {
         match info {
-            None => {
-                bail!("file not found: {}", path.display());
-            }
             Some(info) if info.size == 0 => {
                 bail!("file is empty: {}", path.display());
+            }
+            None => {
+                bail!("file not found: {}", path.display());
             }
             _ => {}
         }
         if path.is_dir() {
             bail!("path is a directory: {}", path.display());
         }
-    } else {
-        if info.is_some() {
-            bail!("output file already exists: {}", path.display());
-        }
+    } else if info.is_some() {
+        bail!("output file already exists: {}", path.display());
     }
 
     Ok(())

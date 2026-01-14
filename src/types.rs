@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter, Result};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,8 +16,8 @@ impl ProcessorMode {
     }
 }
 
-impl std::fmt::Display for ProcessorMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ProcessorMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.as_str())
     }
 }
@@ -36,8 +37,8 @@ impl Processing {
     }
 }
 
-impl std::fmt::Display for Processing {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Processing {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.description())
     }
 }
@@ -45,7 +46,6 @@ impl std::fmt::Display for Processing {
 #[derive(Debug)]
 pub struct Task {
     pub data: Vec<u8>,
-
     pub index: u64,
 }
 

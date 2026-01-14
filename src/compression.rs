@@ -1,9 +1,8 @@
-use std::io::{Read, Write};
-
 use anyhow::{Context, Result, bail};
-use flate2::Compression as FlateCompression;
+use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
+use std::io::{Read, Write};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompressionLevel {
@@ -14,19 +13,19 @@ pub enum CompressionLevel {
     Best,
 }
 
-impl From<CompressionLevel> for FlateCompression {
+impl From<CompressionLevel> for Compression {
     fn from(level: CompressionLevel) -> Self {
         match level {
-            CompressionLevel::None => FlateCompression::none(),
-            CompressionLevel::Fast => FlateCompression::fast(),
-            CompressionLevel::Default => FlateCompression::default(),
-            CompressionLevel::Best => FlateCompression::best(),
+            CompressionLevel::None => Compression::none(),
+            CompressionLevel::Fast => Compression::fast(),
+            CompressionLevel::Default => Compression::default(),
+            CompressionLevel::Best => Compression::best(),
         }
     }
 }
 
 pub struct Compressor {
-    level: FlateCompression,
+    level: Compression,
 }
 
 impl Compressor {
@@ -114,9 +113,7 @@ mod tests {
     #[test]
     fn test_compression_actually_compresses() {
         let compressor = Compressor::new(CompressionLevel::Best);
-
         let data: Vec<u8> = vec![b'a'; 10000];
-
         let compressed = compressor.compress(&data).unwrap();
         assert!(compressed.len() < data.len());
     }

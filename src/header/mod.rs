@@ -128,6 +128,7 @@ impl Default for Header {
 mod tests {
     use super::*;
     use crate::crypto::{derive_key, random_bytes};
+    use std::io::Cursor;
 
     #[test]
     fn test_header_new() {
@@ -161,9 +162,7 @@ mod tests {
         let serialized = header.marshal(&salt, &key).unwrap();
 
         let mut new_header = Header::new();
-        new_header
-            .unmarshal(std::io::Cursor::new(&serialized))
-            .unwrap();
+        new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 
         assert_eq!(new_header.version, header.version);
         assert_eq!(new_header.flags, header.flags);
@@ -181,9 +180,7 @@ mod tests {
 
         let serialized = header.marshal(&salt, &key).unwrap();
         let mut new_header = Header::new();
-        new_header
-            .unmarshal(std::io::Cursor::new(&serialized))
-            .unwrap();
+        new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 
         assert!(new_header.verify(&key).is_ok());
     }
@@ -201,9 +198,7 @@ mod tests {
         let serialized = header.marshal(&salt, &key).unwrap();
 
         let mut new_header = Header::new();
-        new_header
-            .unmarshal(std::io::Cursor::new(&serialized))
-            .unwrap();
+        new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 
         assert!(new_header.verify(&wrong_key).is_err());
     }

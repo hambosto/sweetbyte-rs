@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use crate::file::discovery::find_eligible_files;
 use crate::file::operations::{get_output_path, is_encrypted_file};
@@ -81,11 +82,7 @@ pub fn run_command(cmd: Commands) -> Result<()> {
     }
 }
 
-fn encrypt_file(
-    input: &std::path::Path,
-    output: Option<PathBuf>,
-    password: Option<String>,
-) -> Result<()> {
+fn encrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>) -> Result<()> {
     let output = output.unwrap_or_else(|| get_output_path(input, ProcessorMode::Encrypt));
 
     let password = match password {
@@ -101,11 +98,7 @@ fn encrypt_file(
     Ok(())
 }
 
-fn decrypt_file(
-    input: &std::path::Path,
-    output: Option<PathBuf>,
-    password: Option<String>,
-) -> Result<()> {
+fn decrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>) -> Result<()> {
     let output = output.unwrap_or_else(|| get_output_path(input, ProcessorMode::Decrypt));
     let password = match password {
         Some(p) => p,
@@ -133,7 +126,7 @@ pub fn run_interactive() -> Result<()> {
         .iter()
         .map(|p| FileInfo {
             path: p.clone(),
-            size: std::fs::metadata(p).map(|m| m.len()).unwrap_or(0),
+            size: fs::metadata(p).map(|m| m.len()).unwrap_or(0),
             is_encrypted: is_encrypted_file(p),
         })
         .collect();
@@ -152,7 +145,7 @@ pub fn run_interactive() -> Result<()> {
             show_success(mode, &output);
 
             if confirm_removal(&selected, "original")? {
-                std::fs::remove_file(&selected)
+                fs::remove_file(&selected)
                     .with_context(|| format!("failed to remove {}", selected.display()))?;
                 show_source_deleted(&selected);
             }
@@ -166,7 +159,7 @@ pub fn run_interactive() -> Result<()> {
             show_success(mode, &output);
 
             if confirm_removal(&selected, "encrypted")? {
-                std::fs::remove_file(&selected)
+                fs::remove_file(&selected)
                     .with_context(|| format!("failed to remove {}", selected.display()))?;
                 show_source_deleted(&selected);
             }

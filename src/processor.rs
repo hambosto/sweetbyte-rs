@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use std::io::Write;
 use std::path::Path;
 
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
@@ -28,7 +29,7 @@ pub fn encrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
     let header_bytes = header.marshal(&salt, &key)?;
     let mut dest_file = create_file(dest_path)?;
 
-    std::io::Write::write_all(&mut dest_file, &header_bytes)?;
+    Write::write_all(&mut dest_file, &header_bytes)?;
 
     let key_array: [u8; ARGON_KEY_LEN] = key;
     let pipeline = Pipeline::new(&key_array, Processing::Encryption)?;
@@ -71,6 +72,7 @@ pub fn decrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::tempdir;
 
     #[test]
@@ -81,7 +83,7 @@ mod tests {
         let dec_path = dir.path().join("decrypted.txt");
 
         let original_content = b"Hello, World! This is a test file for encryption.";
-        std::fs::write(&src_path, original_content).unwrap();
+        fs::write(&src_path, original_content).unwrap();
 
         encrypt(&src_path, &enc_path, "test_password_123").unwrap();
         assert!(enc_path.exists());
@@ -89,7 +91,7 @@ mod tests {
         decrypt(&enc_path, &dec_path, "test_password_123").unwrap();
         assert!(dec_path.exists());
 
-        let decrypted_content = std::fs::read(&dec_path).unwrap();
+        let decrypted_content = fs::read(&dec_path).unwrap();
         assert_eq!(decrypted_content, original_content);
     }
 
@@ -100,7 +102,7 @@ mod tests {
         let enc_path = dir.path().join("encrypted.swx");
         let dec_path = dir.path().join("decrypted.txt");
 
-        std::fs::write(&src_path, b"Test content").unwrap();
+        fs::write(&src_path, b"Test content").unwrap();
 
         encrypt(&src_path, &enc_path, "correct_password").unwrap();
 

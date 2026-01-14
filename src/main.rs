@@ -1,3 +1,5 @@
+use std::process;
+
 fn run() -> anyhow::Result<()> {
     let cli = sweetbyte_rs::cli::parse();
     match cli.command {
@@ -9,6 +11,6 @@ fn run() -> anyhow::Result<()> {
 fn main() {
     if let Err(e) = run() {
         eprintln!("Error: {:?}", e);
-        std::process::exit(1);
+        process::exit(1);
     }
 }

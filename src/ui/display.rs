@@ -2,6 +2,7 @@ use anyhow::{Result, anyhow};
 use comfy_table::{Cell, Color, ContentArrangement, Table, presets::UTF8_FULL_CONDENSED};
 use console::{Term, style};
 use figlet_rs::FIGfont;
+use std::path::Path;
 
 use crate::types::{FileInfo, ProcessorMode};
 
@@ -85,7 +86,7 @@ pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
     Ok(())
 }
 
-pub fn show_success(mode: ProcessorMode, path: &std::path::Path) {
+pub fn show_success(mode: ProcessorMode, path: &Path) {
     let action = match mode {
         ProcessorMode::Encrypt => "encrypted",
         ProcessorMode::Decrypt => "decrypted",
@@ -99,7 +100,7 @@ pub fn show_success(mode: ProcessorMode, path: &std::path::Path) {
     );
 }
 
-pub fn show_source_deleted(path: &std::path::Path) {
+pub fn show_source_deleted(path: &Path) {
     println!(
         "{} {}",
         style("✓").green(),

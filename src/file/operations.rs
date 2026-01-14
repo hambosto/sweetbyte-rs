@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use crate::config::FILE_EXTENSION;
@@ -42,7 +42,7 @@ pub fn remove_file(path: &Path) -> Result<()> {
 pub fn get_file_info(path: &Path) -> Result<Option<FileInfo>> {
     let metadata = match fs::metadata(path) {
         Ok(meta) => meta,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
         Err(e) => {
             return Err(e).with_context(|| format!("failed to get metadata: {}", path.display()));
         }
@@ -95,6 +95,7 @@ pub fn get_file_info_list(paths: &[PathBuf]) -> Result<Vec<FileInfo>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
     use tempfile::tempdir;
 
     #[test]
@@ -104,11 +105,11 @@ mod tests {
 
         {
             let mut writer = create_file(&path).unwrap();
-            std::io::Write::write_all(&mut writer, b"Hello, World!").unwrap();
+            Write::write_all(&mut writer, b"Hello, World!").unwrap();
         }
 
         let reader = open_file(&path).unwrap();
-        let content: Vec<u8> = std::io::Read::bytes(reader).map(|b| b.unwrap()).collect();
+        let content: Vec<u8> = Read::bytes(reader).map(|b| b.unwrap()).collect();
         assert_eq!(content, b"Hello, World!");
     }
 

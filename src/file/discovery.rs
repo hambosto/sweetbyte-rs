@@ -1,5 +1,6 @@
 use anyhow::Result;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use crate::file::operations::is_encrypted_file;
 use crate::file::validation::is_excluded;
@@ -19,13 +20,13 @@ pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
 
 fn walk_directory<F>(dir: &str, mut callback: F) -> Result<()>
 where
-    F: FnMut(&std::path::Path),
+    F: FnMut(&Path),
 {
-    fn walk_inner<F>(dir: &std::path::Path, callback: &mut F) -> Result<()>
+    fn walk_inner<F>(dir: &Path, callback: &mut F) -> Result<()>
     where
-        F: FnMut(&std::path::Path),
+        F: FnMut(&Path),
     {
-        let entries = match std::fs::read_dir(dir) {
+        let entries = match fs::read_dir(dir) {
             Ok(entries) => entries,
             Err(_) => return Ok(()),
         };
@@ -42,10 +43,10 @@ where
         Ok(())
     }
 
-    walk_inner(std::path::Path::new(dir), &mut callback)
+    walk_inner(Path::new(dir), &mut callback)
 }
 
-fn is_eligible(path: &std::path::Path, mode: ProcessorMode) -> bool {
+fn is_eligible(path: &Path, mode: ProcessorMode) -> bool {
     if let Some(name) = path.file_name()
         && name.to_string_lossy().starts_with('.')
     {
@@ -66,7 +67,6 @@ fn is_eligible(path: &std::path::Path, mode: ProcessorMode) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn test_is_eligible_encrypt() {
