@@ -13,7 +13,6 @@ fn get_exclusion_patterns() -> &'static [Pattern] {
     COMPILED_PATTERNS.get_or_init(|| EXCLUDED_PATTERNS.iter().filter_map(|p| Pattern::new(p).ok()).collect())
 }
 
-#[inline]
 pub fn is_excluded(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
     let path_str = path_str.replace('\\', "/");

@@ -8,14 +8,13 @@ use crate::file::discovery::find_eligible_files;
 use crate::file::operations::{get_output_path, is_encrypted_file};
 use crate::processor::{decrypt, encrypt};
 use crate::types::{FileInfo, ProcessorMode};
-use crate::ui::display::{print_banner, show_file_info, show_source_deleted, show_success};
+use crate::ui::display::{clear_screen, print_banner, show_file_info, show_source_deleted, show_success};
 use crate::ui::prompt::{choose_file, confirm_removal, get_decryption_password, get_encryption_password, get_processing_mode};
 
 #[derive(Parser)]
 #[command(name = "sweetbyte-rs")]
 #[command(version = "1.0")]
-#[command(about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error \
-             correction. Run without arguments for interactive mode.")]
+#[command(about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction. Run without arguments for interactive mode.")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -96,6 +95,7 @@ fn decrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>)
 }
 
 pub fn run_interactive() -> Result<()> {
+    clear_screen()?;
     print_banner();
 
     let mode = get_processing_mode()?;

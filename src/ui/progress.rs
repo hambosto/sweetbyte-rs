@@ -7,23 +7,18 @@ pub struct Bar {
 impl Bar {
     pub fn new(total: u64, description: &str) -> Self {
         let bar = ProgressBar::new(total);
-        let style = ProgressStyle::default_bar()
-            .template("{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+        let style = ProgressStyle::with_template("{spinner:.green} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
             .expect("valid template")
             .progress_chars("●○ ");
-
         bar.set_style(style);
         bar.set_message(description.to_string());
-
         Self { bar }
     }
 
-    #[inline]
     pub fn add(&self, delta: u64) {
         self.bar.inc(delta);
     }
 
-    #[inline]
     pub fn finish(&self) {
         self.bar.finish_with_message("Done");
     }

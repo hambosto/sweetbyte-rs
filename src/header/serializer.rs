@@ -75,16 +75,13 @@ impl<'a> Serializer<'a> {
 
     fn assemble_header(&self, lengths_header: &[u8], length_sections: &[(SectionType, EncodedSection); 4], sections: &[(SectionType, EncodedSection); 4]) -> Vec<u8> {
         let mut result = Vec::new();
-
         result.extend_from_slice(lengths_header);
-        for section_type in SECTION_ORDER {
-            let section = length_sections.iter().find(|(t, _)| *t == section_type).expect("section must exist");
-            result.extend_from_slice(&section.1.data);
-        }
 
-        for section_type in SECTION_ORDER {
-            let section = sections.iter().find(|(t, _)| *t == section_type).expect("section must exist");
-            result.extend_from_slice(&section.1.data);
+        for &section_list in &[length_sections, sections] {
+            for section_type in SECTION_ORDER {
+                let section = section_list.iter().find(|(t, _)| *t == section_type).expect("section must exist");
+                result.extend_from_slice(&section.1.data);
+            }
         }
 
         result

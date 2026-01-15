@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
@@ -11,45 +11,27 @@ pub fn compute_mac(key: &[u8], parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
     if key.is_empty() {
         bail!("key cannot be empty");
     }
-    let mut mac = initialize_hmac(key)?;
-    update_hmac_with_parts(&mut mac, parts);
-    finalize_mac(mac)
+
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
+    for part in parts.iter().filter(|p| !p.is_empty()) {
+        mac.update(part);
+    }
+
+    Ok(mac.finalize().into_bytes().into())
 }
 
 pub fn verify_mac(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
     let computed = compute_mac(key, parts)?;
-    if !constant_time_compare(&computed, expected) {
+
+    if !bool::from(computed.ct_eq(expected)) {
         bail!("MAC verification failed");
     }
+
     Ok(())
 }
 
-#[inline]
 pub fn verify_magic(magic: &[u8], expected: &[u8]) -> bool {
-    constant_time_compare(magic, expected)
-}
-
-fn initialize_hmac(key: &[u8]) -> Result<HmacSha256> {
-    HmacSha256::new_from_slice(key).context("HMAC initialization failed")
-}
-
-fn update_hmac_with_parts(mac: &mut HmacSha256, parts: &[&[u8]]) {
-    for part in parts {
-        if !part.is_empty() {
-            mac.update(part);
-        }
-    }
-}
-
-fn finalize_mac(mac: HmacSha256) -> Result<[u8; MAC_SIZE]> {
-    let result = mac.finalize();
-    let bytes: [u8; MAC_SIZE] = result.into_bytes().into();
-    Ok(bytes)
-}
-
-#[inline]
-fn constant_time_compare(a: &[u8], b: &[u8]) -> bool {
-    bool::from(a.ct_eq(b))
+    bool::from(magic.ct_eq(expected))
 }
 
 #[cfg(test)]
@@ -106,22 +88,16 @@ mod tests {
 
     #[test]
     fn verify_magic_returns_true_for_matching_bytes() {
-        let magic = b"MAGIC";
-        let expected = b"MAGIC";
-        assert!(verify_magic(magic, expected));
+        assert!(verify_magic(b"MAGIC", b"MAGIC"));
     }
 
     #[test]
     fn verify_magic_returns_false_for_different_bytes() {
-        let magic = b"MAGIC";
-        let expected = b"WRONG";
-        assert!(!verify_magic(magic, expected));
+        assert!(!verify_magic(b"MAGIC", b"WRONG"));
     }
 
     #[test]
-    fn constant_time_compare_prevents_length_leakage() {
-        let short = b"AB";
-        let long = b"ABCD";
-        assert!(!constant_time_compare(short, long));
+    fn verify_magic_returns_false_for_different_lengths() {
+        assert!(!verify_magic(b"AB", b"ABCD"));
     }
 }

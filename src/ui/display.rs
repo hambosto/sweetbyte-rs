@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::{Result, anyhow};
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 use console::{Term, style};
@@ -34,21 +35,20 @@ pub fn format_bytes(bytes: u64) -> String {
 
 pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
     if files.is_empty() {
-        println!("{}", style("No files found").yellow());
+        println!("{}", style("No files found").yellow().bold());
         return Ok(());
     }
 
     println!();
-    println!("{} {}", style("✓").green(), style(format!("Found {} file(s):", files.len())).bold());
+    println!("{} {}", style("✔").green(), style(format!("Found {} file(s):", files.len())).bold());
     println!();
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Dynamic).set_header(vec![
-        Cell::new("No").fg(Color::White),
-        Cell::new("Name").fg(Color::White),
-        Cell::new("Size").fg(Color::White),
-        Cell::new("Status").fg(Color::White),
-    ]);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![Cell::new("No").fg(Color::White), Cell::new("Name").fg(Color::White), Cell::new("Size").fg(Color::White), Cell::new("Status").fg(Color::White)]);
 
     for (i, file) in files.iter().enumerate() {
         let filename = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
@@ -69,11 +69,11 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
     };
 
     println!();
-    println!("{} {}", style("✓").green(), style(format!("File {} successfully: {}", action, path.display())).bold());
+    println!("{} {}", style("✔").green(), style(format!("File {} successfully: {}", action, path.display())).bold());
 }
 
 pub fn show_source_deleted(path: &Path) {
-    println!("{} {}", style("✓").green(), style(format!("Source file deleted: {}", path.display())).bold());
+    println!("{} {}", style("✔").green(), style(format!("Source file deleted: {}", path.display())).bold());
 }
 
 pub fn clear_screen() -> Result<()> {

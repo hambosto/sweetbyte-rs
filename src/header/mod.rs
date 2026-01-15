@@ -17,17 +17,16 @@ pub mod serializer;
 #[derive(Debug)]
 pub struct Header {
     pub original_size: u64,
-    pub(crate) decoded_sections: Option<HashMap<SectionType, Vec<u8>>>,
     pub flags: u32,
     pub version: u16,
+    pub(crate) decoded_sections: Option<HashMap<SectionType, Vec<u8>>>,
 }
 
 impl Header {
     pub fn new() -> Self {
-        Self { original_size: 0, decoded_sections: None, flags: 0, version: CURRENT_VERSION }
+        Self { original_size: 0, flags: 0, version: CURRENT_VERSION, decoded_sections: None }
     }
 
-    #[inline]
     pub fn original_size(&self) -> u64 {
         self.original_size
     }
@@ -36,7 +35,6 @@ impl Header {
         self.original_size = size;
     }
 
-    #[inline]
     pub fn is_protected(&self) -> bool {
         self.flags & FLAG_PROTECTED != 0
     }

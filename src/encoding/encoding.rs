@@ -44,7 +44,7 @@ impl Encoding {
         }
 
         let mut shards: Vec<Option<Vec<u8>>> = self.shards.split_encoded(encoded).into_iter().map(Some).collect();
-        self.encoder.reconstruct(&mut shards).map_err(|e| anyhow::anyhow!("Reed-Solomon reconstruction failed: {:?}", e))?;
+        self.encoder.reconstruct(&mut shards).map_err(|e| anyhow!("Reed-Solomon reconstruction failed: {:?}", e))?;
 
         let reconstructed: Vec<Vec<u8>> = shards.into_iter().flatten().collect();
         self.shards.extract(&reconstructed)

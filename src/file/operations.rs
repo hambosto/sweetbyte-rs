@@ -1,5 +1,6 @@
 use std::fs::{File, OpenOptions, create_dir_all, metadata, remove_file};
-use std::io::{BufReader, BufWriter, ErrorKind};
+use std::io::ErrorKind::NotFound;
+use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -41,7 +42,7 @@ pub fn delete_file(path: &Path) -> Result<()> {
 pub fn get_file_info(path: &Path) -> Result<Option<FileInfo>> {
     let metadata = match metadata(path) {
         Ok(meta) => meta,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == NotFound => return Ok(None),
         Err(e) => {
             return Err(e).with_context(|| format!("failed to get metadata: {}", path.display()));
         }
@@ -64,7 +65,6 @@ pub fn get_output_path(input: &Path, mode: ProcessorMode) -> PathBuf {
     }
 }
 
-#[inline]
 pub fn is_encrypted_file(path: &Path) -> bool {
     path.extension().and_then(|ext| ext.to_str()).map(|ext| format!(".{}", ext) == FILE_EXTENSION).unwrap_or(false)
 }
