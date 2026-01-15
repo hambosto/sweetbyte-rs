@@ -1,6 +1,8 @@
 use anyhow::{Result, anyhow, bail};
-use argon2::{Argon2, Params, Version};
-use rand::Rng;
+use argon2::Algorithm::Argon2id;
+use argon2::Version::V0x13;
+use argon2::{Argon2, Params};
+use rand::rand_core::{OsRng, TryRngCore};
 
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME};
 
@@ -15,7 +17,7 @@ pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
 
     let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_THREADS, Some(ARGON_KEY_LEN))
         .map_err(|e| anyhow!("invalid Argon2 parameters: {:?}", e))?;
-    let argon2 = Argon2::new(argon2::Algorithm::Argon2id, Version::V0x13, params);
+    let argon2 = Argon2::new(Argon2id, V0x13, params);
 
     let mut key = [0u8; ARGON_KEY_LEN];
     argon2
@@ -27,7 +29,9 @@ pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
 
 pub fn random_bytes<const N: usize>() -> Result<[u8; N]> {
     let mut bytes = [0u8; N];
-    rand::rng().fill(&mut bytes);
+    OsRng
+        .try_fill_bytes(&mut bytes)
+        .map_err(|e| anyhow!("failed to generate random bytes: {:?}", e))?;
     Ok(bytes)
 }
 

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, anyhow, bail};
 use reed_solomon_erasure::galois_8::ReedSolomon;
 
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
@@ -14,7 +14,7 @@ pub struct Encoding {
 impl Encoding {
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
         let encoder = ReedSolomon::new(data_shards, parity_shards)
-            .context("failed to create Reed-Solomon encoder")?;
+            .map_err(|e| anyhow!("failed to create Reed-Solomon encoder: {:?}", e))?;
 
         Ok(Self {
             encoder,
@@ -39,7 +39,7 @@ impl Encoding {
 
         self.encoder
             .encode(&mut shards)
-            .context("Reed-Solomon encoding failed")?;
+            .map_err(|e| anyhow!("Reed-Solomon encoding failed: {:?}", e))?;
 
         Ok(self.shards.combine(&shards))
     }
@@ -68,7 +68,7 @@ impl Encoding {
 
         self.encoder
             .reconstruct(&mut shards)
-            .context("Reed-Solomon reconstruction failed")?;
+            .map_err(|e| anyhow::anyhow!("Reed-Solomon reconstruction failed: {:?}", e))?;
 
         let reconstructed: Vec<Vec<u8>> = shards.into_iter().flatten().collect();
         self.shards.extract(&reconstructed)

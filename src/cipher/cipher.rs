@@ -1,17 +1,17 @@
 use anyhow::{Context, Result};
 
-use crate::cipher::aes::AesCipher;
-use crate::cipher::chacha::ChachaCipher;
+use crate::cipher::aes_gcm::Aes256GcmCipher;
+use crate::cipher::cacha20poly1305::ChaCha20Poly1305Cipher;
 use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};
-
-pub mod algorithm {
-    pub struct AESGcm;
+#[allow(non_snake_case)]
+pub mod Algorithm {
+    pub struct AES256Gcm;
     pub struct XChaCha20Poly1305;
 }
 
 pub struct Cipher {
-    aes: AesCipher,
-    chacha: ChachaCipher,
+    aes_gcm: Aes256GcmCipher,
+    chacha20poly1305: ChaCha20Poly1305Cipher,
 }
 
 impl Cipher {
@@ -24,42 +24,42 @@ impl Cipher {
             .context("invalid ChaCha key")?;
 
         Ok(Self {
-            aes: AesCipher::new(&aes_key),
-            chacha: ChachaCipher::new(&chacha_key),
+            aes_gcm: Aes256GcmCipher::new(&aes_key),
+            chacha20poly1305: ChaCha20Poly1305Cipher::new(&chacha_key),
         })
     }
 
-    pub fn encrypt<T: CipherSelector>(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+    pub fn encrypt<T: Selector>(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         T::encrypt(self, plaintext)
     }
 
-    pub fn decrypt<T: CipherSelector>(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+    pub fn decrypt<T: Selector>(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         T::decrypt(self, ciphertext)
     }
 }
 
-pub trait CipherSelector {
+pub trait Selector {
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>>;
     fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>>;
 }
 
-impl CipherSelector for algorithm::AESGcm {
+impl Selector for Algorithm::AES256Gcm {
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
-        cipher.aes.encrypt(plaintext)
+        cipher.aes_gcm.encrypt(plaintext)
     }
 
     fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        cipher.aes.decrypt(ciphertext)
+        cipher.aes_gcm.decrypt(ciphertext)
     }
 }
 
-impl CipherSelector for algorithm::XChaCha20Poly1305 {
+impl Selector for Algorithm::XChaCha20Poly1305 {
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
-        cipher.chacha.encrypt(plaintext)
+        cipher.chacha20poly1305.encrypt(plaintext)
     }
 
     fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        cipher.chacha.decrypt(ciphertext)
+        cipher.chacha20poly1305.decrypt(ciphertext)
     }
 }
 
@@ -79,8 +79,8 @@ mod tests {
         let cipher = Cipher::new(&key).unwrap();
 
         let plaintext = b"Hello, World!";
-        let ciphertext = cipher.encrypt::<algorithm::AESGcm>(plaintext).unwrap();
-        let decrypted = cipher.decrypt::<algorithm::AESGcm>(&ciphertext).unwrap();
+        let ciphertext = cipher.encrypt::<Algorithm::AES256Gcm>(plaintext).unwrap();
+        let decrypted = cipher.decrypt::<Algorithm::AES256Gcm>(&ciphertext).unwrap();
 
         assert_eq!(decrypted, plaintext);
     }
@@ -92,10 +92,10 @@ mod tests {
 
         let plaintext = b"Hello, World!";
         let ciphertext = cipher
-            .encrypt::<algorithm::XChaCha20Poly1305>(plaintext)
+            .encrypt::<Algorithm::XChaCha20Poly1305>(plaintext)
             .unwrap();
         let decrypted = cipher
-            .decrypt::<algorithm::XChaCha20Poly1305>(&ciphertext)
+            .decrypt::<Algorithm::XChaCha20Poly1305>(&ciphertext)
             .unwrap();
 
         assert_eq!(decrypted, plaintext);
@@ -108,16 +108,16 @@ mod tests {
 
         let plaintext = b"Hello, World!";
 
-        let aes_encrypted = cipher.encrypt::<algorithm::AESGcm>(plaintext).unwrap();
+        let aes_encrypted = cipher.encrypt::<Algorithm::AES256Gcm>(plaintext).unwrap();
         let dual_encrypted = cipher
-            .encrypt::<algorithm::XChaCha20Poly1305>(&aes_encrypted)
+            .encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted)
             .unwrap();
 
         let chacha_decrypted = cipher
-            .decrypt::<algorithm::XChaCha20Poly1305>(&dual_encrypted)
+            .decrypt::<Algorithm::XChaCha20Poly1305>(&dual_encrypted)
             .unwrap();
         let decrypted = cipher
-            .decrypt::<algorithm::AESGcm>(&chacha_decrypted)
+            .decrypt::<Algorithm::AES256Gcm>(&chacha_decrypted)
             .unwrap();
 
         assert_eq!(decrypted, plaintext);

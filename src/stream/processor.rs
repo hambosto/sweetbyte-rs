@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::cipher::{Cipher, algorithm};
+use crate::cipher::{Algorithm, Cipher};
 use crate::compression::{CompressionLevel, Compressor};
 use crate::config::{ARGON_KEY_LEN, BLOCK_SIZE, DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
@@ -51,14 +51,14 @@ impl DataProcessor {
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let aes_encrypted = match self.cipher.encrypt::<algorithm::AESGcm>(&padded) {
+        let aes_encrypted = match self.cipher.encrypt::<Algorithm::AES256Gcm>(&padded) {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
         let chacha_encrypted = match self
             .cipher
-            .encrypt::<algorithm::XChaCha20Poly1305>(&aes_encrypted)
+            .encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted)
         {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e),
@@ -82,7 +82,7 @@ impl DataProcessor {
 
         let chacha_decrypted = match self
             .cipher
-            .decrypt::<algorithm::XChaCha20Poly1305>(&decoded)
+            .decrypt::<Algorithm::XChaCha20Poly1305>(&decoded)
         {
             Ok(data) => data,
             Err(e) => {
@@ -90,7 +90,10 @@ impl DataProcessor {
             }
         };
 
-        let aes_decrypted = match self.cipher.decrypt::<algorithm::AESGcm>(&chacha_decrypted) {
+        let aes_decrypted = match self
+            .cipher
+            .decrypt::<Algorithm::AES256Gcm>(&chacha_decrypted)
+        {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e.context("AES decryption failed")),
         };

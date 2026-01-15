@@ -1,4 +1,4 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{File, OpenOptions, create_dir_all, metadata, remove_file};
 use std::io::{BufReader, BufWriter, ErrorKind};
 use std::path::{Path, PathBuf};
 
@@ -18,7 +18,7 @@ pub fn create_file(path: &Path) -> Result<BufWriter<File>> {
         && !parent.as_os_str().is_empty()
         && !parent.exists()
     {
-        fs::create_dir_all(parent)
+        create_dir_all(parent)
             .with_context(|| format!("failed to create directory: {}", parent.display()))?;
     }
 
@@ -32,16 +32,16 @@ pub fn create_file(path: &Path) -> Result<BufWriter<File>> {
     Ok(BufWriter::new(file))
 }
 
-pub fn remove_file(path: &Path) -> Result<()> {
+pub fn delete_file(path: &Path) -> Result<()> {
     if !path.exists() {
         bail!("file not found: {}", path.display());
     }
 
-    fs::remove_file(path).with_context(|| format!("failed to remove file: {}", path.display()))
+    remove_file(path).with_context(|| format!("failed to remove file: {}", path.display()))
 }
 
 pub fn get_file_info(path: &Path) -> Result<Option<FileInfo>> {
-    let metadata = match fs::metadata(path) {
+    let metadata = match metadata(path) {
         Ok(meta) => meta,
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
         Err(e) => {

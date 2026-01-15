@@ -5,14 +5,14 @@ use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use crate::cipher::derive::random_bytes;
 use crate::config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE};
 
-pub struct ChachaCipher {
-    aead: XChaCha20Poly1305,
+pub struct ChaCha20Poly1305Cipher {
+    cipher: XChaCha20Poly1305,
 }
 
-impl ChachaCipher {
+impl ChaCha20Poly1305Cipher {
     pub fn new(key: &[u8; CHACHA_KEY_SIZE]) -> Self {
-        let aead = XChaCha20Poly1305::new_from_slice(key).expect("valid key size");
-        Self { aead }
+        let cipher = XChaCha20Poly1305::new_from_slice(key).expect("valid key size");
+        Self { cipher }
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -23,14 +23,14 @@ impl ChachaCipher {
         let nonce_bytes: [u8; CHACHA_NONCE_SIZE] = random_bytes()?;
         let nonce = XNonce::from_slice(&nonce_bytes);
 
-        let ciphertext = self
-            .aead
+        let encrypted = self
+            .cipher
             .encrypt(nonce, plaintext)
             .map_err(|e| anyhow!("ChaCha encryption failed: {}", e))?;
 
-        let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE + ciphertext.len());
+        let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE + encrypted.len());
         result.extend_from_slice(&nonce_bytes);
-        result.extend_from_slice(&ciphertext);
+        result.extend_from_slice(&encrypted);
 
         Ok(result)
     }
@@ -51,7 +51,7 @@ impl ChachaCipher {
         let (nonce_bytes, encrypted) = ciphertext.split_at(CHACHA_NONCE_SIZE);
         let nonce = XNonce::from_slice(nonce_bytes);
 
-        self.aead
+        self.cipher
             .decrypt(nonce, encrypted)
             .map_err(|_| anyhow!("ChaCha authentication failed"))
     }
@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt() {
         let key = [0u8; CHACHA_KEY_SIZE];
-        let cipher = ChachaCipher::new(&key);
+        let cipher = ChaCha20Poly1305Cipher::new(&key);
         let plaintext = b"Hello, World!";
         let ciphertext = cipher.encrypt(plaintext).unwrap();
         let decrypted = cipher.decrypt(&ciphertext).unwrap();
@@ -74,28 +74,28 @@ mod tests {
     #[test]
     fn test_encrypt_empty() {
         let key = [0u8; CHACHA_KEY_SIZE];
-        let cipher = ChachaCipher::new(&key);
+        let cipher = ChaCha20Poly1305Cipher::new(&key);
         assert!(cipher.encrypt(b"").is_err());
     }
 
     #[test]
     fn test_decrypt_empty() {
         let key = [0u8; CHACHA_KEY_SIZE];
-        let cipher = ChachaCipher::new(&key);
+        let cipher = ChaCha20Poly1305Cipher::new(&key);
         assert!(cipher.decrypt(&[]).is_err());
     }
 
     #[test]
     fn test_decrypt_too_short() {
         let key = [0u8; CHACHA_KEY_SIZE];
-        let cipher = ChachaCipher::new(&key);
+        let cipher = ChaCha20Poly1305Cipher::new(&key);
         assert!(cipher.decrypt(&[0u8; CHACHA_NONCE_SIZE - 1]).is_err());
     }
 
     #[test]
     fn test_decrypt_tampered() {
         let key = [0u8; CHACHA_KEY_SIZE];
-        let cipher = ChachaCipher::new(&key);
+        let cipher = ChaCha20Poly1305Cipher::new(&key);
         let plaintext = b"Hello, World!";
         let mut ciphertext = cipher.encrypt(plaintext).unwrap();
         if let Some(last) = ciphertext.last_mut() {
