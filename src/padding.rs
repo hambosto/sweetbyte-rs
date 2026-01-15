@@ -1,4 +1,4 @@
-use std::iter::repeat;
+use std::iter::repeat_n;
 
 use anyhow::{Result, bail};
 
@@ -26,7 +26,7 @@ impl Padding {
         let padding_len = self.block_size - (data.len() % self.block_size);
         let mut padded_data = Vec::with_capacity(data.len() + padding_len);
         padded_data.extend_from_slice(data);
-        padded_data.extend(repeat(padding_len as u8).take(padding_len));
+        padded_data.extend(repeat_n(padding_len as u8, padding_len));
         Ok(padded_data)
     }
 
