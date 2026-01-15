@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use crate::cipher::aes_gcm::Aes256GcmCipher;
 use crate::cipher::cacha20poly1305::ChaCha20Poly1305Cipher;
 use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};
+
 #[allow(non_snake_case)]
 pub mod Algorithm {
     pub struct AES256Gcm;
