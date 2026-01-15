@@ -10,7 +10,7 @@ use crate::types::ProcessorMode;
 pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     let files = WalkDir::new(".")
         .into_iter()
-        .filter_map(|entry| entry.ok())
+        .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_file())
         .map(|entry| entry.into_path())
         .filter(|path| is_eligible(path, mode))
@@ -19,21 +19,17 @@ pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
+#[inline]
 fn is_eligible(path: &Path, mode: ProcessorMode) -> bool {
-    if let Some(name) = path.file_name()
-        && name.to_string_lossy().starts_with('.')
-    {
+    let is_hidden = path.file_name().is_some_and(|name| name.to_string_lossy().starts_with('.'));
+
+    if is_hidden || is_excluded(path) {
         return false;
     }
 
-    if is_excluded(path) {
-        return false;
-    }
-
-    let is_encrypted = is_encrypted_file(path);
     match mode {
-        ProcessorMode::Encrypt => !is_encrypted,
-        ProcessorMode::Decrypt => is_encrypted,
+        ProcessorMode::Encrypt => !is_encrypted_file(path),
+        ProcessorMode::Decrypt => is_encrypted_file(path),
     }
 }
 

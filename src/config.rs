@@ -7,7 +7,6 @@ pub const APP_VERSION: &str = "1.0";
 /// Encrypted file extension.
 pub const FILE_EXTENSION: &str = ".swx";
 
-// Argon2id parameters
 /// Argon2id time cost (iterations).
 pub const ARGON_TIME: u32 = 3;
 
@@ -23,7 +22,6 @@ pub const ARGON_KEY_LEN: usize = 64;
 /// Salt length in bytes.
 pub const ARGON_SALT_LEN: usize = 32;
 
-// Reed-Solomon parameters
 /// Number of data shards.
 pub const DATA_SHARDS: usize = 4;
 
@@ -33,15 +31,12 @@ pub const PARITY_SHARDS: usize = 10;
 /// Total number of shards.
 pub const TOTAL_SHARDS: usize = DATA_SHARDS + PARITY_SHARDS;
 
-// Padding parameters
 /// PKCS7 block size.
 pub const BLOCK_SIZE: usize = 128;
 
-// Streaming parameters
 /// Default chunk size for streaming (256 KB).
 pub const CHUNK_SIZE: usize = 256 * 1024;
 
-// Header constants
 /// Magic bytes identifying SweetByte files.
 pub const MAGIC_BYTES: u32 = 0xCAFE_BABE;
 
@@ -60,7 +55,6 @@ pub const CURRENT_VERSION: u16 = 0x0001;
 /// Flag indicating file is protected.
 pub const FLAG_PROTECTED: u32 = 1;
 
-// Cipher parameters
 /// AES-256-GCM key size.
 pub const AES_KEY_SIZE: usize = 32;
 
@@ -77,5 +71,5 @@ pub const CHACHA_NONCE_SIZE: usize = 24;
 pub const PASSWORD_MIN_LENGTH: usize = 8;
 
 /// Excluded patterns for file discovery.
-/// TODO: Add more patterns
-pub const EXCLUDED_PATTERNS: &[&str] = &["vendor/**", "node_modules/**", "resources/**", "target/**", ".git/**", ".github/**"];
+/// TODO: Add more patterns.
+pub const EXCLUDED_PATTERNS: &[&str] = &["target/**", "vendor/**", "node_modules/**", ".git/**", ".github/**", ".config/**", ".local/**", ".cache/**", ".ssh/**", ".gnupg/**", "*.rs", "*.go"];

@@ -1,6 +1,5 @@
-use std::fs::{File, OpenOptions, create_dir_all, metadata, remove_file};
-use std::io::ErrorKind::NotFound;
-use std::io::{BufReader, BufWriter};
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufReader, BufWriter, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -8,17 +7,16 @@ use anyhow::{Context, Result, anyhow, bail};
 use crate::config::FILE_EXTENSION;
 use crate::types::{FileInfo, ProcessorMode};
 
+#[must_use = "the returned BufReader should be used to read the file"]
 pub fn open_file(path: &Path) -> Result<BufReader<File>> {
     let file = File::open(path).with_context(|| format!("failed to open file: {}", path.display()))?;
     Ok(BufReader::new(file))
 }
 
+#[must_use = "the returned BufWriter should be used to write to the file"]
 pub fn create_file(path: &Path) -> Result<BufWriter<File>> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-        && !parent.exists()
-    {
-        create_dir_all(parent).with_context(|| format!("failed to create directory: {}", parent.display()))?;
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent).with_context(|| format!("failed to create directory: {}", parent.display()))?;
     }
 
     let file = OpenOptions::new()
@@ -33,51 +31,44 @@ pub fn create_file(path: &Path) -> Result<BufWriter<File>> {
 
 pub fn delete_file(path: &Path) -> Result<()> {
     if !path.exists() {
-        bail!("file not found: {}", path.display());
+        bail!("not found: {}", path.display());
     }
 
-    remove_file(path).with_context(|| format!("failed to remove file: {}", path.display()))
+    fs::remove_file(path).with_context(|| format!("cannot remove: {}", path.display()))
 }
 
+#[must_use = "the returned FileInfo should be used"]
 pub fn get_file_info(path: &Path) -> Result<Option<FileInfo>> {
-    let metadata = match metadata(path) {
+    let meta = match fs::metadata(path) {
         Ok(meta) => meta,
-        Err(e) if e.kind() == NotFound => return Ok(None),
-        Err(e) => {
-            return Err(e).with_context(|| format!("failed to get metadata: {}", path.display()));
-        }
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("stat failed: {}", path.display())),
     };
 
-    Ok(Some(FileInfo { path: path.to_path_buf(), size: metadata.len(), is_encrypted: is_encrypted_file(path) }))
+    Ok(Some(FileInfo { path: path.to_path_buf(), size: meta.len(), is_encrypted: is_encrypted_file(path), is_selected: true }))
 }
 
+#[inline]
+#[must_use]
 pub fn get_output_path(input: &Path, mode: ProcessorMode) -> PathBuf {
     match mode {
         ProcessorMode::Encrypt => {
-            let mut path = input.as_os_str().to_owned();
-            path.push(FILE_EXTENSION);
-            PathBuf::from(path)
+            let mut name = input.as_os_str().to_os_string();
+            name.push(FILE_EXTENSION);
+            PathBuf::from(name)
         }
-        ProcessorMode::Decrypt => {
-            let path_str = input.to_string_lossy();
-            if let Some(stripped) = path_str.strip_suffix(FILE_EXTENSION) { PathBuf::from(stripped) } else { input.to_path_buf() }
-        }
+        ProcessorMode::Decrypt => input.to_string_lossy().strip_suffix(FILE_EXTENSION).map_or_else(|| input.to_path_buf(), PathBuf::from),
     }
 }
 
+#[inline]
+#[must_use]
 pub fn is_encrypted_file(path: &Path) -> bool {
-    path.extension().and_then(|ext| ext.to_str()).map(|ext| format!(".{}", ext) == FILE_EXTENSION).unwrap_or(false)
+    path.as_os_str().to_string_lossy().ends_with(FILE_EXTENSION)
 }
 
 pub fn get_file_info_list(paths: &[PathBuf]) -> Result<Vec<FileInfo>> {
-    let mut infos = Vec::with_capacity(paths.len());
-
-    for path in paths {
-        let info = get_file_info(path)?.ok_or_else(|| anyhow!("file not found: {}", path.display()))?;
-        infos.push(info);
-    }
-
-    Ok(infos)
+    paths.iter().map(|path| get_file_info(path)?.ok_or_else(|| anyhow!("file not found: {}", path.display()))).collect()
 }
 
 #[cfg(test)]

@@ -76,4 +76,5 @@ pub struct FileInfo {
     pub path: PathBuf,
     pub size: u64,
     pub is_encrypted: bool,
+    pub is_selected: bool,
 }

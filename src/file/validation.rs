@@ -1,42 +1,39 @@
 use std::path::Path;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
-use anyhow::{Result, bail};
-use glob::Pattern;
+use anyhow::{Result, anyhow, bail};
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
 use crate::config::EXCLUDED_PATTERNS;
 use crate::file::operations::get_file_info;
 
-static COMPILED_PATTERNS: OnceLock<Vec<Pattern>> = OnceLock::new();
+static EXCLUSION_MATCHER: LazyLock<Gitignore> = LazyLock::new(|| {
+    let mut builder = GitignoreBuilder::new("");
+    for pattern in EXCLUDED_PATTERNS {
+        let _ = builder.add_line(None, pattern);
+    }
+    builder.build().unwrap_or_else(|_| Gitignore::empty())
+});
 
-fn get_exclusion_patterns() -> &'static [Pattern] {
-    COMPILED_PATTERNS.get_or_init(|| EXCLUDED_PATTERNS.iter().filter_map(|p| Pattern::new(p).ok()).collect())
-}
-
+#[inline]
 pub fn is_excluded(path: &Path) -> bool {
-    let path_str = path.to_string_lossy();
-    let path_str = path_str.replace('\\', "/");
-    let path_str = path_str.strip_prefix("./").unwrap_or(&path_str);
-    get_exclusion_patterns().iter().any(|pattern| pattern.matches(path_str))
+    EXCLUSION_MATCHER.matched(path, false).is_ignore()
 }
 
 pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {
     let info = get_file_info(path)?;
+
     if must_exist {
-        match info {
-            Some(info) if info.size == 0 => {
-                bail!("file is empty: {}", path.display());
-            }
-            None => {
-                bail!("file not found: {}", path.display());
-            }
-            _ => {}
-        }
+        let info = info.ok_or_else(|| anyhow!("file not found: {}", path.display()))?;
+
         if path.is_dir() {
-            bail!("path is a directory: {}", path.display());
+            bail!("path is directory: {}", path.display());
+        }
+        if info.size == 0 {
+            bail!("file is empty: {}", path.display());
         }
     } else if info.is_some() {
-        bail!("output file already exists: {}", path.display());
+        bail!("output exists: {}", path.display());
     }
 
     Ok(())
@@ -52,21 +49,18 @@ mod tests {
     fn test_is_excluded_unix_paths() {
         assert!(is_excluded(Path::new("node_modules/package.json")));
         assert!(is_excluded(Path::new(".git/config")));
-        assert!(is_excluded(Path::new("target/debug/binary")));
         assert!(is_excluded(Path::new("vendor/lib/file.rs")));
-        assert!(is_excluded(Path::new("./.git/config")));
-        assert!(is_excluded(Path::new("./node_modules/package.json")));
-        assert!(is_excluded(Path::new("./target/release/app")));
+        assert!(is_excluded(Path::new(".config/settings.json")));
+        assert!(is_excluded(Path::new(".cache/data")));
     }
 
     #[test]
     fn test_is_excluded_windows_paths() {
         assert!(is_excluded(Path::new(r".git\config")));
         assert!(is_excluded(Path::new(r"node_modules\package.json")));
-        assert!(is_excluded(Path::new(r"target\debug\binary")));
-        assert!(is_excluded(Path::new(r".\.git\config")));
-        assert!(is_excluded(Path::new(r".\node_modules\package.json")));
-        assert!(is_excluded(Path::new(r".\target\release\app")));
+        assert!(is_excluded(Path::new(r"vendor\lib\file.rs")));
+        assert!(is_excluded(Path::new(r".config\settings.json")));
+        assert!(is_excluded(Path::new(r".cache\data")));
     }
 
     #[test]

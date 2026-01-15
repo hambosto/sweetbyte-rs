@@ -1,15 +1,16 @@
-use std::fs::{metadata, remove_file};
+use std::fs::remove_file;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
 use crate::file::discovery::find_eligible_files;
-use crate::file::operations::{get_output_path, is_encrypted_file};
+use crate::file::operations::{get_file_info_list, get_output_path};
+use crate::file::validation::validate_path;
 use crate::processor::{decrypt, encrypt};
-use crate::types::{FileInfo, ProcessorMode};
+use crate::types::ProcessorMode;
 use crate::ui::display::{clear_screen, print_banner, show_file_info, show_source_deleted, show_success};
-use crate::ui::prompt::{choose_file, confirm_removal, get_decryption_password, get_encryption_password, get_processing_mode};
+use crate::ui::prompt::{choose_file, confirm_overwrite, confirm_removal, get_decryption_password, get_encryption_password, get_processing_mode};
 
 #[derive(Parser)]
 #[command(name = "sweetbyte-rs")]
@@ -99,42 +100,57 @@ pub fn run_interactive() -> Result<()> {
     print_banner();
 
     let mode = get_processing_mode()?;
-    let files = find_eligible_files(mode)?;
 
-    if files.is_empty() {
-        bail!("No eligible files found for {}", mode);
+    // Find eligible files
+    let eligible_files = find_eligible_files(mode)?;
+    if eligible_files.is_empty() {
+        bail!("no eligible files found for {} operation", mode);
     }
 
-    let file_infos: Vec<_> = files
-        .iter()
-        .map(|p| FileInfo { path: p.clone(), size: metadata(p).map(|m| m.len()).unwrap_or(0), is_encrypted: is_encrypted_file(p) })
-        .collect();
+    // Get file info list
+    let file_infos = get_file_info_list(&eligible_files)?;
 
+    // Display file info
     show_file_info(&file_infos)?;
-    let selected = choose_file(&files)?;
-    let output = get_output_path(&selected, mode);
 
+    // Choose file
+    let selected_file = choose_file(&eligible_files)?;
+    let output_path = get_output_path(&selected_file, mode);
+
+    // Validate source path
+    validate_path(&selected_file, true).with_context(|| format!("source validation failed: {}", selected_file.display()))?;
+
+    // Validate output path - if exists, ask for overwrite confirmation
+    if validate_path(&output_path, false).is_err() {
+        if !confirm_overwrite(&output_path)? {
+            bail!("operation canceled by user");
+        }
+    }
+
+    // Process file
     match mode {
         ProcessorMode::Encrypt => {
             let password = get_encryption_password()?;
-            encrypt(&selected, &output, &password).with_context(|| format!("encryption failed for {}", selected.display()))?;
-
-            show_success(mode, &output);
-            if confirm_removal(&selected, "original")? {
-                remove_file(&selected).with_context(|| format!("failed to remove {}", selected.display()))?;
-                show_source_deleted(&selected);
-            }
+            encrypt(&selected_file, &output_path, &password).with_context(|| format!("failed to encrypt {}", selected_file.display()))?;
         }
         ProcessorMode::Decrypt => {
             let password = get_decryption_password()?;
-            decrypt(&selected, &output, &password).with_context(|| format!("decryption failed for {}", selected.display()))?;
-
-            show_success(mode, &output);
-            if confirm_removal(&selected, "encrypted")? {
-                remove_file(&selected).with_context(|| format!("failed to remove {}", selected.display()))?;
-                show_source_deleted(&selected);
-            }
+            decrypt(&selected_file, &output_path, &password).with_context(|| format!("failed to decrypt {}", selected_file.display()))?;
         }
+    }
+
+    // Show success
+    show_success(mode, &output_path);
+
+    // Confirm removal
+    let file_type = match mode {
+        ProcessorMode::Encrypt => "original",
+        ProcessorMode::Decrypt => "encrypted",
+    };
+
+    if confirm_removal(&selected_file, file_type)? {
+        remove_file(&selected_file).with_context(|| format!("failed to delete source file: {}", selected_file.display()))?;
+        show_source_deleted(&selected_file);
     }
 
     Ok(())
