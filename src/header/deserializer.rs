@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::io::Read;
 
 use anyhow::{Context, Result, bail};
-use byteorder::{BigEndian, ByteOrder};
+use hashbrown::HashMap;
 
 use crate::config::{HEADER_DATA_SIZE, MAGIC_SIZE};
 use crate::header::Header;
@@ -44,10 +43,10 @@ impl<'a> Deserializer<'a> {
         reader.read_exact(&mut lengths_header).context("failed to read lengths header")?;
 
         let mut sizes = HashMap::new();
-        sizes.insert(SectionType::Magic, BigEndian::read_u32(&lengths_header[0..4]));
-        sizes.insert(SectionType::Salt, BigEndian::read_u32(&lengths_header[4..8]));
-        sizes.insert(SectionType::HeaderData, BigEndian::read_u32(&lengths_header[8..12]));
-        sizes.insert(SectionType::Mac, BigEndian::read_u32(&lengths_header[12..16]));
+        sizes.insert(SectionType::Magic, u32::from_be_bytes([lengths_header[0], lengths_header[1], lengths_header[2], lengths_header[3]]));
+        sizes.insert(SectionType::Salt, u32::from_be_bytes([lengths_header[4], lengths_header[5], lengths_header[6], lengths_header[7]]));
+        sizes.insert(SectionType::HeaderData, u32::from_be_bytes([lengths_header[8], lengths_header[9], lengths_header[10], lengths_header[11]]));
+        sizes.insert(SectionType::Mac, u32::from_be_bytes([lengths_header[12], lengths_header[13], lengths_header[14], lengths_header[15]]));
 
         Ok(sizes)
     }
@@ -93,9 +92,9 @@ impl<'a> Deserializer<'a> {
             bail!("invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
         }
 
-        self.header.version = BigEndian::read_u16(&data[0..2]);
-        self.header.flags = BigEndian::read_u32(&data[2..6]);
-        self.header.original_size = BigEndian::read_u64(&data[6..14]);
+        self.header.version = u16::from_be_bytes([data[0], data[1]]);
+        self.header.flags = u32::from_be_bytes([data[2], data[3], data[4], data[5]]);
+        self.header.original_size = u64::from_be_bytes([data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13]]);
         Ok(())
     }
 }

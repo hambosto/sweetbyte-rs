@@ -2,7 +2,6 @@ use std::io::ErrorKind::UnexpectedEof;
 use std::io::Read;
 
 use anyhow::{Context, Result, anyhow, bail};
-use byteorder::{BigEndian, ReadBytesExt};
 use crossbeam_channel::Sender;
 
 use crate::config::CHUNK_SIZE;
@@ -53,11 +52,14 @@ impl ChunkReader {
         let mut index = 0u64;
 
         loop {
-            let chunk_len = match reader.read_u32::<BigEndian>() {
-                Ok(len) => len as usize,
+            let mut len_buf = [0u8; 4];
+            match reader.read_exact(&mut len_buf) {
+                Ok(()) => {}
                 Err(e) if e.kind() == UnexpectedEof => break,
                 Err(e) => return Err(e).context("failed to read chunk length"),
-            };
+            }
+
+            let chunk_len = u32::from_be_bytes(len_buf) as usize;
 
             if chunk_len == 0 {
                 continue;

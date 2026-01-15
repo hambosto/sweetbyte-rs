@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 
 use crate::file::discovery::find_eligible_files;
 use crate::file::operations::{get_output_path, is_encrypted_file};
-use crate::processor;
+use crate::processor::{decrypt, encrypt};
 use crate::types::{FileInfo, ProcessorMode};
 use crate::ui::display::{print_banner, show_file_info, show_source_deleted, show_success};
 use crate::ui::prompt::{choose_file, confirm_removal, get_decryption_password, get_encryption_password, get_processing_mode};
@@ -76,7 +76,7 @@ fn encrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>)
         None => get_encryption_password()?,
     };
 
-    processor::encrypt(input, &output, &password).with_context(|| format!("encryption failed for {}", input.display()))?;
+    encrypt(input, &output, &password).with_context(|| format!("encryption failed for {}", input.display()))?;
     println!("✓ Encrypted: {} -> {}", input.display(), output.display());
 
     Ok(())
@@ -89,7 +89,7 @@ fn decrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>)
         None => get_decryption_password()?,
     };
 
-    processor::decrypt(input, &output, &password).with_context(|| format!("decryption failed for {}", input.display()))?;
+    decrypt(input, &output, &password).with_context(|| format!("decryption failed for {}", input.display()))?;
     println!("✓ Decrypted: {} -> {}", input.display(), output.display());
 
     Ok(())
@@ -100,6 +100,7 @@ pub fn run_interactive() -> Result<()> {
 
     let mode = get_processing_mode()?;
     let files = find_eligible_files(mode)?;
+
     if files.is_empty() {
         bail!("No eligible files found for {}", mode);
     }
@@ -116,7 +117,7 @@ pub fn run_interactive() -> Result<()> {
     match mode {
         ProcessorMode::Encrypt => {
             let password = get_encryption_password()?;
-            processor::encrypt(&selected, &output, &password).with_context(|| format!("encryption failed for {}", selected.display()))?;
+            encrypt(&selected, &output, &password).with_context(|| format!("encryption failed for {}", selected.display()))?;
 
             show_success(mode, &output);
             if confirm_removal(&selected, "original")? {
@@ -126,7 +127,7 @@ pub fn run_interactive() -> Result<()> {
         }
         ProcessorMode::Decrypt => {
             let password = get_decryption_password()?;
-            processor::decrypt(&selected, &output, &password).with_context(|| format!("decryption failed for {}", selected.display()))?;
+            decrypt(&selected, &output, &password).with_context(|| format!("decryption failed for {}", selected.display()))?;
 
             show_success(mode, &output);
             if confirm_removal(&selected, "encrypted")? {

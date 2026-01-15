@@ -1,5 +1,4 @@
 use anyhow::{Result, bail};
-use byteorder::{BigEndian, ByteOrder};
 
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
@@ -50,8 +49,7 @@ impl SectionEncoder {
     }
 
     pub fn encode_length(&self, length: u32) -> Result<EncodedSection> {
-        let mut bytes = [0u8; 4];
-        BigEndian::write_u32(&mut bytes, length);
+        let bytes = length.to_be_bytes();
         self.encode_section(&bytes)
     }
 
@@ -61,7 +59,7 @@ impl SectionEncoder {
             bail!("invalid length prefix size");
         }
 
-        Ok(BigEndian::read_u32(&decoded[..4]))
+        Ok(u32::from_be_bytes([decoded[0], decoded[1], decoded[2], decoded[3]]))
     }
 }
 

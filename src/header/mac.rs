@@ -24,6 +24,7 @@ pub fn verify_mac(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
     Ok(())
 }
 
+#[inline]
 pub fn verify_magic(magic: &[u8], expected: &[u8]) -> bool {
     constant_time_compare(magic, expected)
 }
@@ -46,6 +47,7 @@ fn finalize_mac(mac: HmacSha256) -> Result<[u8; MAC_SIZE]> {
     Ok(bytes)
 }
 
+#[inline]
 fn constant_time_compare(a: &[u8], b: &[u8]) -> bool {
     bool::from(a.ct_eq(b))
 }

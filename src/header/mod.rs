@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use std::io::Read;
 
 use anyhow::{Context, Result, bail};
+use hashbrown::HashMap;
 
 use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE};
 use crate::header::deserializer::Deserializer;
@@ -16,17 +16,18 @@ pub mod serializer;
 
 #[derive(Debug)]
 pub struct Header {
-    pub version: u16,
-    pub flags: u32,
     pub original_size: u64,
     pub(crate) decoded_sections: Option<HashMap<SectionType, Vec<u8>>>,
+    pub flags: u32,
+    pub version: u16,
 }
 
 impl Header {
     pub fn new() -> Self {
-        Self { version: CURRENT_VERSION, flags: 0, original_size: 0, decoded_sections: None }
+        Self { original_size: 0, decoded_sections: None, flags: 0, version: CURRENT_VERSION }
     }
 
+    #[inline]
     pub fn original_size(&self) -> u64 {
         self.original_size
     }
@@ -35,6 +36,7 @@ impl Header {
         self.original_size = size;
     }
 
+    #[inline]
     pub fn is_protected(&self) -> bool {
         self.flags & FLAG_PROTECTED != 0
     }
@@ -92,7 +94,6 @@ impl Header {
 
     pub(crate) fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
         let sections = self.decoded_sections.as_ref().context("header not unmarshalled yet")?;
-
         let data = sections.get(&section_type).context("required section missing")?;
 
         if data.len() < min_len {

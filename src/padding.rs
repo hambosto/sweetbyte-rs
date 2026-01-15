@@ -1,3 +1,5 @@
+use std::iter::repeat;
+
 use anyhow::{Result, bail};
 
 use crate::config::BLOCK_SIZE;
@@ -22,8 +24,9 @@ impl Padding {
         }
 
         let padding_len = self.block_size - (data.len() % self.block_size);
-        let mut padded_data = data.to_vec();
-        padded_data.extend(vec![padding_len as u8; padding_len]);
+        let mut padded_data = Vec::with_capacity(data.len() + padding_len);
+        padded_data.extend_from_slice(data);
+        padded_data.extend(repeat(padding_len as u8).take(padding_len));
         Ok(padded_data)
     }
 

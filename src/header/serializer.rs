@@ -1,5 +1,4 @@
 use anyhow::{Result, bail};
-use byteorder::{BigEndian, ByteOrder};
 
 use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
 use crate::header::Header;
@@ -20,7 +19,7 @@ impl<'a> Serializer<'a> {
     pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         self.validate_inputs(salt, key)?;
 
-        let magic = to_bytes_u32(MAGIC_BYTES);
+        let magic = MAGIC_BYTES.to_be_bytes();
         let header_data = self.serialize_header_data();
         let mac = compute_mac(key, &[&magic, salt, &header_data])?;
 
@@ -68,7 +67,7 @@ impl<'a> Serializer<'a> {
 
         for section_type in SECTION_ORDER {
             let section = length_sections.iter().find(|(t, _)| *t == section_type).expect("section must exist");
-            header.extend_from_slice(&to_bytes_u32(section.1.length));
+            header.extend_from_slice(&section.1.length.to_be_bytes());
         }
 
         header
@@ -93,31 +92,13 @@ impl<'a> Serializer<'a> {
 
     fn serialize_header_data(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(HEADER_DATA_SIZE);
-        data.extend_from_slice(&to_bytes_u16(self.header.version));
-        data.extend_from_slice(&to_bytes_u32(self.header.flags));
-        data.extend_from_slice(&to_bytes_u64(self.header.original_size));
+        data.extend_from_slice(&self.header.version.to_be_bytes());
+        data.extend_from_slice(&self.header.flags.to_be_bytes());
+        data.extend_from_slice(&self.header.original_size.to_be_bytes());
         data
     }
 }
 
-fn to_bytes_u16(value: u16) -> [u8; 2] {
-    let mut bytes = [0u8; 2];
-    BigEndian::write_u16(&mut bytes, value);
-    bytes
-}
-
-fn to_bytes_u32(value: u32) -> [u8; 4] {
-    let mut bytes = [0u8; 4];
-    BigEndian::write_u32(&mut bytes, value);
-    bytes
-}
-
-fn to_bytes_u64(value: u64) -> [u8; 8] {
-    let mut bytes = [0u8; 8];
-    BigEndian::write_u64(&mut bytes, value);
-    bytes
-}
-
 pub fn magic_bytes() -> [u8; MAGIC_SIZE] {
-    to_bytes_u32(MAGIC_BYTES)
+    MAGIC_BYTES.to_be_bytes()
 }

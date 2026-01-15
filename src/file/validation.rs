@@ -13,17 +13,12 @@ fn get_exclusion_patterns() -> &'static [Pattern] {
     COMPILED_PATTERNS.get_or_init(|| EXCLUDED_PATTERNS.iter().filter_map(|p| Pattern::new(p).ok()).collect())
 }
 
+#[inline]
 pub fn is_excluded(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
     let path_str = path_str.replace('\\', "/");
     let path_str = path_str.strip_prefix("./").unwrap_or(&path_str);
-    for pattern in get_exclusion_patterns() {
-        if pattern.matches(path_str) {
-            return true;
-        }
-    }
-
-    false
+    get_exclusion_patterns().iter().any(|pattern| pattern.matches(path_str))
 }
 
 pub fn validate_path(path: &Path, must_exist: bool) -> Result<()> {

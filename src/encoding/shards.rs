@@ -16,11 +16,9 @@ impl Shards {
         let shard_size = data.len().div_ceil(self.data_shards);
         let mut shards: Vec<Vec<u8>> = (0..self.total_shards).map(|_| vec![0u8; shard_size]).collect();
 
-        for (i, byte) in data.iter().enumerate() {
-            let shard_index = i / shard_size;
-            let pos_in_shard = i % shard_size;
-            if shard_index < self.data_shards {
-                shards[shard_index][pos_in_shard] = *byte;
+        for (shard_idx, chunk) in data.chunks(shard_size).enumerate() {
+            if shard_idx < self.data_shards {
+                shards[shard_idx][..chunk.len()].copy_from_slice(chunk);
             }
         }
 
@@ -29,15 +27,7 @@ impl Shards {
 
     pub fn split_encoded(&self, data: &[u8]) -> Vec<Vec<u8>> {
         let shard_size = data.len() / self.total_shards;
-        let mut shards = Vec::with_capacity(self.total_shards);
-
-        for i in 0..self.total_shards {
-            let start = i * shard_size;
-            let end = start + shard_size;
-            shards.push(data[start..end].to_vec());
-        }
-
-        shards
+        data.chunks_exact(shard_size).map(|chunk| chunk.to_vec()).collect()
     }
 
     pub fn combine(&self, shards: &[Vec<u8>]) -> Vec<u8> {

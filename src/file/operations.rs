@@ -64,6 +64,7 @@ pub fn get_output_path(input: &Path, mode: ProcessorMode) -> PathBuf {
     }
 }
 
+#[inline]
 pub fn is_encrypted_file(path: &Path) -> bool {
     path.extension().and_then(|ext| ext.to_str()).map(|ext| format!(".{}", ext) == FILE_EXTENSION).unwrap_or(false)
 }

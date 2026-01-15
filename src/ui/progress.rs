@@ -18,10 +18,12 @@ impl Bar {
         Self { bar }
     }
 
+    #[inline]
     pub fn add(&self, delta: u64) {
         self.bar.inc(delta);
     }
 
+    #[inline]
     pub fn finish(&self) {
         self.bar.finish_with_message("Done");
     }

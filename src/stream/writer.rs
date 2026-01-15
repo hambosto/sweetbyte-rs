@@ -1,7 +1,6 @@
 use std::io::Write;
 
 use anyhow::{Context, Result, bail};
-use byteorder::{BigEndian, WriteBytesExt};
 use crossbeam_channel::Receiver;
 
 use crate::stream::buffer::SequentialBuffer;
@@ -38,7 +37,8 @@ impl ChunkWriter {
         match self.mode {
             Processing::Encryption => {
                 for result in results {
-                    output.write_u32::<BigEndian>(result.data.len() as u32).context("failed to write chunk size")?;
+                    let size_bytes = (result.data.len() as u32).to_be_bytes();
+                    output.write_all(&size_bytes).context("failed to write chunk size")?;
                     output.write_all(&result.data).context("failed to write chunk data")?;
 
                     if let Some(bar) = progress {

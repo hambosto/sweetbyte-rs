@@ -13,7 +13,6 @@ categories = ["cryptography", "command-line-utilities"]
 aes-gcm = "0.10.3"
 anyhow = "1.0.100"
 argon2 = "0.5.3"
-byteorder = "1.5.0"
 chacha20poly1305 = "0.10.1"
 clap = { version = "4.5.54", features = ["derive"] }
 comfy-table = "7.2.2"
@@ -23,10 +22,13 @@ dialoguer = "0.12.0"
 flate2 = { version = "1.1.8", features = ["zlib-ng"], default-features = false }
 figlet-rs = "0.1.5"
 glob = "0.3.3"
+hashbrown = "0.16.1"
 hmac = "0.12.1"
 indicatif = "0.18.3"
 rand = { version = "0.9.2", features = ["os_rng"], default-features = false }
-reed-solomon-erasure = { version = "6.0.0", features = ["simd-accel"], default-features = false }
+reed-solomon-erasure = { version = "6.0.0", features = [
+    "simd-accel",
+], default-features = false }
 sha2 = "0.10.9"
 subtle = "2.6.1"
 walkdir = "2.5.0"

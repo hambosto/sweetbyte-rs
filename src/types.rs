@@ -8,6 +8,7 @@ pub enum ProcessorMode {
 }
 
 impl ProcessorMode {
+    #[inline]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Encrypt => "Encrypt",
@@ -29,6 +30,7 @@ pub enum Processing {
 }
 
 impl Processing {
+    #[inline]
     pub fn description(&self) -> &'static str {
         match self {
             Self::Encryption => "Encrypting...",
@@ -51,21 +53,22 @@ pub struct Task {
 
 #[derive(Debug)]
 pub struct TaskResult {
-    pub index: u64,
     pub data: Vec<u8>,
-    pub size: usize,
     pub error: Option<String>,
+    pub index: u64,
+    pub size: usize,
 }
 
 impl TaskResult {
     pub fn success(index: u64, data: Vec<u8>, size: usize) -> Self {
-        Self { index, data, size, error: None }
+        Self { data, error: None, index, size }
     }
 
     pub fn failure(index: u64, error: anyhow::Error) -> Self {
-        Self { index, data: Vec::new(), size: 0, error: Some(error.to_string()) }
+        Self { data: Vec::new(), error: Some(error.to_string()), index, size: 0 }
     }
 
+    #[inline]
     pub fn is_ok(&self) -> bool {
         self.error.is_none()
     }
