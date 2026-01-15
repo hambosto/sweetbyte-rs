@@ -11,7 +11,7 @@ pub enum SectionType {
     Mac,
 }
 
-pub const SECTION_ORDER: [SectionType; 4] = [SectionType::Magic, SectionType::Salt, SectionType::HeaderData, SectionType::Mac];
+pub(crate) const SECTION_ORDER: [SectionType; 4] = [SectionType::Magic, SectionType::Salt, SectionType::HeaderData, SectionType::Mac];
 
 #[derive(Debug)]
 pub struct EncodedSection {

@@ -31,7 +31,7 @@ impl<'a> Deserializer<'a> {
             bail!("invalid magic bytes");
         }
 
-        let header_data: Vec<u8> = self.header.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?.to_vec();
+        let header_data = self.header.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?.to_vec();
         self.deserialize_header_data(&header_data)?;
         self.header.validate()?;
 

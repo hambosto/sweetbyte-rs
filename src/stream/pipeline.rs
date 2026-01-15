@@ -10,7 +10,7 @@ use crate::stream::processor::DataProcessor;
 use crate::stream::reader::ChunkReader;
 use crate::stream::writer::ChunkWriter;
 use crate::types::Processing;
-use crate::ui::progress::Bar;
+use crate::ui::progress::ProgressBar;
 
 pub struct Pipeline {
     processor: DataProcessor,
@@ -27,7 +27,7 @@ impl Pipeline {
     }
 
     pub fn process<R: Read + Send + 'static, W: Write + Send + 'static>(self, input: R, output: W, total_size: u64) -> Result<()> {
-        let progress = Bar::new(total_size, self.mode.description());
+        let progress = ProgressBar::new(total_size, self.mode.description())?;
 
         let (task_sender, task_receiver) = bounded(self.concurrency * 2);
         let (result_sender, result_receiver) = bounded(self.concurrency * 2);

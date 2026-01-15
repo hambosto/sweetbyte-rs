@@ -5,7 +5,7 @@ use crossbeam_channel::Receiver;
 
 use crate::stream::buffer::SequentialBuffer;
 use crate::types::{Processing, TaskResult};
-use crate::ui::progress::Bar;
+use crate::ui::progress::ProgressBar;
 
 pub struct ChunkWriter {
     mode: Processing,
@@ -17,7 +17,7 @@ impl ChunkWriter {
         Self { mode, buffer: SequentialBuffer::new(0) }
     }
 
-    pub fn write_all<W: Write>(&mut self, mut output: W, receiver: Receiver<TaskResult>, progress: Option<&Bar>) -> Result<()> {
+    pub fn write_all<W: Write>(&mut self, mut output: W, receiver: Receiver<TaskResult>, progress: Option<&ProgressBar>) -> Result<()> {
         for result in receiver {
             if let Some(ref err) = result.error {
                 bail!("task {} failed: {}", result.index, err);
@@ -33,7 +33,7 @@ impl ChunkWriter {
         Ok(())
     }
 
-    fn write_ordered<W: Write>(&self, output: &mut W, results: &[TaskResult], progress: Option<&Bar>) -> Result<()> {
+    fn write_ordered<W: Write>(&self, output: &mut W, results: &[TaskResult], progress: Option<&ProgressBar>) -> Result<()> {
         match self.mode {
             Processing::Encryption => {
                 for result in results {

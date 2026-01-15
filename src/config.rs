@@ -1,5 +1,3 @@
-//! Application configuration constants.
-
 /// Application name.
 pub const APP_NAME: &str = "SweetByte";
 
@@ -79,26 +77,5 @@ pub const CHACHA_NONCE_SIZE: usize = 24;
 pub const PASSWORD_MIN_LENGTH: usize = 8;
 
 /// Excluded patterns for file discovery.
-pub const EXCLUDED_PATTERNS: &[&str] = &[
-    "vendor/**",
-    "node_modules/**",
-    ".git/**",
-    "build/**",
-    "dist/**",
-    "target/**",
-    "bin/**",
-    "obj/**",
-    "out/**",
-    "__pycache__/**",
-    ".pytest_cache/**",
-    ".mypy_cache/**",
-    ".venv/**",
-    "venv/**",
-    "env/**",
-    ".next/**",
-    ".nuxt/**",
-    ".svelte-kit/**",
-    "tmp/**",
-    "temp/**",
-    "logs/**",
-];
+/// TODO: Add more patterns
+pub const EXCLUDED_PATTERNS: &[&str] = &["vendor/**", "node_modules/**", "resources/**", "target/**", ".git/**", ".github/**"];

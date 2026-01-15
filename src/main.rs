@@ -1,6 +1,8 @@
 use std::process;
 
-fn run() -> anyhow::Result<()> {
+use anyhow::Result;
+
+fn run() -> Result<()> {
     let cli = sweetbyte_rs::cli::parse();
     match cli.command {
         Some(cmd) => sweetbyte_rs::cli::run_command(cmd),

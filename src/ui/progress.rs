@@ -1,18 +1,18 @@
-use indicatif::{ProgressBar, ProgressStyle};
+use anyhow::Result;
+use indicatif::{ProgressBar as Bar, ProgressStyle as Style};
 
-pub struct Bar {
-    bar: ProgressBar,
+pub struct ProgressBar {
+    bar: Bar,
 }
 
-impl Bar {
-    pub fn new(total: u64, description: &str) -> Self {
-        let bar = ProgressBar::new(total);
-        let style = ProgressStyle::with_template("{spinner:.green} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
-            .expect("valid template")
-            .progress_chars("●○ ");
-        bar.set_style(style);
+const PROGRESS_TEMPLATE: &str = "{spinner:.green} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})";
+
+impl ProgressBar {
+    pub fn new(total: u64, description: &str) -> Result<Self> {
+        let bar = Bar::new(total);
+        bar.set_style(Style::with_template(PROGRESS_TEMPLATE)?.progress_chars("●○ "));
         bar.set_message(description.to_string());
-        Self { bar }
+        Ok(Self { bar })
     }
 
     pub fn add(&self, delta: u64) {
@@ -20,7 +20,7 @@ impl Bar {
     }
 
     pub fn finish(&self) {
-        self.bar.finish_with_message("Done");
+        self.bar.finish();
     }
 
     pub fn set_message(&self, msg: &str) {
@@ -28,7 +28,7 @@ impl Bar {
     }
 }
 
-impl Drop for Bar {
+impl Drop for ProgressBar {
     fn drop(&mut self) {
         if !self.bar.is_finished() {
             self.bar.finish();

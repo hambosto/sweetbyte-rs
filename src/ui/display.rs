@@ -82,9 +82,9 @@ pub fn clear_screen() -> Result<()> {
 }
 
 pub fn print_banner() {
-    let standard_font = FIGfont::standard().unwrap();
-    if let Some(figure) = standard_font.convert(APP_NAME) {
-        println!("{}", style(figure).green().bold());
+    let font = FIGfont::from_content(include_str!("../../resources/rectangles.flf")).expect("failed to load font");
+    if let Some(fig) = font.convert(APP_NAME) {
+        println!("{}", style(fig).green().bold());
     }
 }
 
