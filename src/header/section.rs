@@ -12,12 +12,7 @@ pub enum SectionType {
     Mac,
 }
 
-pub const SECTION_ORDER: [SectionType; 4] = [
-    SectionType::Magic,
-    SectionType::Salt,
-    SectionType::HeaderData,
-    SectionType::Mac,
-];
+pub const SECTION_ORDER: [SectionType; 4] = [SectionType::Magic, SectionType::Salt, SectionType::HeaderData, SectionType::Mac];
 
 #[derive(Debug)]
 pub struct EncodedSection {
@@ -43,10 +38,7 @@ impl SectionEncoder {
         let encoded = self.rs.encode(data)?;
         let length = encoded.len() as u32;
 
-        Ok(EncodedSection {
-            data: encoded,
-            length,
-        })
+        Ok(EncodedSection { data: encoded, length })
     }
 
     pub fn decode_section(&self, section: &EncodedSection) -> Result<Vec<u8>> {

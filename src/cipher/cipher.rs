@@ -17,17 +17,9 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &[u8; ARGON_KEY_LEN]) -> Result<Self> {
-        let aes_key: [u8; AES_KEY_SIZE] =
-            key[..AES_KEY_SIZE].try_into().context("invalid AES key")?;
-
-        let chacha_key: [u8; CHACHA_KEY_SIZE] = key[AES_KEY_SIZE..AES_KEY_SIZE + CHACHA_KEY_SIZE]
-            .try_into()
-            .context("invalid ChaCha key")?;
-
-        Ok(Self {
-            aes_gcm: Aes256GcmCipher::new(&aes_key),
-            chacha20poly1305: ChaCha20Poly1305Cipher::new(&chacha_key),
-        })
+        let aes_key: [u8; AES_KEY_SIZE] = key[..AES_KEY_SIZE].try_into().context("invalid AES key")?;
+        let chacha_key: [u8; CHACHA_KEY_SIZE] = key[AES_KEY_SIZE..AES_KEY_SIZE + CHACHA_KEY_SIZE].try_into().context("invalid ChaCha key")?;
+        Ok(Self { aes_gcm: Aes256GcmCipher::new(&aes_key), chacha20poly1305: ChaCha20Poly1305Cipher::new(&chacha_key) })
     }
 
     pub fn encrypt<T: Selector>(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -92,12 +84,8 @@ mod tests {
         let cipher = Cipher::new(&key).unwrap();
 
         let plaintext = b"Hello, World!";
-        let ciphertext = cipher
-            .encrypt::<Algorithm::XChaCha20Poly1305>(plaintext)
-            .unwrap();
-        let decrypted = cipher
-            .decrypt::<Algorithm::XChaCha20Poly1305>(&ciphertext)
-            .unwrap();
+        let ciphertext = cipher.encrypt::<Algorithm::XChaCha20Poly1305>(plaintext).unwrap();
+        let decrypted = cipher.decrypt::<Algorithm::XChaCha20Poly1305>(&ciphertext).unwrap();
 
         assert_eq!(decrypted, plaintext);
     }
@@ -106,20 +94,13 @@ mod tests {
     fn test_dual_layer_roundtrip() {
         let key = [0u8; ARGON_KEY_LEN];
         let cipher = Cipher::new(&key).unwrap();
-
         let plaintext = b"Hello, World!";
 
         let aes_encrypted = cipher.encrypt::<Algorithm::AES256Gcm>(plaintext).unwrap();
-        let dual_encrypted = cipher
-            .encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted)
-            .unwrap();
+        let dual_encrypted = cipher.encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted).unwrap();
 
-        let chacha_decrypted = cipher
-            .decrypt::<Algorithm::XChaCha20Poly1305>(&dual_encrypted)
-            .unwrap();
-        let decrypted = cipher
-            .decrypt::<Algorithm::AES256Gcm>(&chacha_decrypted)
-            .unwrap();
+        let chacha_decrypted = cipher.decrypt::<Algorithm::XChaCha20Poly1305>(&dual_encrypted).unwrap();
+        let decrypted = cipher.decrypt::<Algorithm::AES256Gcm>(&chacha_decrypted).unwrap();
 
         assert_eq!(decrypted, plaintext);
     }

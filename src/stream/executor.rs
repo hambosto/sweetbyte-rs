@@ -13,10 +13,7 @@ pub struct ConcurrentExecutor {
 
 impl ConcurrentExecutor {
     pub fn new(processor: DataProcessor, concurrency: usize) -> Self {
-        Self {
-            processor: Arc::new(processor),
-            concurrency,
-        }
+        Self { processor: Arc::new(processor), concurrency }
     }
 
     pub fn process(&self, tasks: Receiver<Task>, results: Sender<TaskResult>) {

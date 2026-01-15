@@ -8,8 +8,7 @@ use crate::config::FILE_EXTENSION;
 use crate::types::{FileInfo, ProcessorMode};
 
 pub fn open_file(path: &Path) -> Result<BufReader<File>> {
-    let file =
-        File::open(path).with_context(|| format!("failed to open file: {}", path.display()))?;
+    let file = File::open(path).with_context(|| format!("failed to open file: {}", path.display()))?;
     Ok(BufReader::new(file))
 }
 
@@ -18,8 +17,7 @@ pub fn create_file(path: &Path) -> Result<BufWriter<File>> {
         && !parent.as_os_str().is_empty()
         && !parent.exists()
     {
-        create_dir_all(parent)
-            .with_context(|| format!("failed to create directory: {}", parent.display()))?;
+        create_dir_all(parent).with_context(|| format!("failed to create directory: {}", parent.display()))?;
     }
 
     let file = OpenOptions::new()
@@ -49,11 +47,7 @@ pub fn get_file_info(path: &Path) -> Result<Option<FileInfo>> {
         }
     };
 
-    Ok(Some(FileInfo {
-        path: path.to_path_buf(),
-        size: metadata.len(),
-        is_encrypted: is_encrypted_file(path),
-    }))
+    Ok(Some(FileInfo { path: path.to_path_buf(), size: metadata.len(), is_encrypted: is_encrypted_file(path) }))
 }
 
 pub fn get_output_path(input: &Path, mode: ProcessorMode) -> PathBuf {
@@ -65,28 +59,20 @@ pub fn get_output_path(input: &Path, mode: ProcessorMode) -> PathBuf {
         }
         ProcessorMode::Decrypt => {
             let path_str = input.to_string_lossy();
-            if let Some(stripped) = path_str.strip_suffix(FILE_EXTENSION) {
-                PathBuf::from(stripped)
-            } else {
-                input.to_path_buf()
-            }
+            if let Some(stripped) = path_str.strip_suffix(FILE_EXTENSION) { PathBuf::from(stripped) } else { input.to_path_buf() }
         }
     }
 }
 
 pub fn is_encrypted_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| format!(".{}", ext) == FILE_EXTENSION)
-        .unwrap_or(false)
+    path.extension().and_then(|ext| ext.to_str()).map(|ext| format!(".{}", ext) == FILE_EXTENSION).unwrap_or(false)
 }
 
 pub fn get_file_info_list(paths: &[PathBuf]) -> Result<Vec<FileInfo>> {
     let mut infos = Vec::with_capacity(paths.len());
 
     for path in paths {
-        let info =
-            get_file_info(path)?.ok_or_else(|| anyhow!("file not found: {}", path.display()))?;
+        let info = get_file_info(path)?.ok_or_else(|| anyhow!("file not found: {}", path.display()))?;
         infos.push(info);
     }
 

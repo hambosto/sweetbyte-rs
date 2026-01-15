@@ -45,9 +45,7 @@ pub fn decrypt(src_path: &Path, dest_path: &Path, password: &str) -> Result<()> 
 
     let salt = header.salt()?;
     let key = derive_key(password.as_bytes(), salt)?;
-    header
-        .verify(&key)
-        .context("incorrect password or corrupt file")?;
+    header.verify(&key).context("incorrect password or corrupt file")?;
 
     if !header.is_protected() {
         bail!("file is not protected");

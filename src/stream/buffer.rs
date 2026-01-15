@@ -9,10 +9,7 @@ pub struct SequentialBuffer {
 
 impl SequentialBuffer {
     pub fn new(start: u64) -> Self {
-        Self {
-            buffer: HashMap::new(),
-            next_idx: start,
-        }
+        Self { buffer: HashMap::new(), next_idx: start }
     }
 
     pub fn add(&mut self, result: TaskResult) -> Vec<TaskResult> {

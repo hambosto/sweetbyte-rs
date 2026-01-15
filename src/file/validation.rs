@@ -10,12 +10,7 @@ use crate::file::operations::get_file_info;
 static COMPILED_PATTERNS: OnceLock<Vec<Pattern>> = OnceLock::new();
 
 fn get_exclusion_patterns() -> &'static [Pattern] {
-    COMPILED_PATTERNS.get_or_init(|| {
-        EXCLUDED_PATTERNS
-            .iter()
-            .filter_map(|p| Pattern::new(p).ok())
-            .collect()
-    })
+    COMPILED_PATTERNS.get_or_init(|| EXCLUDED_PATTERNS.iter().filter_map(|p| Pattern::new(p).ok()).collect())
 }
 
 pub fn is_excluded(path: &Path) -> bool {

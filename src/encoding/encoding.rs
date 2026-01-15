@@ -13,13 +13,9 @@ pub struct Encoding {
 
 impl Encoding {
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
-        let encoder = ReedSolomon::new(data_shards, parity_shards)
-            .map_err(|e| anyhow!("failed to create Reed-Solomon encoder: {:?}", e))?;
+        let encoder = ReedSolomon::new(data_shards, parity_shards).map_err(|e| anyhow!("failed to create Reed-Solomon encoder: {:?}", e))?;
 
-        Ok(Self {
-            encoder,
-            shards: Shards::new(data_shards, parity_shards),
-        })
+        Ok(Self { encoder, shards: Shards::new(data_shards, parity_shards) })
     }
 
     pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
@@ -28,19 +24,11 @@ impl Encoding {
         }
 
         if data.len() > MAX_DATA_LEN {
-            bail!(
-                "data size {} exceeds maximum {} bytes",
-                data.len(),
-                MAX_DATA_LEN
-            );
+            bail!("data size {} exceeds maximum {} bytes", data.len(), MAX_DATA_LEN);
         }
 
         let mut shards = self.shards.split(data);
-
-        self.encoder
-            .encode(&mut shards)
-            .map_err(|e| anyhow!("Reed-Solomon encoding failed: {:?}", e))?;
-
+        self.encoder.encode(&mut shards).map_err(|e| anyhow!("Reed-Solomon encoding failed: {:?}", e))?;
         Ok(self.shards.combine(&shards))
     }
 
@@ -52,23 +40,11 @@ impl Encoding {
         }
 
         if !encoded.len().is_multiple_of(total_shards) {
-            bail!(
-                "encoded data length {} not divisible by total shards {}",
-                encoded.len(),
-                total_shards
-            );
+            bail!("encoded data length {} not divisible by total shards {}", encoded.len(), total_shards);
         }
 
-        let mut shards: Vec<Option<Vec<u8>>> = self
-            .shards
-            .split_encoded(encoded)
-            .into_iter()
-            .map(Some)
-            .collect();
-
-        self.encoder
-            .reconstruct(&mut shards)
-            .map_err(|e| anyhow::anyhow!("Reed-Solomon reconstruction failed: {:?}", e))?;
+        let mut shards: Vec<Option<Vec<u8>>> = self.shards.split_encoded(encoded).into_iter().map(Some).collect();
+        self.encoder.reconstruct(&mut shards).map_err(|e| anyhow::anyhow!("Reed-Solomon reconstruction failed: {:?}", e))?;
 
         let reconstructed: Vec<Vec<u8>> = shards.into_iter().flatten().collect();
         self.shards.extract(&reconstructed)

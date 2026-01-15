@@ -14,10 +14,7 @@ pub fn get_encryption_password() -> Result<String> {
         .map_err(|e| anyhow!("password input failed: {}", e))?;
 
     if password.len() < PASSWORD_MIN_LENGTH {
-        bail!(
-            "password must be at least {} characters",
-            PASSWORD_MIN_LENGTH
-        );
+        bail!("password must be at least {} characters", PASSWORD_MIN_LENGTH);
     }
 
     if password.trim().is_empty() {
@@ -51,10 +48,7 @@ pub fn get_decryption_password() -> Result<String> {
 
 pub fn confirm_overwrite(path: &Path) -> Result<bool> {
     let result = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!(
-            "Output file {} already exists. Overwrite?",
-            path.display()
-        ))
+        .with_prompt(format!("Output file {} already exists. Overwrite?", path.display()))
         .default(false)
         .interact()
         .map_err(|e| anyhow!("confirmation failed: {}", e))?;

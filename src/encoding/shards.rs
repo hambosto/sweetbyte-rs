@@ -9,17 +9,12 @@ pub struct Shards {
 
 impl Shards {
     pub fn new(data_shards: usize, parity_shards: usize) -> Self {
-        Self {
-            data_shards,
-            total_shards: data_shards + parity_shards,
-        }
+        Self { data_shards, total_shards: data_shards + parity_shards }
     }
 
     pub fn split(&self, data: &[u8]) -> Vec<Vec<u8>> {
         let shard_size = data.len().div_ceil(self.data_shards);
-        let mut shards: Vec<Vec<u8>> = (0..self.total_shards)
-            .map(|_| vec![0u8; shard_size])
-            .collect();
+        let mut shards: Vec<Vec<u8>> = (0..self.total_shards).map(|_| vec![0u8; shard_size]).collect();
 
         for (i, byte) in data.iter().enumerate() {
             let shard_index = i / shard_size;
@@ -63,11 +58,7 @@ impl Shards {
 
     pub fn extract(&self, shards: &[Vec<u8>]) -> Result<Vec<u8>> {
         if shards.len() < self.data_shards {
-            bail!(
-                "insufficient shards, have {} but need at least {} data shards",
-                shards.len(),
-                self.data_shards
-            );
+            bail!("insufficient shards, have {} but need at least {} data shards", shards.len(), self.data_shards);
         }
 
         let shard_size = shards[0].len();

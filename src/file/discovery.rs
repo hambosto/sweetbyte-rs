@@ -43,26 +43,14 @@ mod tests {
 
     #[test]
     fn test_is_eligible_encrypt() {
-        assert!(is_eligible(
-            Path::new("document.txt"),
-            ProcessorMode::Encrypt
-        ));
-        assert!(!is_eligible(
-            Path::new("document.swx"),
-            ProcessorMode::Encrypt
-        ));
+        assert!(is_eligible(Path::new("document.txt"), ProcessorMode::Encrypt));
+        assert!(!is_eligible(Path::new("document.swx"), ProcessorMode::Encrypt));
         assert!(!is_eligible(Path::new(".hidden"), ProcessorMode::Encrypt));
     }
 
     #[test]
     fn test_is_eligible_decrypt() {
-        assert!(is_eligible(
-            Path::new("document.swx"),
-            ProcessorMode::Decrypt
-        ));
-        assert!(!is_eligible(
-            Path::new("document.txt"),
-            ProcessorMode::Decrypt
-        ));
+        assert!(is_eligible(Path::new("document.swx"), ProcessorMode::Decrypt));
+        assert!(!is_eligible(Path::new("document.txt"), ProcessorMode::Decrypt));
     }
 }

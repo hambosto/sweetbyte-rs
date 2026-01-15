@@ -18,11 +18,7 @@ pub struct ChunkReader {
 impl ChunkReader {
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
         if chunk_size < MIN_CHUNK_SIZE {
-            bail!(
-                "chunk size must be at least {} bytes, got {}",
-                MIN_CHUNK_SIZE,
-                chunk_size
-            );
+            bail!("chunk size must be at least {} bytes, got {}", MIN_CHUNK_SIZE, chunk_size);
         }
 
         Ok(Self { mode, chunk_size })
@@ -45,11 +41,7 @@ impl ChunkReader {
                 break;
             }
 
-            let task = Task {
-                data: buffer[..n].to_vec(),
-                index,
-            };
-
+            let task = Task { data: buffer[..n].to_vec(), index };
             sender.send(task).map_err(|_| anyhow!("channel closed"))?;
             index += 1;
         }
@@ -72,9 +64,7 @@ impl ChunkReader {
             }
 
             let mut data = vec![0u8; chunk_len];
-            reader
-                .read_exact(&mut data)
-                .context("failed to read chunk data")?;
+            reader.read_exact(&mut data).context("failed to read chunk data")?;
 
             let task = Task { data, index };
             sender.send(task).map_err(|_| anyhow!("channel closed"))?;

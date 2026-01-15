@@ -35,11 +35,7 @@ impl<'a> Serializer<'a> {
         self.header.validate()?;
 
         if salt.len() != ARGON_SALT_LEN {
-            bail!(
-                "invalid salt size: expected {}, got {}",
-                ARGON_SALT_LEN,
-                salt.len()
-            );
+            bail!("invalid salt size: expected {}, got {}", ARGON_SALT_LEN, salt.len());
         }
 
         if key.is_empty() {
@@ -49,88 +45,46 @@ impl<'a> Serializer<'a> {
         Ok(())
     }
 
-    fn encode_sections(
-        &self,
-        magic: &[u8],
-        salt: &[u8],
-        header_data: &[u8],
-        mac: &[u8],
-    ) -> Result<[(SectionType, EncodedSection); 4]> {
+    fn encode_sections(&self, magic: &[u8], salt: &[u8], header_data: &[u8], mac: &[u8]) -> Result<[(SectionType, EncodedSection); 4]> {
         Ok([
             (SectionType::Magic, self.encoder.encode_section(magic)?),
             (SectionType::Salt, self.encoder.encode_section(salt)?),
-            (
-                SectionType::HeaderData,
-                self.encoder.encode_section(header_data)?,
-            ),
+            (SectionType::HeaderData, self.encoder.encode_section(header_data)?),
             (SectionType::Mac, self.encoder.encode_section(mac)?),
         ])
     }
 
-    fn encode_length_prefixes(
-        &self,
-        sections: &[(SectionType, EncodedSection); 4],
-    ) -> Result<[(SectionType, EncodedSection); 4]> {
+    fn encode_length_prefixes(&self, sections: &[(SectionType, EncodedSection); 4]) -> Result<[(SectionType, EncodedSection); 4]> {
         Ok([
-            (
-                SectionType::Magic,
-                self.encoder.encode_length(sections[0].1.length)?,
-            ),
-            (
-                SectionType::Salt,
-                self.encoder.encode_length(sections[1].1.length)?,
-            ),
-            (
-                SectionType::HeaderData,
-                self.encoder.encode_length(sections[2].1.length)?,
-            ),
-            (
-                SectionType::Mac,
-                self.encoder.encode_length(sections[3].1.length)?,
-            ),
+            (SectionType::Magic, self.encoder.encode_length(sections[0].1.length)?),
+            (SectionType::Salt, self.encoder.encode_length(sections[1].1.length)?),
+            (SectionType::HeaderData, self.encoder.encode_length(sections[2].1.length)?),
+            (SectionType::Mac, self.encoder.encode_length(sections[3].1.length)?),
         ])
     }
 
-    fn build_lengths_header(
-        &self,
-        length_sections: &[(SectionType, EncodedSection); 4],
-    ) -> Vec<u8> {
+    fn build_lengths_header(&self, length_sections: &[(SectionType, EncodedSection); 4]) -> Vec<u8> {
         let mut header = Vec::with_capacity(16);
 
         for section_type in SECTION_ORDER {
-            let section = length_sections
-                .iter()
-                .find(|(t, _)| *t == section_type)
-                .expect("section must exist");
+            let section = length_sections.iter().find(|(t, _)| *t == section_type).expect("section must exist");
             header.extend_from_slice(&to_bytes_u32(section.1.length));
         }
 
         header
     }
 
-    fn assemble_header(
-        &self,
-        lengths_header: &[u8],
-        length_sections: &[(SectionType, EncodedSection); 4],
-        sections: &[(SectionType, EncodedSection); 4],
-    ) -> Vec<u8> {
+    fn assemble_header(&self, lengths_header: &[u8], length_sections: &[(SectionType, EncodedSection); 4], sections: &[(SectionType, EncodedSection); 4]) -> Vec<u8> {
         let mut result = Vec::new();
 
         result.extend_from_slice(lengths_header);
-
         for section_type in SECTION_ORDER {
-            let section = length_sections
-                .iter()
-                .find(|(t, _)| *t == section_type)
-                .expect("section must exist");
+            let section = length_sections.iter().find(|(t, _)| *t == section_type).expect("section must exist");
             result.extend_from_slice(&section.1.data);
         }
 
         for section_type in SECTION_ORDER {
-            let section = sections
-                .iter()
-                .find(|(t, _)| *t == section_type)
-                .expect("section must exist");
+            let section = sections.iter().find(|(t, _)| *t == section_type).expect("section must exist");
             result.extend_from_slice(&section.1.data);
         }
 

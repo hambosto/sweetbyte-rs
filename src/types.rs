@@ -59,21 +59,11 @@ pub struct TaskResult {
 
 impl TaskResult {
     pub fn success(index: u64, data: Vec<u8>, size: usize) -> Self {
-        Self {
-            index,
-            data,
-            size,
-            error: None,
-        }
+        Self { index, data, size, error: None }
     }
 
     pub fn failure(index: u64, error: anyhow::Error) -> Self {
-        Self {
-            index,
-            data: Vec::new(),
-            size: 0,
-            error: Some(error.to_string()),
-        }
+        Self { index, data: Vec::new(), size: 0, error: Some(error.to_string()) }
     }
 
     pub fn is_ok(&self) -> bool {

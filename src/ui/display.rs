@@ -39,49 +39,22 @@ pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
     }
 
     println!();
-    println!(
-        "{} {}",
-        style("✓").green(),
-        style(format!("Found {} file(s):", files.len())).bold()
-    );
+    println!("{} {}", style("✓").green(), style(format!("Found {} file(s):", files.len())).bold());
     println!();
 
     let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec![
-            Cell::new("No").fg(Color::White),
-            Cell::new("Name").fg(Color::White),
-            Cell::new("Size").fg(Color::White),
-            Cell::new("Status").fg(Color::White),
-        ]);
+    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Dynamic).set_header(vec![
+        Cell::new("No").fg(Color::White),
+        Cell::new("Name").fg(Color::White),
+        Cell::new("Size").fg(Color::White),
+        Cell::new("Status").fg(Color::White),
+    ]);
 
     for (i, file) in files.iter().enumerate() {
-        let filename = file
-            .path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
-
-        let display_name = if filename.len() > 25 {
-            format!("{}...", &filename[..22])
-        } else {
-            filename.to_string()
-        };
-
-        let (status_text, status_color) = if file.is_encrypted {
-            ("encrypted", Color::Cyan)
-        } else {
-            ("unencrypted", Color::Green)
-        };
-
-        table.add_row(vec![
-            Cell::new(i + 1),
-            Cell::new(&display_name).fg(Color::Green),
-            Cell::new(format_bytes(file.size)),
-            Cell::new(status_text).fg(status_color),
-        ]);
+        let filename = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+        let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_string() };
+        let (status_text, status_color) = if file.is_encrypted { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
+        table.add_row(vec![Cell::new(i + 1), Cell::new(&display_name).fg(Color::Green), Cell::new(format_bytes(file.size)), Cell::new(status_text).fg(status_color)]);
     }
 
     println!("{table}");
@@ -96,25 +69,16 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
     };
 
     println!();
-    println!(
-        "{} {}",
-        style("✓").green(),
-        style(format!("File {} successfully: {}", action, path.display())).bold()
-    );
+    println!("{} {}", style("✓").green(), style(format!("File {} successfully: {}", action, path.display())).bold());
 }
 
 pub fn show_source_deleted(path: &Path) {
-    println!(
-        "{} {}",
-        style("✓").green(),
-        style(format!("Source file deleted: {}", path.display())).bold()
-    );
+    println!("{} {}", style("✓").green(), style(format!("Source file deleted: {}", path.display())).bold());
 }
 
 pub fn clear_screen() -> Result<()> {
     let term = Term::stdout();
-    term.clear_screen()
-        .map_err(|e| anyhow!("failed to clear screen: {}", e))
+    term.clear_screen().map_err(|e| anyhow!("failed to clear screen: {}", e))
 }
 
 pub fn print_banner() {

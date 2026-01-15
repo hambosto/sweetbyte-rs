@@ -3,9 +3,7 @@ use std::io::Read;
 
 use anyhow::{Context, Result, bail};
 
-use crate::config::{
-    ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE,
-};
+use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE};
 use crate::header::deserializer::Deserializer;
 use crate::header::mac::verify_mac;
 use crate::header::section::SectionType;
@@ -26,12 +24,7 @@ pub struct Header {
 
 impl Header {
     pub fn new() -> Self {
-        Self {
-            version: CURRENT_VERSION,
-            flags: 0,
-            original_size: 0,
-            decoded_sections: None,
-        }
+        Self { version: CURRENT_VERSION, flags: 0, original_size: 0, decoded_sections: None }
     }
 
     pub fn original_size(&self) -> u64 {
@@ -56,11 +49,7 @@ impl Header {
 
     pub fn validate(&self) -> Result<()> {
         if self.version > CURRENT_VERSION {
-            bail!(
-                "unsupported version: {} (current: {})",
-                self.version,
-                CURRENT_VERSION
-            );
+            bail!("unsupported version: {} (current: {})", self.version, CURRENT_VERSION);
         }
 
         if self.original_size == 0 {
@@ -102,14 +91,9 @@ impl Header {
     }
 
     pub(crate) fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
-        let sections = self
-            .decoded_sections
-            .as_ref()
-            .context("header not unmarshalled yet")?;
+        let sections = self.decoded_sections.as_ref().context("header not unmarshalled yet")?;
 
-        let data = sections
-            .get(&section_type)
-            .context("required section missing")?;
+        let data = sections.get(&section_type).context("required section missing")?;
 
         if data.len() < min_len {
             bail!("section too short");
@@ -162,7 +146,6 @@ mod tests {
         header.set_protected(true);
 
         let serialized = header.marshal(&salt, &key).unwrap();
-
         let mut new_header = Header::new();
         new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 

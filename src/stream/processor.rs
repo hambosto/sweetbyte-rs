@@ -22,13 +22,7 @@ impl DataProcessor {
         let compressor = Compressor::new(CompressionLevel::Fast);
         let padding = Padding::new(BLOCK_SIZE)?;
 
-        Ok(Self {
-            cipher,
-            encoder,
-            compressor,
-            padding,
-            mode,
-        })
+        Ok(Self { cipher, encoder, compressor, padding, mode })
     }
 
     pub fn process(&self, task: Task) -> TaskResult {
@@ -56,10 +50,7 @@ impl DataProcessor {
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let chacha_encrypted = match self
-            .cipher
-            .encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted)
-        {
+        let chacha_encrypted = match self.cipher.encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted) {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e),
         };
@@ -80,20 +71,14 @@ impl DataProcessor {
             }
         };
 
-        let chacha_decrypted = match self
-            .cipher
-            .decrypt::<Algorithm::XChaCha20Poly1305>(&decoded)
-        {
+        let chacha_decrypted = match self.cipher.decrypt::<Algorithm::XChaCha20Poly1305>(&decoded) {
             Ok(data) => data,
             Err(e) => {
                 return TaskResult::failure(task.index, e.context("ChaCha decryption failed"));
             }
         };
 
-        let aes_decrypted = match self
-            .cipher
-            .decrypt::<Algorithm::AES256Gcm>(&chacha_decrypted)
-        {
+        let aes_decrypted = match self.cipher.decrypt::<Algorithm::AES256Gcm>(&chacha_decrypted) {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e.context("AES decryption failed")),
         };

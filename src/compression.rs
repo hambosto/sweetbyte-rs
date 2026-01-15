@@ -31,9 +31,7 @@ pub struct Compressor {
 
 impl Compressor {
     pub fn new(level: CompressionLevel) -> Self {
-        Self {
-            level: level.into(),
-        }
+        Self { level: level.into() }
     }
 
     pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
@@ -52,10 +50,7 @@ impl Compressor {
         }
         let mut decoder = ZlibDecoder::new(data);
         let mut decompressed = Vec::new();
-
-        decoder
-            .read_to_end(&mut decompressed)
-            .context("decompression failed")?;
+        decoder.read_to_end(&mut decompressed).context("decompression failed")?;
 
         Ok(decompressed)
     }
@@ -98,12 +93,7 @@ mod tests {
     fn test_compression_levels() {
         let data = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit.";
 
-        for level in [
-            CompressionLevel::None,
-            CompressionLevel::Fast,
-            CompressionLevel::Default,
-            CompressionLevel::Best,
-        ] {
+        for level in [CompressionLevel::None, CompressionLevel::Fast, CompressionLevel::Default, CompressionLevel::Best] {
             let compressor = Compressor::new(level);
             let compressed = compressor.compress(data).unwrap();
             let decompressed = compressor.decompress(&compressed).unwrap();
