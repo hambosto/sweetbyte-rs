@@ -1,12 +1,11 @@
 use std::io::Read;
 
 use anyhow::{Context, Result, bail};
-use hashbrown::HashMap;
 
 use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE};
 use crate::header::deserializer::Deserializer;
 use crate::header::mac::verify_mac;
-use crate::header::section::SectionType;
+use crate::header::section::{SectionType, Sections};
 use crate::header::serializer::Serializer;
 
 pub mod deserializer;
@@ -16,35 +15,69 @@ pub mod serializer;
 
 #[derive(Debug)]
 pub struct Header {
-    pub original_size: u64,
-    pub flags: u32,
-    pub version: u16,
-    pub(crate) decoded_sections: Option<HashMap<SectionType, Vec<u8>>>,
+    original_size: u64,
+    flags: u32,
+    version: u16,
+    sections: Option<Sections>,
 }
 
 impl Header {
+    #[inline]
     pub fn new() -> Self {
-        Self { original_size: 0, flags: 0, version: CURRENT_VERSION, decoded_sections: None }
+        Self { original_size: 0, flags: 0, version: CURRENT_VERSION, sections: None }
     }
 
+    #[inline]
+    #[must_use]
     pub fn original_size(&self) -> u64 {
         self.original_size
     }
 
+    #[inline]
     pub fn set_original_size(&mut self, size: u64) {
         self.original_size = size;
     }
 
+    #[inline]
+    #[must_use]
+    pub fn version(&self) -> u16 {
+        self.version
+    }
+
+    #[inline]
+    pub(crate) fn set_version(&mut self, version: u16) {
+        self.version = version;
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn flags(&self) -> u32 {
+        self.flags
+    }
+
+    #[inline]
+    pub(crate) fn set_flags(&mut self, flags: u32) {
+        self.flags = flags;
+    }
+
+    #[inline]
+    #[must_use]
     pub fn is_protected(&self) -> bool {
         self.flags & FLAG_PROTECTED != 0
     }
 
+    #[inline]
     pub fn set_protected(&mut self, protected: bool) {
         if protected {
             self.flags |= FLAG_PROTECTED;
         } else {
             self.flags &= !FLAG_PROTECTED;
         }
+    }
+
+    #[inline]
+    pub(crate) fn set_sections(&mut self, sections: Sections) {
+        self.sections = Some(sections);
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -91,14 +124,8 @@ impl Header {
     }
 
     pub(crate) fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
-        let sections = self.decoded_sections.as_ref().context("header not unmarshalled yet")?;
-        let data = sections.get(&section_type).context("required section missing")?;
-
-        if data.len() < min_len {
-            bail!("section too short");
-        }
-
-        Ok(&data[..min_len])
+        let sections = self.sections.as_ref().context("header not unmarshalled yet")?;
+        sections.get_with_min_len(section_type, min_len)
     }
 }
 
@@ -116,15 +143,15 @@ mod tests {
     use crate::cipher::{derive_key, random_bytes};
 
     #[test]
-    fn test_header_new() {
+    fn header_new_has_correct_defaults() {
         let header = Header::new();
-        assert_eq!(header.version, CURRENT_VERSION);
-        assert_eq!(header.flags, 0);
-        assert_eq!(header.original_size, 0);
+        assert_eq!(header.version(), CURRENT_VERSION);
+        assert_eq!(header.flags(), 0);
+        assert_eq!(header.original_size(), 0);
     }
 
     #[test]
-    fn test_header_protected_flag() {
+    fn header_protected_flag_toggles() {
         let mut header = Header::new();
         assert!(!header.is_protected());
 
@@ -136,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_header_marshal_unmarshal() {
+    fn header_marshal_unmarshal_roundtrip() {
         let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
         let key = derive_key(b"password", &salt).unwrap();
 
@@ -148,13 +175,13 @@ mod tests {
         let mut new_header = Header::new();
         new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 
-        assert_eq!(new_header.version, header.version);
-        assert_eq!(new_header.flags, header.flags);
-        assert_eq!(new_header.original_size, header.original_size);
+        assert_eq!(new_header.version(), header.version());
+        assert_eq!(new_header.flags(), header.flags());
+        assert_eq!(new_header.original_size(), header.original_size());
     }
 
     #[test]
-    fn test_header_verify() {
+    fn header_verify_succeeds_with_correct_key() {
         let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
         let key = derive_key(b"password", &salt).unwrap();
         let mut header = Header::new();
@@ -170,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn test_header_verify_wrong_key() {
+    fn header_verify_fails_with_wrong_key() {
         let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
         let key = derive_key(b"password", &salt).unwrap();
         let wrong_key = derive_key(b"wrong_password", &salt).unwrap();

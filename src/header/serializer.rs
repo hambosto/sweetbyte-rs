@@ -55,47 +55,53 @@ impl<'a> Serializer<'a> {
 
     fn encode_length_prefixes(&self, sections: &[(SectionType, EncodedSection); 4]) -> Result<[(SectionType, EncodedSection); 4]> {
         Ok([
-            (SectionType::Magic, self.encoder.encode_length(sections[0].1.length)?),
-            (SectionType::Salt, self.encoder.encode_length(sections[1].1.length)?),
-            (SectionType::HeaderData, self.encoder.encode_length(sections[2].1.length)?),
-            (SectionType::Mac, self.encoder.encode_length(sections[3].1.length)?),
+            (SectionType::Magic, self.encoder.encode_length(sections[0].1.length())?),
+            (SectionType::Salt, self.encoder.encode_length(sections[1].1.length())?),
+            (SectionType::HeaderData, self.encoder.encode_length(sections[2].1.length())?),
+            (SectionType::Mac, self.encoder.encode_length(sections[3].1.length())?),
         ])
     }
 
-    fn build_lengths_header(&self, length_sections: &[(SectionType, EncodedSection); 4]) -> Vec<u8> {
-        let mut header = Vec::with_capacity(16);
+    fn build_lengths_header(&self, length_sections: &[(SectionType, EncodedSection); 4]) -> [u8; 16] {
+        let mut header = [0u8; 16];
 
-        for section_type in SECTION_ORDER {
-            let section = length_sections.iter().find(|(t, _)| *t == section_type).expect("section must exist");
-            header.extend_from_slice(&section.1.length.to_be_bytes());
+        for (i, section_type) in SECTION_ORDER.iter().enumerate() {
+            let section = length_sections.iter().find(|(t, _)| t == section_type).expect("section must exist");
+            let bytes = section.1.length().to_be_bytes();
+            header[i * 4..i * 4 + 4].copy_from_slice(&bytes);
         }
 
         header
     }
 
     fn assemble_header(&self, lengths_header: &[u8], length_sections: &[(SectionType, EncodedSection); 4], sections: &[(SectionType, EncodedSection); 4]) -> Vec<u8> {
-        let mut result = Vec::new();
+        let total_size = lengths_header.len() + length_sections.iter().map(|(_, s)| s.data().len()).sum::<usize>() + sections.iter().map(|(_, s)| s.data().len()).sum::<usize>();
+
+        let mut result = Vec::with_capacity(total_size);
         result.extend_from_slice(lengths_header);
 
-        for &section_list in &[length_sections, sections] {
+        for section_list in [length_sections, sections] {
             for section_type in SECTION_ORDER {
                 let section = section_list.iter().find(|(t, _)| *t == section_type).expect("section must exist");
-                result.extend_from_slice(&section.1.data);
+                result.extend_from_slice(section.1.data());
             }
         }
 
         result
     }
 
-    fn serialize_header_data(&self) -> Vec<u8> {
-        let mut data = Vec::with_capacity(HEADER_DATA_SIZE);
-        data.extend_from_slice(&self.header.version.to_be_bytes());
-        data.extend_from_slice(&self.header.flags.to_be_bytes());
-        data.extend_from_slice(&self.header.original_size.to_be_bytes());
+    #[inline]
+    fn serialize_header_data(&self) -> [u8; HEADER_DATA_SIZE] {
+        let mut data = [0u8; HEADER_DATA_SIZE];
+        data[0..2].copy_from_slice(&self.header.version().to_be_bytes());
+        data[2..6].copy_from_slice(&self.header.flags().to_be_bytes());
+        data[6..14].copy_from_slice(&self.header.original_size().to_be_bytes());
         data
     }
 }
 
+#[inline]
+#[must_use]
 pub fn magic_bytes() -> [u8; MAGIC_SIZE] {
     MAGIC_BYTES.to_be_bytes()
 }
