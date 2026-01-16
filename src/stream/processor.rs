@@ -45,7 +45,7 @@ impl DataProcessor {
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let aes_encrypted = match self.cipher.encrypt::<Algorithm::AES256Gcm>(&padded) {
+        let aes_encrypted = match self.cipher.encrypt::<Algorithm::Aes256Gcm>(&padded) {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e),
         };
@@ -78,7 +78,7 @@ impl DataProcessor {
             }
         };
 
-        let aes_decrypted = match self.cipher.decrypt::<Algorithm::AES256Gcm>(&chacha_decrypted) {
+        let aes_decrypted = match self.cipher.decrypt::<Algorithm::Aes256Gcm>(&chacha_decrypted) {
             Ok(data) => data,
             Err(e) => return TaskResult::failure(task.index, e.context("AES decryption failed")),
         };

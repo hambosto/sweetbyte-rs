@@ -1,18 +1,18 @@
 use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::{Aes256Gcm as AesGcm, Nonce};
 use anyhow::{Result, anyhow, bail};
 
-use crate::cipher::derive::random_bytes;
+use super::random_bytes;
 use crate::config::{AES_KEY_SIZE, AES_NONCE_SIZE};
 
-pub struct Aes256GcmCipher {
-    cipher: Aes256Gcm,
+pub struct Aes256Gcm {
+    inner: AesGcm,
 }
 
-impl Aes256GcmCipher {
+impl Aes256Gcm {
+    #[inline]
     pub fn new(key: &[u8; AES_KEY_SIZE]) -> Self {
-        let cipher = Aes256Gcm::new_from_slice(key).expect("valid key size");
-        Self { cipher }
+        Self { inner: AesGcm::new_from_slice(key).expect("valid key size") }
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -23,27 +23,22 @@ impl Aes256GcmCipher {
         let nonce_bytes: [u8; AES_NONCE_SIZE] = random_bytes()?;
         let nonce = Nonce::from_slice(&nonce_bytes);
 
-        let encrypted = self.cipher.encrypt(nonce, plaintext).map_err(|e| anyhow!("AES encryption failed: {}", e))?;
+        let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("AES encryption failed: {e}"))?;
         let mut result = Vec::with_capacity(AES_NONCE_SIZE + encrypted.len());
         result.extend_from_slice(&nonce_bytes);
-        result.extend_from_slice(&encrypted);
+        result.extend(encrypted);
 
         Ok(result)
     }
 
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        if ciphertext.is_empty() {
-            bail!("ciphertext cannot be empty");
-        }
-
         if ciphertext.len() < AES_NONCE_SIZE {
-            bail!("ciphertext too short, need at least {} bytes, got {}", AES_NONCE_SIZE, ciphertext.len());
+            bail!("ciphertext too short: need at least {AES_NONCE_SIZE} bytes, got {}", ciphertext.len());
         }
 
         let (nonce_bytes, encrypted) = ciphertext.split_at(AES_NONCE_SIZE);
         let nonce = Nonce::from_slice(nonce_bytes);
-
-        self.cipher.decrypt(nonce, encrypted).map_err(|_| anyhow!("AES authentication failed"))
+        self.inner.decrypt(nonce, encrypted).map_err(|_| anyhow!("AES authentication failed"))
     }
 }
 
@@ -51,12 +46,15 @@ impl Aes256GcmCipher {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_encrypt_decrypt() {
-        let key = [0u8; AES_KEY_SIZE];
-        let cipher = Aes256GcmCipher::new(&key);
+    fn test_cipher() -> Aes256Gcm {
+        Aes256Gcm::new(&[0u8; AES_KEY_SIZE])
+    }
 
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let cipher = test_cipher();
         let plaintext = b"Hello, World!";
+
         let ciphertext = cipher.encrypt(plaintext).unwrap();
         let decrypted = cipher.decrypt(&ciphertext).unwrap();
 
@@ -64,36 +62,19 @@ mod tests {
     }
 
     #[test]
-    fn test_encrypt_empty() {
-        let key = [0u8; AES_KEY_SIZE];
-        let cipher = Aes256GcmCipher::new(&key);
-
-        assert!(cipher.encrypt(b"").is_err());
+    fn encrypt_empty_fails() {
+        assert!(test_cipher().encrypt(b"").is_err());
     }
 
     #[test]
-    fn test_decrypt_empty() {
-        let key = [0u8; AES_KEY_SIZE];
-        let cipher = Aes256GcmCipher::new(&key);
-
-        assert!(cipher.decrypt(&[]).is_err());
+    fn decrypt_too_short_fails() {
+        assert!(test_cipher().decrypt(&[0u8; AES_NONCE_SIZE - 1]).is_err());
     }
 
     #[test]
-    fn test_decrypt_too_short() {
-        let key = [0u8; AES_KEY_SIZE];
-        let cipher = Aes256GcmCipher::new(&key);
-
-        assert!(cipher.decrypt(&[0u8; AES_NONCE_SIZE - 1]).is_err());
-    }
-
-    #[test]
-    fn test_decrypt_tampered() {
-        let key = [0u8; AES_KEY_SIZE];
-        let cipher = Aes256GcmCipher::new(&key);
-
-        let plaintext = b"Hello, World!";
-        let mut ciphertext = cipher.encrypt(plaintext).unwrap();
+    fn decrypt_tampered_fails() {
+        let cipher = test_cipher();
+        let mut ciphertext = cipher.encrypt(b"Hello, World!").unwrap();
 
         if let Some(last) = ciphertext.last_mut() {
             *last ^= 0xFF;

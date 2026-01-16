@@ -10,7 +10,7 @@ use crate::types::ProcessorMode;
 pub fn find_eligible_files(mode: ProcessorMode) -> Result<Vec<PathBuf>> {
     let files = WalkDir::new(".")
         .into_iter()
-        .filter_map(Result::ok)
+        .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().is_file())
         .map(|entry| entry.into_path())
         .filter(|path| is_eligible(path, mode))
