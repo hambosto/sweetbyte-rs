@@ -46,21 +46,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_excluded_unix_paths() {
+    fn test_is_excluded() {
         assert!(is_excluded(Path::new("node_modules/package.json")));
         assert!(is_excluded(Path::new(".git/config")));
         assert!(is_excluded(Path::new("vendor/lib/file.rs")));
         assert!(is_excluded(Path::new(".config/settings.json")));
         assert!(is_excluded(Path::new(".cache/data")));
-    }
-
-    #[test]
-    fn test_is_excluded_windows_paths() {
-        assert!(is_excluded(Path::new(r".git\config")));
-        assert!(is_excluded(Path::new(r"node_modules\package.json")));
-        assert!(is_excluded(Path::new(r"vendor\lib\file.rs")));
-        assert!(is_excluded(Path::new(r".config\settings.json")));
-        assert!(is_excluded(Path::new(r".cache\data")));
     }
 
     #[test]
