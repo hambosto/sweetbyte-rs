@@ -25,6 +25,7 @@ impl DataProcessor {
         Ok(Self { cipher, encoder, compressor, padding, mode })
     }
 
+    #[inline]
     pub fn process(&self, task: Task) -> TaskResult {
         match self.mode {
             Processing::Encryption => self.encrypt_pipeline(task),
@@ -35,67 +36,61 @@ impl DataProcessor {
     fn encrypt_pipeline(&self, task: Task) -> TaskResult {
         let input_size = task.data.len();
 
-        let compressed = match self.compressor.compress(&task.data) {
-            Ok(data) => data,
+        let compressed_data = match self.compressor.compress(&task.data) {
+            Ok(compressed) => compressed,
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let padded = match self.padding.pad(&compressed) {
-            Ok(data) => data,
+        let padded_data = match self.padding.pad(&compressed_data) {
+            Ok(padded) => padded,
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let aes_encrypted = match self.cipher.encrypt::<Algorithm::Aes256Gcm>(&padded) {
-            Ok(data) => data,
+        let aes_encrypted = match self.cipher.encrypt::<Algorithm::Aes256Gcm>(&padded_data) {
+            Ok(aes_encrypted) => aes_encrypted,
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
         let chacha_encrypted = match self.cipher.encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted) {
-            Ok(data) => data,
+            Ok(chacha_encrypted) => chacha_encrypted,
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        let encoded = match self.encoder.encode(&chacha_encrypted) {
-            Ok(data) => data,
+        let encoded_data = match self.encoder.encode(&chacha_encrypted) {
+            Ok(encoded) => encoded,
             Err(e) => return TaskResult::failure(task.index, e),
         };
 
-        TaskResult::success(task.index, encoded, input_size)
+        TaskResult::success(task.index, encoded_data, input_size)
     }
 
     fn decrypt_pipeline(&self, task: Task) -> TaskResult {
-        let decoded = match self.encoder.decode(&task.data) {
-            Ok(data) => data,
-            Err(e) => {
-                return TaskResult::failure(task.index, e.context("Reed-Solomon decoding failed"));
-            }
+        let decoded_data = match self.encoder.decode(&task.data) {
+            Ok(decoded) => decoded,
+            Err(e) => return TaskResult::failure(task.index, e.context("failed to decode data")),
         };
 
-        let chacha_decrypted = match self.cipher.decrypt::<Algorithm::XChaCha20Poly1305>(&decoded) {
-            Ok(data) => data,
-            Err(e) => {
-                return TaskResult::failure(task.index, e.context("ChaCha decryption failed"));
-            }
+        let chacha_decrypted = match self.cipher.decrypt::<Algorithm::XChaCha20Poly1305>(&decoded_data) {
+            Ok(chacha_decrypted) => chacha_decrypted,
+            Err(e) => return TaskResult::failure(task.index, e.context("chacha20poly1305 decryption failed")),
         };
 
         let aes_decrypted = match self.cipher.decrypt::<Algorithm::Aes256Gcm>(&chacha_decrypted) {
-            Ok(data) => data,
-            Err(e) => return TaskResult::failure(task.index, e.context("AES decryption failed")),
+            Ok(aes_decrypted) => aes_decrypted,
+            Err(e) => return TaskResult::failure(task.index, e.context("aes256gcm decryption failed")),
         };
 
-        let unpadded = match self.padding.unpad(&aes_decrypted) {
-            Ok(data) => data,
-            Err(e) => {
-                return TaskResult::failure(task.index, e.context("padding validation failed"));
-            }
+        let unpadded_data = match self.padding.unpad(&aes_decrypted) {
+            Ok(unpadded) => unpadded,
+            Err(e) => return TaskResult::failure(task.index, e.context("padding validation failed")),
         };
 
-        let decompressed = match self.compressor.decompress(&unpadded) {
-            Ok(data) => data,
+        let decompressed_data = match self.compressor.decompress(&unpadded_data) {
+            Ok(decompressed) => decompressed,
             Err(e) => return TaskResult::failure(task.index, e.context("decompression failed")),
         };
 
-        let output_size = decompressed.len();
-        TaskResult::success(task.index, decompressed, output_size)
+        let output_size = decompressed_data.len();
+        TaskResult::success(task.index, decompressed_data, output_size)
     }
 }

@@ -12,30 +12,34 @@ pub struct ConcurrentExecutor {
 }
 
 impl ConcurrentExecutor {
+    #[inline]
     pub fn new(processor: DataProcessor, concurrency: usize) -> Self {
         Self { processor: Arc::new(processor), concurrency }
     }
 
     pub fn process(&self, tasks: Receiver<Task>, results: Sender<TaskResult>) {
-        let mut handles = Vec::with_capacity(self.concurrency);
-        for _ in 0..self.concurrency {
-            let processor = Arc::clone(&self.processor);
-            let tasks = tasks.clone();
-            let results = results.clone();
-            let handle = thread::spawn(move || {
-                for task in tasks {
-                    let result = processor.process(task);
-                    if results.send(result).is_err() {
-                        break;
-                    }
-                }
-            });
+        thread::scope(|scope| {
+            for _ in 0..self.concurrency {
+                let processor = Arc::clone(&self.processor);
+                let tasks = tasks.clone();
+                let results = results.clone();
 
-            handles.push(handle);
-        }
-        drop(results);
-        for handle in handles {
-            let _ = handle.join();
+                scope.spawn(move || {
+                    Self::worker_loop(processor, tasks, results);
+                });
+            }
+
+            drop(results);
+        });
+    }
+
+    #[inline]
+    fn worker_loop(processor: Arc<DataProcessor>, tasks: Receiver<Task>, results: Sender<TaskResult>) {
+        for task in tasks {
+            let result = processor.process(task);
+            if results.send(result).is_err() {
+                break;
+            }
         }
     }
 }
