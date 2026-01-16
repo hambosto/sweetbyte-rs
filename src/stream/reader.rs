@@ -14,7 +14,6 @@ pub struct ChunkReader {
 }
 
 impl ChunkReader {
-    /// Create a new chunk reader.
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
         if chunk_size < MIN_CHUNK_SIZE {
             bail!("chunk size must be at least {} bytes, got {}", MIN_CHUNK_SIZE, chunk_size);
