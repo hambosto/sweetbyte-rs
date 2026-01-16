@@ -1,18 +1,18 @@
 use anyhow::{Result, anyhow, bail};
 use chacha20poly1305::aead::{Aead, KeyInit};
-use chacha20poly1305::{XChaCha20Poly1305 as ChaCha, XNonce};
+use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 
 use super::random_bytes;
 use crate::config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE};
 
-pub struct XChaCha20Poly1305 {
-    inner: ChaCha,
+pub struct ChaCha20Poly1305 {
+    inner: XChaCha20Poly1305,
 }
 
-impl XChaCha20Poly1305 {
+impl ChaCha20Poly1305 {
     #[inline]
     pub fn new(key: &[u8; CHACHA_KEY_SIZE]) -> Self {
-        Self { inner: ChaCha::new_from_slice(key).expect("valid key size") }
+        Self { inner: XChaCha20Poly1305::new_from_slice(key).expect("valid key size") }
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -47,8 +47,8 @@ impl XChaCha20Poly1305 {
 mod tests {
     use super::*;
 
-    fn test_cipher() -> XChaCha20Poly1305 {
-        XChaCha20Poly1305::new(&[0u8; CHACHA_KEY_SIZE])
+    fn test_cipher() -> ChaCha20Poly1305 {
+        ChaCha20Poly1305::new(&[0u8; CHACHA_KEY_SIZE])
     }
 
     #[test]

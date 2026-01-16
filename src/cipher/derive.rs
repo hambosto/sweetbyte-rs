@@ -1,5 +1,8 @@
 use anyhow::{Result, anyhow, bail};
-use argon2::{Algorithm, Argon2, Params, Version};
+
+use argon2::Algorithm::Argon2id;
+use argon2::Version::V0x13;
+use argon2::{Argon2, Params};
 use rand::rand_core::{OsRng, TryRngCore};
 
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME};
@@ -14,7 +17,7 @@ pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
     }
 
     let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_THREADS, Some(ARGON_KEY_LEN)).map_err(|e| anyhow!("invalid Argon2 parameters: {e:?}"))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let argon2 = Argon2::new(Argon2id, V0x13, params);
 
     let mut key = [0u8; ARGON_KEY_LEN];
     argon2.hash_password_into(password, salt, &mut key).map_err(|e| anyhow!("key derivation failed: {e:?}"))?;
@@ -37,7 +40,6 @@ mod tests {
     fn derive_key_success() {
         let password = b"test_password";
         let salt = random_bytes::<ARGON_SALT_LEN>().unwrap();
-
         let key = derive_key(password, &salt).unwrap();
 
         assert_eq!(key.len(), ARGON_KEY_LEN);

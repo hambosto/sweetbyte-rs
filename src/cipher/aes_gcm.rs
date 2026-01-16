@@ -1,18 +1,18 @@
 use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm as AesGcm, Nonce};
+use aes_gcm::{Aes256Gcm, Nonce};
 use anyhow::{Result, anyhow, bail};
 
 use super::random_bytes;
 use crate::config::{AES_KEY_SIZE, AES_NONCE_SIZE};
 
-pub struct Aes256Gcm {
-    inner: AesGcm,
+pub struct AesGcm {
+    inner: Aes256Gcm,
 }
 
-impl Aes256Gcm {
+impl AesGcm {
     #[inline]
     pub fn new(key: &[u8; AES_KEY_SIZE]) -> Self {
-        Self { inner: AesGcm::new_from_slice(key).expect("valid key size") }
+        Self { inner: Aes256Gcm::new_from_slice(key).expect("valid key size") }
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
@@ -46,8 +46,8 @@ impl Aes256Gcm {
 mod tests {
     use super::*;
 
-    fn test_cipher() -> Aes256Gcm {
-        Aes256Gcm::new(&[0u8; AES_KEY_SIZE])
+    fn test_cipher() -> AesGcm {
+        AesGcm::new(&[0u8; AES_KEY_SIZE])
     }
 
     #[test]

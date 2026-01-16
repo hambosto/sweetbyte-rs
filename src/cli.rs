@@ -10,7 +10,7 @@ use crate::file::validation::validate_path;
 use crate::processor::{decrypt, encrypt};
 use crate::types::ProcessorMode;
 use crate::ui::display::{clear_screen, print_banner, show_file_info, show_source_deleted, show_success};
-use crate::ui::prompt::{choose_file, confirm_overwrite, confirm_removal, get_decryption_password, get_encryption_password, get_processing_mode};
+use crate::ui::prompt::Prompt;
 
 #[derive(Parser)]
 #[command(name = "sweetbyte-rs", version = "1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction. Run without arguments for interactive mode.")]
@@ -81,11 +81,12 @@ impl Commands {
 
 fn process_file(input: &Path, output: Option<PathBuf>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
     let output = output.unwrap_or_else(|| get_output_path(input, mode));
+    let prompt = Prompt::new();
 
     let password = password.map_or_else(
         || match mode {
-            ProcessorMode::Encrypt => get_encryption_password(),
-            ProcessorMode::Decrypt => get_decryption_password(),
+            ProcessorMode::Encrypt => prompt.prompt_encryption_password(),
+            ProcessorMode::Decrypt => prompt.prompt_decryption_password(),
         },
         Ok,
     )?;
@@ -113,23 +114,25 @@ mod Interactive {
         clear_screen()?;
         print_banner();
 
-        let mode = get_processing_mode()?;
-        let selected_file = select_file(mode)?;
+        let prompt = Prompt::new();
+
+        let mode = prompt.select_processing_mode()?;
+        let selected_file = select_file(&prompt, mode)?;
         let output_path = get_output_path(&selected_file, mode);
 
         validate_source(&selected_file)?;
-        validate_output(&output_path)?;
+        validate_output(&prompt, &output_path)?;
 
-        let password = get_password(mode)?;
+        let password = get_password(&prompt, mode)?;
         execute_operation(mode, &selected_file, &output_path, &password)?;
 
         show_success(mode, &output_path);
-        cleanup_source(&selected_file, mode)?;
+        cleanup_source(&prompt, &selected_file, mode)?;
 
         Ok(())
     }
 
-    fn select_file(mode: ProcessorMode) -> Result<PathBuf> {
+    fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<PathBuf> {
         let eligible_files = find_eligible_files(mode)?;
 
         if eligible_files.is_empty() {
@@ -139,24 +142,24 @@ mod Interactive {
         let file_infos = get_file_info_list(&eligible_files)?;
         show_file_info(&file_infos)?;
 
-        choose_file(&eligible_files)
+        prompt.select_file(&eligible_files)
     }
 
     fn validate_source(path: &Path) -> Result<()> {
         validate_path(path, true).with_context(|| format!("source validation failed: {}", path.display()))
     }
 
-    fn validate_output(path: &Path) -> Result<()> {
-        if validate_path(path, false).is_err() && !confirm_overwrite(path)? {
+    fn validate_output(prompt: &Prompt, path: &Path) -> Result<()> {
+        if validate_path(path, false).is_err() && !prompt.confirm_file_overwrite(path)? {
             bail!("operation canceled by user");
         }
         Ok(())
     }
 
-    fn get_password(mode: ProcessorMode) -> Result<String> {
+    fn get_password(prompt: &Prompt, mode: ProcessorMode) -> Result<String> {
         match mode {
-            ProcessorMode::Encrypt => get_encryption_password(),
-            ProcessorMode::Decrypt => get_decryption_password(),
+            ProcessorMode::Encrypt => prompt.prompt_encryption_password(),
+            ProcessorMode::Decrypt => prompt.prompt_decryption_password(),
         }
     }
 
@@ -167,13 +170,13 @@ mod Interactive {
         }
     }
 
-    fn cleanup_source(path: &Path, mode: ProcessorMode) -> Result<()> {
+    fn cleanup_source(prompt: &Prompt, path: &Path, mode: ProcessorMode) -> Result<()> {
         let file_type = match mode {
             ProcessorMode::Encrypt => "original",
             ProcessorMode::Decrypt => "encrypted",
         };
 
-        if confirm_removal(path, file_type)? {
+        if prompt.confirm_file_deletion(path, file_type)? {
             remove_file(path).with_context(|| format!("failed to delete source file: {}", path.display()))?;
             show_source_deleted(path);
         }

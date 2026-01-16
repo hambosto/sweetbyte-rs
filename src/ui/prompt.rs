@@ -7,94 +7,106 @@ use dialoguer::{Confirm, Password, Select};
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::types::ProcessorMode;
 
-pub fn get_encryption_password() -> Result<String> {
-    let password: String = Password::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enter encryption password")
-        .interact()
-        .map_err(|e| anyhow!("password input failed: {}", e))?;
-
-    if password.len() < PASSWORD_MIN_LENGTH {
-        bail!("password must be at least {} characters", PASSWORD_MIN_LENGTH);
-    }
-
-    if password.trim().is_empty() {
-        bail!("password cannot be empty");
-    }
-
-    let confirm: String = Password::with_theme(&ColorfulTheme::default())
-        .with_prompt("Confirm password")
-        .interact()
-        .map_err(|e| anyhow!("password confirmation failed: {}", e))?;
-
-    if password != confirm {
-        bail!("passwords do not match");
-    }
-
-    Ok(password)
+pub struct Prompt {
+    theme: ColorfulTheme,
 }
 
-pub fn get_decryption_password() -> Result<String> {
-    let password: String = Password::with_theme(&ColorfulTheme::default())
-        .with_prompt("Enter decryption password")
-        .interact()
-        .map_err(|e| anyhow!("password input failed: {}", e))?;
-
-    if password.trim().is_empty() {
-        bail!("password cannot be empty");
+impl Prompt {
+    pub fn new() -> Self {
+        Self { theme: ColorfulTheme::default() }
     }
 
-    Ok(password)
-}
+    pub fn with_theme(theme: ColorfulTheme) -> Self {
+        Self { theme }
+    }
 
-pub fn confirm_overwrite(path: &Path) -> Result<bool> {
-    let result = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!("Output file {} already exists. Overwrite?", path.display()))
-        .default(false)
-        .interact()
-        .map_err(|e| anyhow!("confirmation failed: {}", e))?;
+    pub fn prompt_encryption_password(&self) -> Result<String> {
+        let password = self.prompt_password("Enter encryption password")?;
+        let confirmation = self.prompt_password("Confirm password")?;
 
-    Ok(result)
-}
+        if password != confirmation {
+            bail!("passwords do not match");
+        }
 
-pub fn confirm_removal(path: &Path, file_type: &str) -> Result<bool> {
-    let result = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!("Delete {} file {}?", file_type, path.display()))
-        .default(false)
-        .interact()
-        .map_err(|e| anyhow!("confirmation failed: {}", e))?;
+        Ok(password)
+    }
 
-    Ok(result)
-}
+    pub fn prompt_decryption_password(&self) -> Result<String> {
+        self.prompt_password("Enter decryption password")
+    }
 
-pub fn get_processing_mode() -> Result<ProcessorMode> {
-    let options = vec!["Encrypt", "Decrypt"];
+    pub fn select_processing_mode(&self) -> Result<ProcessorMode> {
+        let options = [ProcessorMode::Encrypt.as_str(), ProcessorMode::Decrypt.as_str()];
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select operation")
-        .items(&options)
-        .default(0)
-        .interact()
-        .map_err(|e| anyhow!("selection failed: {}", e))?;
+        let selection = Select::with_theme(&self.theme)
+            .with_prompt("Select operation")
+            .items(&options)
+            .default(0)
+            .interact()
+            .map_err(|e| anyhow!("mode selection failed: {}", e))?;
 
-    match selection {
-        0 => Ok(ProcessorMode::Encrypt),
-        1 => Ok(ProcessorMode::Decrypt),
-        _ => bail!("invalid selection"),
+        match selection {
+            0 => Ok(ProcessorMode::Encrypt),
+            1 => Ok(ProcessorMode::Decrypt),
+            _ => unreachable!("selection index out of bounds"),
+        }
+    }
+
+    pub fn select_file(&self, files: &[PathBuf]) -> Result<PathBuf> {
+        if files.is_empty() {
+            bail!("no files available for selection");
+        }
+
+        let display_names: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
+        let selection = Select::with_theme(&self.theme)
+            .with_prompt("Select file")
+            .items(&display_names)
+            .default(0)
+            .interact()
+            .map_err(|e| anyhow!("file selection failed: {}", e))?;
+
+        Ok(files[selection].clone())
+    }
+
+    pub fn confirm_file_overwrite(&self, path: &Path) -> Result<bool> {
+        self.confirm(&format!("Output file {} already exists. Overwrite?", path.display()))
+    }
+
+    pub fn confirm_file_deletion(&self, path: &Path, file_type: &str) -> Result<bool> {
+        self.confirm(&format!("Delete {} file {}?", file_type, path.display()))
+    }
+
+    fn prompt_password(&self, prompt: &str) -> Result<String> {
+        Password::with_theme(&self.theme)
+            .with_prompt(prompt)
+            .validate_with(Self::validate_password)
+            .interact()
+            .map_err(|e| anyhow!("password input failed: {}", e))
+    }
+
+    fn validate_password(input: &String) -> Result<()> {
+        if input.trim().is_empty() {
+            bail!("password cannot be empty or whitespace only");
+        }
+
+        if input.len() < PASSWORD_MIN_LENGTH {
+            bail!("password must be at least {} characters long", PASSWORD_MIN_LENGTH);
+        }
+
+        Ok(())
+    }
+
+    fn confirm(&self, prompt: &str) -> Result<bool> {
+        Confirm::with_theme(&self.theme)
+            .with_prompt(prompt)
+            .default(false)
+            .interact()
+            .map_err(|e| anyhow!("confirmation failed: {}", e))
     }
 }
 
-pub fn choose_file(files: &[PathBuf]) -> Result<PathBuf> {
-    if files.is_empty() {
-        bail!("no files available");
+impl Default for Prompt {
+    fn default() -> Self {
+        Self::new()
     }
-
-    let display_names: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select file")
-        .items(&display_names)
-        .default(0)
-        .interact()
-        .map_err(|e| anyhow!("selection failed: {}", e))?;
-
-    Ok(files[selection].clone())
 }
