@@ -1,18 +1,15 @@
 use std::process;
 
 use anyhow::Result;
+use sweetbyte_rs::cli::Cli;
 
 fn run() -> Result<()> {
-    let cli = sweetbyte_rs::cli::parse();
-    match cli.command {
-        Some(cmd) => sweetbyte_rs::cli::run_command(cmd),
-        None => sweetbyte_rs::cli::run_interactive(),
-    }
+    Cli::init().execute()
 }
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("Error: {:?}", e);
+        eprintln!("Error: {e:?}");
         process::exit(1);
     }
 }

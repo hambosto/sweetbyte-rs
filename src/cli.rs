@@ -13,12 +13,24 @@ use crate::ui::display::{clear_screen, print_banner, show_file_info, show_source
 use crate::ui::prompt::{choose_file, confirm_overwrite, confirm_removal, get_decryption_password, get_encryption_password, get_processing_mode};
 
 #[derive(Parser)]
-#[command(name = "sweetbyte-rs")]
-#[command(version = "1.0")]
-#[command(about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction. Run without arguments for interactive mode.")]
+#[command(name = "sweetbyte-rs", version = "1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction. Run without arguments for interactive mode.")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
+}
+
+impl Cli {
+    #[inline]
+    pub fn init() -> Self {
+        Self::parse()
+    }
+
+    pub fn execute(self) -> Result<()> {
+        match self.command {
+            Some(cmd) => cmd.run(),
+            None => Interactive::run(),
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -57,101 +69,115 @@ pub enum Commands {
     Interactive,
 }
 
-pub fn parse() -> Cli {
-    Cli::parse()
-}
-
-pub fn run_command(cmd: Commands) -> Result<()> {
-    match cmd {
-        Commands::Encrypt { input, output, password } => encrypt_file(&input, output, password),
-        Commands::Decrypt { input, output, password } => decrypt_file(&input, output, password),
-        Commands::Interactive => run_interactive(),
-    }
-}
-
-fn encrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>) -> Result<()> {
-    let output = output.unwrap_or_else(|| get_output_path(input, ProcessorMode::Encrypt));
-    let password = match password {
-        Some(p) => p,
-        None => get_encryption_password()?,
-    };
-
-    encrypt(input, &output, &password).with_context(|| format!("encryption failed for {}", input.display()))?;
-    println!("✓ Encrypted: {} -> {}", input.display(), output.display());
-
-    Ok(())
-}
-
-fn decrypt_file(input: &Path, output: Option<PathBuf>, password: Option<String>) -> Result<()> {
-    let output = output.unwrap_or_else(|| get_output_path(input, ProcessorMode::Decrypt));
-    let password = match password {
-        Some(p) => p,
-        None => get_decryption_password()?,
-    };
-
-    decrypt(input, &output, &password).with_context(|| format!("decryption failed for {}", input.display()))?;
-    println!("✓ Decrypted: {} -> {}", input.display(), output.display());
-
-    Ok(())
-}
-
-pub fn run_interactive() -> Result<()> {
-    clear_screen()?;
-    print_banner();
-
-    let mode = get_processing_mode()?;
-
-    // Find eligible files
-    let eligible_files = find_eligible_files(mode)?;
-    if eligible_files.is_empty() {
-        bail!("no eligible files found for {} operation", mode);
-    }
-
-    // Get file info list
-    let file_infos = get_file_info_list(&eligible_files)?;
-
-    // Display file info
-    show_file_info(&file_infos)?;
-
-    // Choose file
-    let selected_file = choose_file(&eligible_files)?;
-    let output_path = get_output_path(&selected_file, mode);
-
-    // Validate source path
-    validate_path(&selected_file, true).with_context(|| format!("source validation failed: {}", selected_file.display()))?;
-
-    // Validate output path - if exists, ask for overwrite confirmation
-    if validate_path(&output_path, false).is_err() {
-        if !confirm_overwrite(&output_path)? {
-            bail!("operation canceled by user");
+impl Commands {
+    pub fn run(self) -> Result<()> {
+        match self {
+            Self::Encrypt { input, output, password } => process_file(&input, output, password, ProcessorMode::Encrypt),
+            Self::Decrypt { input, output, password } => process_file(&input, output, password, ProcessorMode::Decrypt),
+            Self::Interactive => Interactive::run(),
         }
     }
+}
 
-    // Process file
-    match mode {
+fn process_file(input: &Path, output: Option<PathBuf>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
+    let output = output.unwrap_or_else(|| get_output_path(input, mode));
+
+    let password = password.map_or_else(
+        || match mode {
+            ProcessorMode::Encrypt => get_encryption_password(),
+            ProcessorMode::Decrypt => get_decryption_password(),
+        },
+        Ok,
+    )?;
+
+    let action = match mode {
         ProcessorMode::Encrypt => {
-            let password = get_encryption_password()?;
-            encrypt(&selected_file, &output_path, &password).with_context(|| format!("failed to encrypt {}", selected_file.display()))?;
+            encrypt(input, &output, &password)?;
+            "Encrypted"
         }
         ProcessorMode::Decrypt => {
-            let password = get_decryption_password()?;
-            decrypt(&selected_file, &output_path, &password).with_context(|| format!("failed to decrypt {}", selected_file.display()))?;
+            decrypt(input, &output, &password)?;
+            "Decrypted"
+        }
+    };
+
+    println!("✓ {action}: {} -> {}", input.display(), output.display());
+    Ok(())
+}
+
+#[allow(non_snake_case)]
+mod Interactive {
+    use super::*;
+
+    pub fn run() -> Result<()> {
+        clear_screen()?;
+        print_banner();
+
+        let mode = get_processing_mode()?;
+        let selected_file = select_file(mode)?;
+        let output_path = get_output_path(&selected_file, mode);
+
+        validate_source(&selected_file)?;
+        validate_output(&output_path)?;
+
+        let password = get_password(mode)?;
+        execute_operation(mode, &selected_file, &output_path, &password)?;
+
+        show_success(mode, &output_path);
+        cleanup_source(&selected_file, mode)?;
+
+        Ok(())
+    }
+
+    fn select_file(mode: ProcessorMode) -> Result<PathBuf> {
+        let eligible_files = find_eligible_files(mode)?;
+
+        if eligible_files.is_empty() {
+            bail!("no eligible files found for {mode} operation");
+        }
+
+        let file_infos = get_file_info_list(&eligible_files)?;
+        show_file_info(&file_infos)?;
+
+        choose_file(&eligible_files)
+    }
+
+    fn validate_source(path: &Path) -> Result<()> {
+        validate_path(path, true).with_context(|| format!("source validation failed: {}", path.display()))
+    }
+
+    fn validate_output(path: &Path) -> Result<()> {
+        if validate_path(path, false).is_err() && !confirm_overwrite(path)? {
+            bail!("operation canceled by user");
+        }
+        Ok(())
+    }
+
+    fn get_password(mode: ProcessorMode) -> Result<String> {
+        match mode {
+            ProcessorMode::Encrypt => get_encryption_password(),
+            ProcessorMode::Decrypt => get_decryption_password(),
         }
     }
 
-    // Show success
-    show_success(mode, &output_path);
-
-    // Confirm removal
-    let file_type = match mode {
-        ProcessorMode::Encrypt => "original",
-        ProcessorMode::Decrypt => "encrypted",
-    };
-
-    if confirm_removal(&selected_file, file_type)? {
-        remove_file(&selected_file).with_context(|| format!("failed to delete source file: {}", selected_file.display()))?;
-        show_source_deleted(&selected_file);
+    fn execute_operation(mode: ProcessorMode, input: &Path, output: &Path, password: &str) -> Result<()> {
+        match mode {
+            ProcessorMode::Encrypt => encrypt(input, output, password).with_context(|| format!("failed to encrypt {}", input.display())),
+            ProcessorMode::Decrypt => decrypt(input, output, password).with_context(|| format!("failed to decrypt {}", input.display())),
+        }
     }
 
-    Ok(())
+    fn cleanup_source(path: &Path, mode: ProcessorMode) -> Result<()> {
+        let file_type = match mode {
+            ProcessorMode::Encrypt => "original",
+            ProcessorMode::Decrypt => "encrypted",
+        };
+
+        if confirm_removal(path, file_type)? {
+            remove_file(path).with_context(|| format!("failed to delete source file: {}", path.display()))?;
+            show_source_deleted(path);
+        }
+
+        Ok(())
+    }
 }
