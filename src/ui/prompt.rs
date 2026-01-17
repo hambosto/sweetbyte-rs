@@ -36,20 +36,15 @@ impl Prompt {
     }
 
     pub fn select_processing_mode(&self) -> Result<ProcessorMode> {
-        let options = [ProcessorMode::Encrypt.as_str(), ProcessorMode::Decrypt.as_str()];
-
+        let options = [ProcessorMode::Encrypt, ProcessorMode::Decrypt];
         let selection = Select::with_theme(&self.theme)
             .with_prompt("Select operation")
-            .items(&options)
+            .items(options)
             .default(0)
             .interact()
             .map_err(|e| anyhow!("mode selection failed: {}", e))?;
 
-        match selection {
-            0 => Ok(ProcessorMode::Encrypt),
-            1 => Ok(ProcessorMode::Decrypt),
-            _ => unreachable!("selection index out of bounds"),
-        }
+        options.get(selection).cloned().ok_or_else(|| anyhow!("Invalid selection index"))
     }
 
     pub fn select_file(&self, files: &[PathBuf]) -> Result<PathBuf> {
@@ -79,21 +74,19 @@ impl Prompt {
     fn prompt_password(&self, prompt: &str) -> Result<String> {
         Password::with_theme(&self.theme)
             .with_prompt(prompt)
-            .validate_with(Self::validate_password)
+            .validate_with(|input: &String| -> Result<()> {
+                if input.trim().is_empty() {
+                    bail!("password cannot be empty or whitespace only");
+                }
+
+                if input.len() < PASSWORD_MIN_LENGTH {
+                    bail!("password must be at least {} characters long", PASSWORD_MIN_LENGTH);
+                }
+
+                Ok(())
+            })
             .interact()
             .map_err(|e| anyhow!("password input failed: {}", e))
-    }
-
-    fn validate_password(input: &String) -> Result<()> {
-        if input.trim().is_empty() {
-            bail!("password cannot be empty or whitespace only");
-        }
-
-        if input.len() < PASSWORD_MIN_LENGTH {
-            bail!("password must be at least {} characters long", PASSWORD_MIN_LENGTH);
-        }
-
-        Ok(())
     }
 
     fn confirm(&self, prompt: &str) -> Result<bool> {

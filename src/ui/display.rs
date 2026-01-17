@@ -81,11 +81,12 @@ pub fn clear_screen() -> Result<()> {
     term.clear_screen().map_err(|e| anyhow!("failed to clear screen: {}", e))
 }
 
-pub fn print_banner() {
-    let font = FIGfont::from_content(include_str!("../../resources/rectangles.flf")).expect("failed to load font");
-    if let Some(fig) = font.convert(APP_NAME) {
-        println!("{}", style(fig).green().bold());
-    }
+pub fn print_banner() -> Result<()> {
+    let font = FIGfont::from_content(include_str!("../../resources/rectangles.flf")).map_err(|e| anyhow!("failed to load font: {}", e))?;
+    let fig = font.convert(APP_NAME).ok_or_else(|| anyhow!("failed to convert text to banner"))?;
+
+    println!("{}", style(fig).green().bold());
+    Ok(())
 }
 
 #[cfg(test)]

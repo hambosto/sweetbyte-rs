@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use crate::file::discovery::find_eligible_files;
 use crate::file::operations::{get_file_info_list, get_output_path};
 use crate::file::validation::validate_path;
-use crate::processor::{decrypt, encrypt};
+use crate::processor::{Decryptor, Encryptor};
 use crate::types::ProcessorMode;
 use crate::ui::display::{clear_screen, print_banner, show_file_info, show_source_deleted, show_success};
 use crate::ui::prompt::Prompt;
@@ -81,23 +81,22 @@ impl Commands {
 
 fn process_file(input: &Path, output: Option<PathBuf>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
     let output = output.unwrap_or_else(|| get_output_path(input, mode));
-    let prompt = Prompt::new();
 
     let password = password.map_or_else(
         || match mode {
-            ProcessorMode::Encrypt => prompt.prompt_encryption_password(),
-            ProcessorMode::Decrypt => prompt.prompt_decryption_password(),
+            ProcessorMode::Encrypt => Prompt::new().prompt_encryption_password(),
+            ProcessorMode::Decrypt => Prompt::new().prompt_decryption_password(),
         },
         Ok,
     )?;
 
     let action = match mode {
         ProcessorMode::Encrypt => {
-            encrypt(input, &output, &password)?;
+            Encryptor::new(&password).encrypt(input, &output)?;
             "Encrypted"
         }
         ProcessorMode::Decrypt => {
-            decrypt(input, &output, &password)?;
+            Decryptor::new(&password).decrypt(input, &output)?;
             "Decrypted"
         }
     };
@@ -112,7 +111,7 @@ mod Interactive {
 
     pub fn run() -> Result<()> {
         clear_screen()?;
-        print_banner();
+        print_banner()?;
 
         let prompt = Prompt::new();
 
@@ -165,8 +164,8 @@ mod Interactive {
 
     fn execute_operation(mode: ProcessorMode, input: &Path, output: &Path, password: &str) -> Result<()> {
         match mode {
-            ProcessorMode::Encrypt => encrypt(input, output, password).with_context(|| format!("failed to encrypt {}", input.display())),
-            ProcessorMode::Decrypt => decrypt(input, output, password).with_context(|| format!("failed to decrypt {}", input.display())),
+            ProcessorMode::Encrypt => Encryptor::new(password).encrypt(input, output).with_context(|| format!("failed to encrypt {}", input.display())),
+            ProcessorMode::Decrypt => Decryptor::new(password).decrypt(input, output).with_context(|| format!("failed to decrypt {}", input.display())),
         }
     }
 
