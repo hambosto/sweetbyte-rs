@@ -5,25 +5,31 @@ use anyhow::{Context, Result};
 use crossbeam_channel::bounded;
 
 use crate::config::{ARGON_KEY_LEN, CHUNK_SIZE};
-use crate::stream::executor::ConcurrentExecutor;
-use crate::stream::processor::DataProcessor;
-use crate::stream::reader::ChunkReader;
-use crate::stream::writer::ChunkWriter;
 use crate::types::Processing;
 use crate::ui::progress::ProgressBar;
+use crate::worker::executor::Executor;
+use crate::worker::pipeline::Pipeline;
+use crate::worker::reader::Reader;
+use crate::worker::writer::Writer;
 
-pub struct Pipeline {
-    processor: DataProcessor,
+pub mod buffer;
+pub mod executor;
+pub mod pipeline;
+pub mod reader;
+pub mod writer;
+
+pub struct Worker {
+    pipeline: Pipeline,
     concurrency: usize,
     mode: Processing,
 }
 
-impl Pipeline {
+impl Worker {
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
-        let processor = DataProcessor::new(key, mode)?;
+        let pipeline = Pipeline::new(key, mode)?;
         let concurrency = thread::available_parallelism().map(|p| p.get()).unwrap_or(4);
 
-        Ok(Self { processor, concurrency, mode })
+        Ok(Self { pipeline, concurrency, mode })
     }
 
     pub fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
@@ -37,12 +43,12 @@ impl Pipeline {
         let (task_sender, task_receiver) = bounded(channel_size);
         let (result_sender, result_receiver) = bounded(channel_size);
 
-        let reader = ChunkReader::new(self.mode, CHUNK_SIZE)?;
-        let mut writer = ChunkWriter::new(self.mode);
+        let reader = Reader::new(self.mode, CHUNK_SIZE)?;
+        let mut writer = Writer::new(self.mode);
 
         let reader_handle = thread::spawn(move || reader.read_all(input, task_sender));
 
-        let executor = ConcurrentExecutor::new(self.processor, self.concurrency);
+        let executor = Executor::new(self.pipeline, self.concurrency);
         let executor_handle = thread::spawn(move || {
             executor.process(task_receiver, result_sender);
         });

@@ -7,7 +7,7 @@ use crate::encoding::Encoding;
 use crate::padding::Padding;
 use crate::types::{Processing, Task, TaskResult};
 
-pub struct DataProcessor {
+pub struct Pipeline {
     cipher: Cipher,
     encoder: Encoding,
     compressor: Compressor,
@@ -15,7 +15,7 @@ pub struct DataProcessor {
     mode: Processing,
 }
 
-impl DataProcessor {
+impl Pipeline {
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
         let cipher = Cipher::new(key)?;
         let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;

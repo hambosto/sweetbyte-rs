@@ -8,12 +8,12 @@ use crate::types::{Processing, Task};
 
 pub const MIN_CHUNK_SIZE: usize = 256 * 1024;
 
-pub struct ChunkReader {
+pub struct Reader {
     mode: Processing,
     chunk_size: usize,
 }
 
-impl ChunkReader {
+impl Reader {
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
         if chunk_size < MIN_CHUNK_SIZE {
             bail!("chunk size must be at least {} bytes, got {}", MIN_CHUNK_SIZE, chunk_size);
@@ -77,7 +77,7 @@ impl ChunkReader {
     }
 }
 
-impl Default for ChunkReader {
+impl Default for Reader {
     fn default() -> Self {
         Self::new(Processing::Encryption, CHUNK_SIZE).expect("valid default parameters")
     }

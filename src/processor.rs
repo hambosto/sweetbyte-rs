@@ -6,8 +6,8 @@ use crate::cipher::{derive_key, random_bytes};
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
 use crate::file::File;
 use crate::header::Header;
-use crate::stream::Pipeline;
 use crate::types::Processing;
+use crate::worker::Worker;
 
 pub struct Encryptor {
     password: String,
@@ -35,7 +35,7 @@ impl Encryptor {
         let reader = src.reader()?.into_inner();
         let writer = writer.into_inner().context("failed to get inner writer")?;
 
-        Pipeline::new(&key, Processing::Encryption)?.process(reader, writer, size)?;
+        Worker::new(&key, Processing::Encryption)?.process(reader, writer, size)?;
         Ok(())
     }
 }
@@ -66,7 +66,7 @@ impl Decryptor {
         let reader = reader.into_inner();
         let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
 
-        Pipeline::new(&key, Processing::Decryption)?.process(reader, writer, size)?;
+        Worker::new(&key, Processing::Decryption)?.process(reader, writer, size)?;
         Ok(())
     }
 }

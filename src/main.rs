@@ -7,9 +7,9 @@ pub mod file;
 pub mod header;
 pub mod padding;
 pub mod processor;
-pub mod stream;
 pub mod types;
 pub mod ui;
+pub mod worker;
 
 use std::process;
 
