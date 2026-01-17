@@ -1,5 +1,3 @@
-use std::fmt;
-
 use anyhow::{Result, bail};
 
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
@@ -13,8 +11,8 @@ pub enum SectionType {
     Mac,
 }
 
-impl fmt::Display for SectionType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for SectionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Magic => write!(f, "Magic"),
             Self::Salt => write!(f, "Salt"),

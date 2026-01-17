@@ -11,11 +11,12 @@ pub struct Padding {
 }
 
 impl Padding {
-    pub fn new(block_size: usize) -> Result<Padding> {
+    pub fn new(block_size: usize) -> Result<Self> {
         if block_size == 0 || block_size > MAX_BLOCK_SIZE {
             bail!("block size must be between 1 and 255, got {}", block_size);
         }
-        Ok(Padding { block_size })
+        // Ok(Padding { block_size })
+        Ok(Self { block_size })
     }
 
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
