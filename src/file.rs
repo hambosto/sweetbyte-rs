@@ -1,9 +1,9 @@
 use std::fs;
-use std::io::{BufReader, BufWriter, ErrorKind};
+use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use fast_glob::glob_match;
 use walkdir::WalkDir;
 
@@ -24,17 +24,6 @@ impl File {
         Self { path: path.into(), size: None, is_selected: true }
     }
 
-    pub fn with_metadata(path: impl Into<PathBuf>) -> Result<Option<Self>> {
-        let path = path.into();
-        let meta = match fs::metadata(&path) {
-            Ok(meta) => meta,
-            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e).with_context(|| format!("stat failed: {}", path.display())),
-        };
-
-        Ok(Some(Self { path, size: Some(meta.len()), is_selected: true }))
-    }
-
     #[inline]
     pub fn path(&self) -> &Path {
         &self.path
@@ -53,16 +42,6 @@ impl File {
     #[inline]
     pub fn size_if_loaded(&self) -> Option<u64> {
         self.size
-    }
-
-    #[inline]
-    pub fn is_selected(&self) -> bool {
-        self.is_selected
-    }
-
-    #[inline]
-    pub fn set_selected(&mut self, selected: bool) {
-        self.is_selected = selected;
     }
 
     #[inline]
@@ -174,13 +153,6 @@ impl File {
             .collect::<Vec<_>>()
             .pipe(Ok)
     }
-
-    pub fn load_metadata(paths: &[PathBuf]) -> Result<Vec<Self>> {
-        paths
-            .iter()
-            .map(|path| File::with_metadata(path)?.ok_or_else(|| anyhow!("file not found: {}", path.display())))
-            .collect()
-    }
 }
 
 trait Pipe: Sized {
@@ -201,14 +173,6 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-
-    #[test]
-    fn test_new() {
-        let file = File::new("test.txt");
-        assert_eq!(file.path(), Path::new("test.txt"));
-        assert!(file.is_selected());
-        assert_eq!(file.size_if_loaded(), None);
-    }
 
     #[test]
     fn test_is_encrypted() {
@@ -312,31 +276,5 @@ mod tests {
         file.writer().unwrap();
 
         assert!(file.validate(false).is_err());
-    }
-
-    #[test]
-    fn test_selection() {
-        let mut file = File::new("test.txt");
-        assert!(file.is_selected());
-
-        file.set_selected(false);
-        assert!(!file.is_selected());
-
-        file.set_selected(true);
-        assert!(file.is_selected());
-    }
-
-    #[test]
-    fn test_with_metadata() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("test.txt");
-
-        assert!(File::with_metadata(&path).unwrap().is_none());
-
-        fs::write(&path, b"Hello").unwrap();
-
-        let file = File::with_metadata(&path).unwrap().unwrap();
-        assert_eq!(file.path(), path);
-        assert_eq!(file.size_if_loaded(), Some(5));
     }
 }

@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
-use console::{Term, style};
+use console::Term;
 use figlet_rs::FIGfont;
 
 use crate::config::APP_NAME;
@@ -34,14 +34,14 @@ pub fn format_bytes(bytes: u64) -> String {
     format!("{:.1} {}", size, UNITS[unit_idx])
 }
 
-pub fn show_file_info(files: &[File]) -> Result<()> {
+pub fn show_file_info(files: &mut [File]) -> Result<()> {
     if files.is_empty() {
-        println!("{}", style("No files found").yellow().bold());
+        println!("{}", console::style("No files found").yellow().bold());
         return Ok(());
     }
 
     println!();
-    println!("{} {}", style("✔").green(), style(format!("Found {} file(s):", files.len())).bold());
+    println!("{} {}", console::style("✔").green(), console::style(format!("Found {} file(s):", files.len())).bold());
     println!();
 
     let mut table = Table::new();
@@ -51,11 +51,11 @@ pub fn show_file_info(files: &[File]) -> Result<()> {
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![Cell::new("No").fg(Color::White), Cell::new("Name").fg(Color::White), Cell::new("Size").fg(Color::White), Cell::new("Status").fg(Color::White)]);
 
-    for (i, file) in files.iter().enumerate() {
+    for (i, file) in files.iter_mut().enumerate() {
         let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
         let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_string() };
         let (status_text, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
-        let size = file.size_if_loaded().unwrap_or(0);
+        let size = file.size()?;
 
         table.add_row(vec![Cell::new(i + 1), Cell::new(&display_name).fg(Color::Green), Cell::new(format_bytes(size)), Cell::new(status_text).fg(status_color)]);
     }
@@ -72,11 +72,11 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
     };
 
     println!();
-    println!("{} {}", style("✔").green(), style(format!("File {} successfully: {}", action, path.display())).bold());
+    println!("{} {}", console::style("✔").green(), console::style(format!("File {} successfully: {}", action, path.display())).bold());
 }
 
 pub fn show_source_deleted(path: &Path) {
-    println!("{} {}", style("✔").green(), style(format!("Source file deleted: {}", path.display())).bold());
+    println!("{} {}", console::style("✔").green(), console::style(format!("Source file deleted: {}", path.display())).bold());
 }
 
 pub fn clear_screen() -> Result<()> {
@@ -85,10 +85,10 @@ pub fn clear_screen() -> Result<()> {
 }
 
 pub fn print_banner() -> Result<()> {
-    let font = FIGfont::from_content(include_str!("../../resources/rectangles.flf")).map_err(|e| anyhow!("failed to load font: {}", e))?;
+    let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow!("failed to load font: {}", e))?;
     let fig = font.convert(APP_NAME).ok_or_else(|| anyhow!("failed to convert text to banner"))?;
 
-    println!("{}", style(fig).green().bold());
+    println!("{}", console::style(fig).green().bold());
     Ok(())
 }
 

@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter, Result};
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessorMode {
@@ -69,12 +68,4 @@ impl TaskResult {
     pub fn is_ok(&self) -> bool {
         self.error.is_none()
     }
-}
-
-#[derive(Debug)]
-pub struct FileInfo {
-    pub path: PathBuf,
-    pub size: u64,
-    pub is_encrypted: bool,
-    pub is_selected: bool,
 }

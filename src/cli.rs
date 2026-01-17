@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, bail};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 use crate::file::File;
 use crate::processor::{Decryptor, Encryptor};
@@ -62,6 +63,13 @@ pub enum Commands {
 
     /// Start interactive mode.
     Interactive,
+
+    /// Generate shell completions.
+    Completions {
+        /// Shell type to generate completions for.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 impl Commands {
@@ -70,6 +78,11 @@ impl Commands {
             Self::Encrypt { input, output, password } => process_file(input, output, password, ProcessorMode::Encrypt),
             Self::Decrypt { input, output, password } => process_file(input, output, password, ProcessorMode::Decrypt),
             Self::Interactive => Interactive::run(),
+            Self::Completions { shell } => {
+                let mut cmd = Cli::command();
+                clap_complete::generate(shell, &mut cmd, "sweetbyte-rs", &mut std::io::stdout());
+                Ok(())
+            }
         }
     }
 }
@@ -132,13 +145,13 @@ mod Interactive {
     }
 
     fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
-        let eligible_files = File::discover(mode)?;
+        let mut eligible_files = File::discover(mode)?;
 
         if eligible_files.is_empty() {
             bail!("no eligible files found for {mode} operation");
         }
 
-        show_file_info(&eligible_files)?;
+        show_file_info(&mut eligible_files)?;
 
         let selected_path = prompt.select_file(&eligible_files)?;
         Ok(File::new(selected_path))
