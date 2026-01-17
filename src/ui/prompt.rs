@@ -5,6 +5,7 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Password, Select};
 
 use crate::config::PASSWORD_MIN_LENGTH;
+use crate::file::File;
 use crate::types::ProcessorMode;
 
 pub struct Prompt {
@@ -47,12 +48,13 @@ impl Prompt {
         options.get(selection).cloned().ok_or_else(|| anyhow!("Invalid selection index"))
     }
 
-    pub fn select_file(&self, files: &[PathBuf]) -> Result<PathBuf> {
+    pub fn select_file(&self, files: &[File]) -> Result<PathBuf> {
         if files.is_empty() {
             bail!("no files available for selection");
         }
 
-        let display_names: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
+        let display_names: Vec<String> = files.iter().map(|f| f.path().display().to_string()).collect();
+
         let selection = Select::with_theme(&self.theme)
             .with_prompt("Select file")
             .items(&display_names)
@@ -60,7 +62,7 @@ impl Prompt {
             .interact()
             .map_err(|e| anyhow!("file selection failed: {}", e))?;
 
-        Ok(files[selection].clone())
+        Ok(files[selection].path().to_path_buf())
     }
 
     pub fn confirm_file_overwrite(&self, path: &Path) -> Result<bool> {

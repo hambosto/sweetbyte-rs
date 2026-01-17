@@ -1,14 +1,8 @@
 use std::process;
-
-use anyhow::Result;
 use sweetbyte_rs::cli::Cli;
 
-fn run() -> Result<()> {
-    Cli::init().execute()
-}
-
 fn main() {
-    if let Err(e) = run() {
+    if let Err(e) = Cli::init().execute() {
         eprintln!("Error: {e:?}");
         process::exit(1);
     }

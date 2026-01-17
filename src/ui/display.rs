@@ -8,7 +8,8 @@ use console::{Term, style};
 use figlet_rs::FIGfont;
 
 use crate::config::APP_NAME;
-use crate::types::{FileInfo, ProcessorMode};
+use crate::file::File;
+use crate::types::ProcessorMode;
 
 pub fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB", "PB"];
@@ -33,7 +34,7 @@ pub fn format_bytes(bytes: u64) -> String {
     format!("{:.1} {}", size, UNITS[unit_idx])
 }
 
-pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
+pub fn show_file_info(files: &[File]) -> Result<()> {
     if files.is_empty() {
         println!("{}", style("No files found").yellow().bold());
         return Ok(());
@@ -51,10 +52,12 @@ pub fn show_file_info(files: &[FileInfo]) -> Result<()> {
         .set_header(vec![Cell::new("No").fg(Color::White), Cell::new("Name").fg(Color::White), Cell::new("Size").fg(Color::White), Cell::new("Status").fg(Color::White)]);
 
     for (i, file) in files.iter().enumerate() {
-        let filename = file.path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+        let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
         let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_string() };
-        let (status_text, status_color) = if file.is_encrypted { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
-        table.add_row(vec![Cell::new(i + 1), Cell::new(&display_name).fg(Color::Green), Cell::new(format_bytes(file.size)), Cell::new(status_text).fg(status_color)]);
+        let (status_text, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
+        let size = file.size_if_loaded().unwrap_or(0);
+
+        table.add_row(vec![Cell::new(i + 1), Cell::new(&display_name).fg(Color::Green), Cell::new(format_bytes(size)), Cell::new(status_text).fg(status_color)]);
     }
 
     println!("{table}");

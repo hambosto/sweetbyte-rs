@@ -72,4 +72,4 @@ pub const PASSWORD_MIN_LENGTH: usize = 8;
 
 /// Excluded patterns for file discovery.
 /// TODO: Add more patterns.
-pub const EXCLUDED_PATTERNS: &[&str] = &["target/**", "vendor/**", "node_modules/**", ".git/**", ".github/**", ".config/**", ".local/**", ".cache/**", ".ssh/**", ".gnupg/**", "*.rs", "*.go"];
+pub const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go"];

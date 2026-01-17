@@ -1,12 +1,9 @@
-use std::fs::remove_file;
-use std::path::{Path, PathBuf};
+// cli.rs - Refactored CLI using new File struct
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
-use crate::file::discovery::find_eligible_files;
-use crate::file::operations::{get_file_info_list, get_output_path};
-use crate::file::validation::validate_path;
+use crate::file::File;
 use crate::processor::{Decryptor, Encryptor};
 use crate::types::ProcessorMode;
 use crate::ui::display::{clear_screen, print_banner, show_file_info, show_source_deleted, show_success};
@@ -39,11 +36,11 @@ pub enum Commands {
     Encrypt {
         /// Input file path.
         #[arg(short, long)]
-        input: PathBuf,
+        input: String,
 
         /// Output file path (optional).
         #[arg(short, long)]
-        output: Option<PathBuf>,
+        output: Option<String>,
 
         /// Password for encryption (optional, will prompt if not provided).
         #[arg(short, long)]
@@ -54,11 +51,11 @@ pub enum Commands {
     Decrypt {
         /// Input file path.
         #[arg(short, long)]
-        input: PathBuf,
+        input: String,
 
         /// Output file path (optional).
         #[arg(short, long)]
-        output: Option<PathBuf>,
+        output: Option<String>,
 
         /// Password for decryption (optional, will prompt if not provided).
         #[arg(short, long)]
@@ -72,15 +69,20 @@ pub enum Commands {
 impl Commands {
     pub fn run(self) -> Result<()> {
         match self {
-            Self::Encrypt { input, output, password } => process_file(&input, output, password, ProcessorMode::Encrypt),
-            Self::Decrypt { input, output, password } => process_file(&input, output, password, ProcessorMode::Decrypt),
+            Self::Encrypt { input, output, password } => process_file(input, output, password, ProcessorMode::Encrypt),
+            Self::Decrypt { input, output, password } => process_file(input, output, password, ProcessorMode::Decrypt),
             Self::Interactive => Interactive::run(),
         }
     }
 }
 
-fn process_file(input: &Path, output: Option<PathBuf>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
-    let output = output.unwrap_or_else(|| get_output_path(input, mode));
+fn process_file(input: String, output: Option<String>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
+    let mut input_file = File::new(input);
+
+    let output_file = match output {
+        Some(path) => File::new(path),
+        None => File::new(input_file.output_path(mode)),
+    };
 
     let password = password.map_or_else(
         || match mode {
@@ -92,16 +94,16 @@ fn process_file(input: &Path, output: Option<PathBuf>, password: Option<String>,
 
     let action = match mode {
         ProcessorMode::Encrypt => {
-            Encryptor::new(&password).encrypt(input, &output)?;
+            Encryptor::new(&password).encrypt(&mut input_file, &output_file)?;
             "Encrypted"
         }
         ProcessorMode::Decrypt => {
-            Decryptor::new(&password).decrypt(input, &output)?;
+            Decryptor::new(&password).decrypt(&input_file, &output_file)?;
             "Decrypted"
         }
     };
 
-    println!("✓ {action}: {} -> {}", input.display(), output.display());
+    println!("✓ {action}: {} -> {}", input_file.path().display(), output_file.path().display());
     Ok(())
 }
 
@@ -116,40 +118,40 @@ mod Interactive {
         let prompt = Prompt::new();
 
         let mode = prompt.select_processing_mode()?;
-        let selected_file = select_file(&prompt, mode)?;
-        let output_path = get_output_path(&selected_file, mode);
+        let mut selected_file = select_file(&prompt, mode)?;
+        let output_file = File::new(selected_file.output_path(mode));
 
-        validate_source(&selected_file)?;
-        validate_output(&prompt, &output_path)?;
+        validate_source(&mut selected_file)?;
+        validate_output(&prompt, &output_file)?;
 
         let password = get_password(&prompt, mode)?;
-        execute_operation(mode, &selected_file, &output_path, &password)?;
+        execute_operation(mode, &mut selected_file, &output_file, &password)?;
 
-        show_success(mode, &output_path);
+        show_success(mode, output_file.path());
         cleanup_source(&prompt, &selected_file, mode)?;
 
         Ok(())
     }
 
-    fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<PathBuf> {
-        let eligible_files = find_eligible_files(mode)?;
+    fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
+        let eligible_files = File::discover(mode)?;
 
         if eligible_files.is_empty() {
             bail!("no eligible files found for {mode} operation");
         }
 
-        let file_infos = get_file_info_list(&eligible_files)?;
-        show_file_info(&file_infos)?;
+        show_file_info(&eligible_files)?;
 
-        prompt.select_file(&eligible_files)
+        let selected_path = prompt.select_file(&eligible_files)?;
+        Ok(File::new(selected_path))
     }
 
-    fn validate_source(path: &Path) -> Result<()> {
-        validate_path(path, true).with_context(|| format!("source validation failed: {}", path.display()))
+    fn validate_source(file: &mut File) -> Result<()> {
+        file.validate(true).with_context(|| format!("source validation failed: {}", file.path().display()))
     }
 
-    fn validate_output(prompt: &Prompt, path: &Path) -> Result<()> {
-        if validate_path(path, false).is_err() && !prompt.confirm_file_overwrite(path)? {
+    fn validate_output(prompt: &Prompt, file: &File) -> Result<()> {
+        if file.exists() && !prompt.confirm_file_overwrite(file.path())? {
             bail!("operation canceled by user");
         }
         Ok(())
@@ -162,24 +164,29 @@ mod Interactive {
         }
     }
 
-    fn execute_operation(mode: ProcessorMode, input: &Path, output: &Path, password: &str) -> Result<()> {
+    fn execute_operation(mode: ProcessorMode, input: &mut File, output: &File, password: &str) -> Result<()> {
         match mode {
-            ProcessorMode::Encrypt => Encryptor::new(password).encrypt(input, output).with_context(|| format!("failed to encrypt {}", input.display())),
-            ProcessorMode::Decrypt => Decryptor::new(password).decrypt(input, output).with_context(|| format!("failed to decrypt {}", input.display())),
+            ProcessorMode::Encrypt => Encryptor::new(password).encrypt(input, output).with_context(|| format!("failed to encrypt {}", input.path().display())),
+            ProcessorMode::Decrypt => Decryptor::new(password).decrypt(input, output).with_context(|| format!("failed to decrypt {}", input.path().display())),
         }
     }
 
-    fn cleanup_source(prompt: &Prompt, path: &Path, mode: ProcessorMode) -> Result<()> {
+    fn cleanup_source(prompt: &Prompt, file: &File, mode: ProcessorMode) -> Result<()> {
         let file_type = match mode {
             ProcessorMode::Encrypt => "original",
             ProcessorMode::Decrypt => "encrypted",
         };
 
-        if prompt.confirm_file_deletion(path, file_type)? {
-            remove_file(path).with_context(|| format!("failed to delete source file: {}", path.display()))?;
-            show_source_deleted(path);
+        if prompt.confirm_file_deletion(file.path(), file_type)? {
+            file.delete().with_context(|| format!("failed to delete source file: {}", file.path().display()))?;
+            show_source_deleted(file.path());
         }
 
         Ok(())
     }
 }
+
+// Note: You'll need to update the Prompt struct methods:
+// - select_file(&[PathBuf]) -> select_file_path(&[File]) -> Result<PathBuf>
+// And the UI display functions:
+// - show_file_info(&[FileInfo]) -> show_file_info(&[File])
