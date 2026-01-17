@@ -17,9 +17,7 @@ pub struct Encryptor {
 
 impl Encryptor {
     pub fn new(password: impl Into<String>) -> Self {
-        Self {
-            password: password.into(),
-        }
+        Self { password: password.into() }
     }
 
     pub fn encrypt(&self, src_path: &Path, dest_path: &Path) -> Result<()> {
@@ -45,26 +43,14 @@ impl Encryptor {
         Ok(src_info.size)
     }
 
-    fn create_header(
-        &self,
-        original_size: u64,
-        salt: &[u8; ARGON_SALT_LEN],
-        key: &[u8; ARGON_KEY_LEN],
-    ) -> Result<Vec<u8>> {
+    fn create_header(&self, original_size: u64, salt: &[u8; ARGON_SALT_LEN], key: &[u8; ARGON_KEY_LEN]) -> Result<Vec<u8>> {
         let mut header = Header::new();
         header.set_original_size(original_size);
         header.set_protected(true);
         header.marshal(salt, key)
     }
 
-    fn write_encrypted_file(
-        &self,
-        dest_path: &Path,
-        header_bytes: &[u8],
-        src_file: BufReader<File>,
-        original_size: u64,
-        key: &[u8; ARGON_KEY_LEN],
-    ) -> Result<()> {
+    fn write_encrypted_file(&self, dest_path: &Path, header_bytes: &[u8], src_file: BufReader<File>, original_size: u64, key: &[u8; ARGON_KEY_LEN]) -> Result<()> {
         let mut dest_file = create_file(dest_path)?;
         dest_file.write_all(header_bytes)?;
 
@@ -82,9 +68,7 @@ pub struct Decryptor {
 
 impl Decryptor {
     pub fn new(password: impl Into<String>) -> Self {
-        Self {
-            password: password.into(),
-        }
+        Self { password: password.into() }
     }
 
     pub fn decrypt(&self, src_path: &Path, dest_path: &Path) -> Result<()> {
@@ -111,9 +95,7 @@ impl Decryptor {
         let salt = header.salt()?;
         let key = derive_key(self.password.as_bytes(), salt)?;
 
-        header
-            .verify(&key)
-            .context("incorrect password or corrupt file")?;
+        header.verify(&key).context("incorrect password or corrupt file")?;
 
         if !header.is_protected() {
             bail!("file is not protected");
@@ -122,13 +104,7 @@ impl Decryptor {
         Ok(header)
     }
 
-    fn write_decrypted_file(
-        &self,
-        dest_path: &Path,
-        src_file: BufReader<File>,
-        original_size: u64,
-        key: &[u8; ARGON_KEY_LEN],
-    ) -> Result<()> {
+    fn write_decrypted_file(&self, dest_path: &Path, src_file: BufReader<File>, original_size: u64, key: &[u8; ARGON_KEY_LEN]) -> Result<()> {
         let dest_file = create_file(dest_path)?;
 
         let src_file = src_file.into_inner();
@@ -176,9 +152,7 @@ mod tests {
 
         fs::write(&src_path, b"Test content").unwrap();
 
-        Encryptor::new("correct_password")
-            .encrypt(&src_path, &enc_path)
-            .unwrap();
+        Encryptor::new("correct_password").encrypt(&src_path, &enc_path).unwrap();
 
         let result = Decryptor::new("wrong_password").decrypt(&enc_path, &dec_path);
         assert!(result.is_err());
