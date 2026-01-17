@@ -5,18 +5,17 @@ use clap_complete::Shell;
 use crate::file::File;
 use crate::processor::{Decryptor, Encryptor};
 use crate::types::ProcessorMode;
-use crate::ui::display::{clear_screen, print_banner, show_file_info, show_source_deleted, show_success};
+use crate::ui::display::*;
 use crate::ui::prompt::Prompt;
 
 #[derive(Parser)]
-#[command(name = "sweetbyte-rs", version = "1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction. Run without arguments for interactive mode.")]
+#[command(name = "sweetbyte-rs", version = "1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    command: Option<Commands>,
 }
 
 impl Cli {
-    #[inline]
     pub fn init() -> Self {
         Self::parse()
     }
@@ -24,49 +23,60 @@ impl Cli {
     pub fn execute(self) -> Result<()> {
         match self.command {
             Some(cmd) => cmd.run(),
-            None => Interactive::run(),
+            None => run_interactive(),
         }
     }
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Encrypt a file with multi-layered encryption.
+    /// Encrypt a file using authenticated encryption.
+    ///
+    /// - Uses AES-256-GCM and XChaCha20-Poly1305.
+    /// - Prompts for password if not provided.
+    /// - Output defaults to an auto-derived path.
     Encrypt {
-        /// Input file path.
+        /// Path to the input file to encrypt.
         #[arg(short, long)]
         input: String,
 
-        /// Output file path (optional).
+        /// Optional output file path.
         #[arg(short, long)]
         output: Option<String>,
 
-        /// Password for encryption (optional, will prompt if not provided).
+        /// Optional encryption password (will prompt if omitted).
         #[arg(short, long)]
         password: Option<String>,
     },
 
-    /// Decrypt a file with error correction.
+    /// Decrypt a previously encrypted file.
+    ///
+    /// - Performs integrity verification.
+    /// - Applies Reed-Solomon error correction.
+    /// - Prompts for password if not provided.
     Decrypt {
-        /// Input file path.
+        /// Path to the encrypted input file.
         #[arg(short, long)]
         input: String,
 
-        /// Output file path (optional).
+        /// Optional output file path.
         #[arg(short, long)]
         output: Option<String>,
 
-        /// Password for decryption (optional, will prompt if not provided).
+        /// Optional decryption password (will prompt if omitted).
         #[arg(short, long)]
         password: Option<String>,
     },
 
-    /// Start interactive mode.
+    /// Launch interactive TUI mode.
     Interactive,
 
-    /// Generate shell completions.
+    /// Generate shell completion scripts.
+    ///
+    /// Example:
+    ///   sweetbyte-rs completions bash > /etc/bash_completion.d/sweetbyte-rs
     Completions {
-        /// Shell type to generate completions for.
+        /// Target shell.
         #[arg(value_enum)]
         shell: Shell,
     },
@@ -75,124 +85,86 @@ pub enum Commands {
 impl Commands {
     pub fn run(self) -> Result<()> {
         match self {
-            Self::Encrypt { input, output, password } => process_file(input, output, password, ProcessorMode::Encrypt),
-            Self::Decrypt { input, output, password } => process_file(input, output, password, ProcessorMode::Decrypt),
-            Self::Interactive => Interactive::run(),
-            Self::Completions { shell } => {
-                let mut cmd = Cli::command();
-                clap_complete::generate(shell, &mut cmd, "sweetbyte-rs", &mut std::io::stdout());
-                Ok(())
-            }
+            Self::Encrypt { input, output, password } => run_cli(input, output, password, ProcessorMode::Encrypt),
+            Self::Decrypt { input, output, password } => run_cli(input, output, password, ProcessorMode::Decrypt),
+            Self::Interactive => run_interactive(),
+            Self::Completions { shell } => generate_completions(shell),
         }
     }
 }
 
-fn process_file(input: String, output: Option<String>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
-    let mut input_file = File::new(input);
+fn run_cli(input: String, output: Option<String>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
+    let mut input = File::new(input);
+    let output = File::new(output.unwrap_or_else(|| input.output_path(mode).to_string_lossy().into_owned()));
+    let password = password.unwrap_or_else(|| prompt_password(mode).unwrap());
 
-    let output_file = match output {
-        Some(path) => File::new(path),
-        None => File::new(input_file.output_path(mode)),
-    };
-
-    let password = password.map_or_else(
-        || match mode {
-            ProcessorMode::Encrypt => Prompt::new().prompt_encryption_password(),
-            ProcessorMode::Decrypt => Prompt::new().prompt_decryption_password(),
-        },
-        Ok,
-    )?;
-
-    let action = match mode {
-        ProcessorMode::Encrypt => {
-            Encryptor::new(&password).encrypt(&mut input_file, &output_file)?;
-            "Encrypted"
-        }
-        ProcessorMode::Decrypt => {
-            Decryptor::new(&password).decrypt(&input_file, &output_file)?;
-            "Decrypted"
-        }
-    };
-
-    println!("✓ {action}: {} -> {}", input_file.path().display(), output_file.path().display());
+    process(mode, &mut input, &output, &password)?;
+    println!("✓ {}: {} -> {}", mode, input.path().display(), output.path().display());
     Ok(())
 }
 
-#[allow(non_snake_case)]
-mod Interactive {
-    use super::*;
+fn run_interactive() -> Result<()> {
+    clear_screen()?;
+    print_banner()?;
 
-    pub fn run() -> Result<()> {
-        clear_screen()?;
-        print_banner()?;
+    let prompt = Prompt::new();
+    let mode = prompt.select_processing_mode()?;
 
-        let prompt = Prompt::new();
+    let mut input = select_file(&prompt, mode)?;
+    let output = File::new(input.output_path(mode));
 
-        let mode = prompt.select_processing_mode()?;
-        let mut selected_file = select_file(&prompt, mode)?;
-        let output_file = File::new(selected_file.output_path(mode));
-
-        validate_source(&mut selected_file)?;
-        validate_output(&prompt, &output_file)?;
-
-        let password = get_password(&prompt, mode)?;
-        execute_operation(mode, &mut selected_file, &output_file, &password)?;
-
-        show_success(mode, output_file.path());
-        cleanup_source(&prompt, &selected_file, mode)?;
-
-        Ok(())
+    input.validate(true)?;
+    if output.exists() && !prompt.confirm_file_overwrite(output.path())? {
+        bail!("operation canceled");
     }
 
-    fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
-        let mut eligible_files = File::discover(mode)?;
+    let password = prompt_password(mode)?;
+    process(mode, &mut input, &output, &password)?;
 
-        if eligible_files.is_empty() {
-            bail!("no eligible files found for {mode} operation");
-        }
+    show_success(mode, output.path());
+    delete_source(&prompt, &input, mode)?;
+    Ok(())
+}
 
-        show_file_info(&mut eligible_files)?;
+fn process(mode: ProcessorMode, input: &mut File, output: &File, password: &str) -> Result<()> {
+    match mode {
+        ProcessorMode::Encrypt => Encryptor::new(password).encrypt(input, output),
+        ProcessorMode::Decrypt => Decryptor::new(password).decrypt(input, output),
+    }
+    .with_context(|| format!("{} failed: {}", mode, input.path().display()))
+}
 
-        let selected_path = prompt.select_file(&eligible_files)?;
-        Ok(File::new(selected_path))
+fn prompt_password(mode: ProcessorMode) -> Result<String> {
+    let prompt = Prompt::new();
+    match mode {
+        ProcessorMode::Encrypt => prompt.prompt_encryption_password(),
+        ProcessorMode::Decrypt => prompt.prompt_decryption_password(),
+    }
+}
+
+fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
+    let mut files = File::discover(mode)?;
+    if files.is_empty() {
+        bail!("no eligible files found");
     }
 
-    fn validate_source(file: &mut File) -> Result<()> {
-        file.validate(true).with_context(|| format!("source validation failed: {}", file.path().display()))
+    show_file_info(&mut files)?;
+    let path = prompt.select_file(&files)?;
+    Ok(File::new(path.to_string_lossy().into_owned()))
+}
+
+fn delete_source(prompt: &Prompt, file: &File, mode: ProcessorMode) -> Result<()> {
+    let label = if mode == ProcessorMode::Encrypt { "original" } else { "encrypted" };
+
+    if prompt.confirm_file_deletion(file.path(), label)? {
+        file.delete()?;
+        show_source_deleted(file.path());
     }
+    Ok(())
+}
 
-    fn validate_output(prompt: &Prompt, file: &File) -> Result<()> {
-        if file.exists() && !prompt.confirm_file_overwrite(file.path())? {
-            bail!("operation canceled by user");
-        }
-        Ok(())
-    }
-
-    fn get_password(prompt: &Prompt, mode: ProcessorMode) -> Result<String> {
-        match mode {
-            ProcessorMode::Encrypt => prompt.prompt_encryption_password(),
-            ProcessorMode::Decrypt => prompt.prompt_decryption_password(),
-        }
-    }
-
-    fn execute_operation(mode: ProcessorMode, input: &mut File, output: &File, password: &str) -> Result<()> {
-        match mode {
-            ProcessorMode::Encrypt => Encryptor::new(password).encrypt(input, output).with_context(|| format!("failed to encrypt {}", input.path().display())),
-            ProcessorMode::Decrypt => Decryptor::new(password).decrypt(input, output).with_context(|| format!("failed to decrypt {}", input.path().display())),
-        }
-    }
-
-    fn cleanup_source(prompt: &Prompt, file: &File, mode: ProcessorMode) -> Result<()> {
-        let file_type = match mode {
-            ProcessorMode::Encrypt => "original",
-            ProcessorMode::Decrypt => "encrypted",
-        };
-
-        if prompt.confirm_file_deletion(file.path(), file_type)? {
-            file.delete().with_context(|| format!("failed to delete source file: {}", file.path().display()))?;
-            show_source_deleted(file.path());
-        }
-
-        Ok(())
-    }
+fn generate_completions(shell: Shell) -> Result<()> {
+    let mut cmd = Cli::command();
+    clap_complete::generate(shell, &mut cmd, "sweetbyte-rs", &mut std::io::stdout());
+    Ok(())
 }

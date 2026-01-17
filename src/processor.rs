@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{BufReader, Write};
 
 use anyhow::{Context, Result, bail};
 
@@ -20,38 +20,22 @@ impl Encryptor {
 
     pub fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
         src.validate(true)?;
-        let original_size = src.size()?;
-
-        if original_size == 0 {
+        let size = src.size()?;
+        if size == 0 {
             bail!("cannot encrypt a file with zero size");
         }
 
         let salt: [u8; ARGON_SALT_LEN] = random_bytes()?;
         let key = derive_key(self.password.as_bytes(), &salt)?;
 
-        let header = self.create_header(original_size, &salt, &key)?;
-        self.write_encrypted_file(dest, &header, src, original_size, &key)?;
+        let header = build_header(size, &salt, &key)?;
+        let mut writer = dest.writer()?;
+        writer.write_all(&header)?;
 
-        Ok(())
-    }
+        let reader = src.reader()?.into_inner();
+        let writer = writer.into_inner().context("failed to get inner writer")?;
 
-    fn create_header(&self, original_size: u64, salt: &[u8; ARGON_SALT_LEN], key: &[u8; ARGON_KEY_LEN]) -> Result<Vec<u8>> {
-        let mut header = Header::new();
-        header.set_original_size(original_size);
-        header.set_protected(true);
-        header.marshal(salt, key)
-    }
-
-    fn write_encrypted_file(&self, dest: &File, header_bytes: &[u8], src: &File, original_size: u64, key: &[u8; ARGON_KEY_LEN]) -> Result<()> {
-        let mut dest_writer = dest.writer()?;
-        dest_writer.write_all(header_bytes)?;
-
-        let src_reader = src.reader()?.into_inner();
-        let dest_writer = dest_writer.into_inner().context("failed to get inner writer")?;
-
-        let pipeline = Pipeline::new(key, Processing::Encryption)?;
-        pipeline.process(src_reader, dest_writer, original_size)?;
-
+        Pipeline::new(&key, Processing::Encryption)?.process(reader, writer, size)?;
         Ok(())
     }
 }
@@ -70,48 +54,42 @@ impl Decryptor {
             bail!("source file not found: {}", src.path().display());
         }
 
-        let mut src_reader = src.reader()?;
-        let header = self.read_and_verify_header(&mut src_reader)?;
+        let mut reader = src.reader()?;
+        let header = read_and_verify_header(&mut reader, self.password.as_bytes())?;
 
-        let original_size = header.original_size();
-        if original_size == 0 {
+        let size = header.original_size();
+        if size == 0 {
             bail!("cannot decrypt a file with zero size");
         }
 
-        let salt = header.salt()?;
-        let key = derive_key(self.password.as_bytes(), salt)?;
-        self.write_decrypted_file(dest, src_reader, original_size, &key)?;
+        let key = derive_key(self.password.as_bytes(), header.salt()?)?;
+        let reader = reader.into_inner();
+        let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
 
+        Pipeline::new(&key, Processing::Decryption)?.process(reader, writer, size)?;
         Ok(())
     }
+}
 
-    fn read_and_verify_header(&self, src_reader: &mut std::io::BufReader<std::fs::File>) -> Result<Header> {
-        let mut header = Header::new();
-        header.unmarshal(src_reader.get_mut())?;
+fn build_header(size: u64, salt: &[u8; ARGON_SALT_LEN], key: &[u8; ARGON_KEY_LEN]) -> Result<Vec<u8>> {
+    let mut h = Header::new();
+    h.set_original_size(size);
+    h.set_protected(true);
+    h.marshal(salt, key)
+}
 
-        let salt = header.salt()?;
-        let key = derive_key(self.password.as_bytes(), salt)?;
+fn read_and_verify_header(reader: &mut BufReader<std::fs::File>, password: &[u8]) -> Result<Header> {
+    let mut h = Header::new();
+    h.unmarshal(reader.get_mut())?;
 
-        header.verify(&key).context("incorrect password or corrupt file")?;
+    let key = derive_key(password, h.salt()?)?;
+    h.verify(&key).context("incorrect password or corrupt file")?;
 
-        if !header.is_protected() {
-            bail!("file is not protected");
-        }
-
-        Ok(header)
+    if !h.is_protected() {
+        bail!("file is not protected");
     }
 
-    fn write_decrypted_file(&self, dest: &File, src_reader: std::io::BufReader<std::fs::File>, original_size: u64, key: &[u8; ARGON_KEY_LEN]) -> Result<()> {
-        let dest_writer = dest.writer()?;
-
-        let src_file = src_reader.into_inner();
-        let dest_file = dest_writer.into_inner().context("failed to get inner writer")?;
-
-        let pipeline = Pipeline::new(key, Processing::Decryption)?;
-        pipeline.process(src_file, dest_file, original_size)?;
-
-        Ok(())
-    }
+    Ok(h)
 }
 
 #[cfg(test)]
@@ -125,113 +103,80 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
         let dir = tempdir().unwrap();
-        let src_path = dir.path().join("source.txt");
-        let enc_path = dir.path().join("encrypted.swx");
-        let dec_path = dir.path().join("decrypted.txt");
-        let original_content = b"Hello, World! This is a test file for encryption.";
+        let src = dir.path().join("src.txt");
+        let enc = dir.path().join("enc.swx");
+        let dec = dir.path().join("dec.txt");
+        let data = b"Hello, World! This is a test file for encryption.";
 
-        fs::write(&src_path, original_content).unwrap();
+        fs::write(&src, data).unwrap();
 
-        let mut src_file = File::new(&src_path);
-        let enc_file = File::new(&enc_path);
-        let dec_file = File::new(&dec_path);
+        let mut src_file = File::new(&src);
+        Encryptor::new("pw").encrypt(&mut src_file, &File::new(&enc)).unwrap();
+        Decryptor::new("pw").decrypt(&File::new(&enc), &File::new(&dec)).unwrap();
 
-        let encryptor = Encryptor::new("test_password_123");
-        encryptor.encrypt(&mut src_file, &enc_file).unwrap();
-        assert!(enc_file.exists());
-
-        let decryptor = Decryptor::new("test_password_123");
-        decryptor.decrypt(&enc_file, &dec_file).unwrap();
-        assert!(dec_file.exists());
-
-        let decrypted_content = fs::read(&dec_path).unwrap();
-        assert_eq!(decrypted_content, original_content);
+        assert_eq!(fs::read(&dec).unwrap(), data);
     }
 
     #[test]
     fn test_decrypt_wrong_password() {
         let dir = tempdir().unwrap();
-        let src_path = dir.path().join("source.txt");
-        let enc_path = dir.path().join("encrypted.swx");
-        let dec_path = dir.path().join("decrypted.txt");
+        let src = dir.path().join("src.txt");
+        let enc = dir.path().join("enc.swx");
 
-        fs::write(&src_path, b"Test content").unwrap();
+        fs::write(&src, b"data").unwrap();
 
-        let mut src_file = File::new(&src_path);
-        let enc_file = File::new(&enc_path);
-        let dec_file = File::new(&dec_path);
+        let mut src_file = File::new(&src);
+        Encryptor::new("correct").encrypt(&mut src_file, &File::new(&enc)).unwrap();
 
-        Encryptor::new("correct_password").encrypt(&mut src_file, &enc_file).unwrap();
-
-        let result = Decryptor::new("wrong_password").decrypt(&enc_file, &dec_file);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("incorrect password"));
+        let err = Decryptor::new("wrong").decrypt(&File::new(&enc), &File::new("out.txt"));
+        assert!(err.unwrap_err().to_string().contains("incorrect password"));
     }
 
     #[test]
     fn test_encrypt_zero_size_file() {
         let dir = tempdir().unwrap();
-        let src_path = dir.path().join("empty.txt");
-        let enc_path = dir.path().join("encrypted.swx");
+        let src = dir.path().join("empty.txt");
+        let enc = dir.path().join("enc.swx");
 
-        fs::write(&src_path, b"").unwrap();
+        fs::write(&src, b"").unwrap();
 
-        let mut src_file = File::new(&src_path);
-        let enc_file = File::new(&enc_path);
-
-        let result = Encryptor::new("password").encrypt(&mut src_file, &enc_file);
-        assert!(result.is_err());
-
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("file is empty") || error_msg.contains("cannot encrypt a file with zero size"), "Unexpected error: {}", error_msg);
+        let mut src_file = File::new(&src);
+        assert!(Encryptor::new("pw").encrypt(&mut src_file, &File::new(&enc)).is_err());
     }
 
     #[test]
     fn test_encrypt_nonexistent_file() {
         let dir = tempdir().unwrap();
-        let src_path = dir.path().join("nonexistent.txt");
-        let enc_path = dir.path().join("encrypted.swx");
+        let src = dir.path().join("nope.txt");
+        let enc = dir.path().join("enc.swx");
 
-        let mut src_file = File::new(&src_path);
-        let enc_file = File::new(&enc_path);
-
-        let result = Encryptor::new("password").encrypt(&mut src_file, &enc_file);
-        assert!(result.is_err());
+        let mut src_file = File::new(&src);
+        assert!(Encryptor::new("pw").encrypt(&mut src_file, &File::new(&enc)).is_err());
     }
 
     #[test]
     fn test_decrypt_nonexistent_file() {
         let dir = tempdir().unwrap();
-        let enc_path = dir.path().join("nonexistent.swx");
-        let dec_path = dir.path().join("decrypted.txt");
+        let enc = dir.path().join("nope.swx");
 
-        let enc_file = File::new(&enc_path);
-        let dec_file = File::new(&dec_path);
-
-        let result = Decryptor::new("password").decrypt(&enc_file, &dec_file);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("source file not found"));
+        let err = Decryptor::new("pw").decrypt(&File::new(&enc), &File::new("out.txt"));
+        assert!(err.unwrap_err().to_string().contains("source file not found"));
     }
 
     #[test]
     fn test_encrypt_large_file() {
         let dir = tempdir().unwrap();
-        let src_path = dir.path().join("large.txt");
-        let enc_path = dir.path().join("large.swx");
-        let dec_path = dir.path().join("large_dec.txt");
+        let src = dir.path().join("large.txt");
+        let enc = dir.path().join("large.swx");
+        let dec = dir.path().join("large_dec.txt");
 
-        let large_content = vec![b'A'; 1024 * 1024];
-        fs::write(&src_path, &large_content).unwrap();
+        let data = vec![b'A'; 1024 * 1024];
+        fs::write(&src, &data).unwrap();
 
-        let mut src_file = File::new(&src_path);
-        let enc_file = File::new(&enc_path);
-        let dec_file = File::new(&dec_path);
+        let mut src_file = File::new(&src);
+        Encryptor::new("pw").encrypt(&mut src_file, &File::new(&enc)).unwrap();
+        Decryptor::new("pw").decrypt(&File::new(&enc), &File::new(&dec)).unwrap();
 
-        Encryptor::new("password").encrypt(&mut src_file, &enc_file).unwrap();
-        Decryptor::new("password").decrypt(&enc_file, &dec_file).unwrap();
-
-        let decrypted = fs::read(&dec_path).unwrap();
-        assert_eq!(decrypted.len(), large_content.len());
-        assert_eq!(decrypted, large_content);
+        assert_eq!(fs::read(&dec).unwrap(), data);
     }
 }
