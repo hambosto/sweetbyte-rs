@@ -2,12 +2,12 @@ use hashbrown::HashMap;
 
 use crate::types::TaskResult;
 
-pub struct SequentialBuffer {
+pub struct Buffer {
     buffer: HashMap<u64, TaskResult>,
     next_idx: u64,
 }
 
-impl SequentialBuffer {
+impl Buffer {
     #[inline]
     pub fn new(start: u64) -> Self {
         Self { buffer: HashMap::new(), next_idx: start }
@@ -69,7 +69,7 @@ impl SequentialBuffer {
     }
 }
 
-impl Default for SequentialBuffer {
+impl Default for Buffer {
     fn default() -> Self {
         Self::new(0)
     }
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn test_in_order() {
-        let mut buffer = SequentialBuffer::new(0);
+        let mut buffer = Buffer::new(0);
 
         let ready = buffer.add(make_result(0));
         assert_eq!(ready.len(), 1);
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_out_of_order() {
-        let mut buffer = SequentialBuffer::new(0);
+        let mut buffer = Buffer::new(0);
 
         let ready = buffer.add(make_result(1));
         assert!(ready.is_empty());
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_flush() {
-        let mut buffer = SequentialBuffer::new(0);
+        let mut buffer = Buffer::new(0);
 
         let _ = buffer.add(make_result(2));
         let _ = buffer.add(make_result(1));
@@ -128,14 +128,14 @@ mod tests {
 
     #[test]
     fn test_flush_empty() {
-        let mut buffer = SequentialBuffer::new(0);
+        let mut buffer = Buffer::new(0);
         let flushed = buffer.flush();
         assert!(flushed.is_empty());
     }
 
     #[test]
     fn test_next_index() {
-        let mut buffer = SequentialBuffer::new(5);
+        let mut buffer = Buffer::new(5);
         assert_eq!(buffer.next_index(), 5);
 
         let _ = buffer.add(make_result(5));

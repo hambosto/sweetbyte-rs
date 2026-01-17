@@ -3,19 +3,19 @@ use std::io::{BufWriter, Write};
 use anyhow::{Context, Result, bail};
 use crossbeam_channel::Receiver;
 
-use crate::stream::buffer::SequentialBuffer;
+use crate::stream::buffer::Buffer;
 use crate::types::{Processing, TaskResult};
 use crate::ui::progress::ProgressBar;
 
 pub struct ChunkWriter {
     mode: Processing,
-    buffer: SequentialBuffer,
+    buffer: Buffer,
 }
 
 impl ChunkWriter {
     #[inline]
     pub fn new(mode: Processing) -> Self {
-        Self { mode, buffer: SequentialBuffer::new(0) }
+        Self { mode, buffer: Buffer::new(0) }
     }
 
     pub fn write_all<W: Write>(&mut self, output: W, receiver: Receiver<TaskResult>, progress: Option<&ProgressBar>) -> Result<()> {
