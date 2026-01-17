@@ -1,5 +1,3 @@
-// cli.rs - Refactored CLI using new File struct
-
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
@@ -185,8 +183,3 @@ mod Interactive {
         Ok(())
     }
 }
-
-// Note: You'll need to update the Prompt struct methods:
-// - select_file(&[PathBuf]) -> select_file_path(&[File]) -> Result<PathBuf>
-// And the UI display functions:
-// - show_file_info(&[FileInfo]) -> show_file_info(&[File])

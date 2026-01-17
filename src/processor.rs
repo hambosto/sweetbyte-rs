@@ -183,7 +183,6 @@ mod tests {
         assert!(result.is_err());
 
         let error_msg = result.unwrap_err().to_string();
-        // The error comes from File::validate() which checks for empty files
         assert!(error_msg.contains("file is empty") || error_msg.contains("cannot encrypt a file with zero size"), "Unexpected error: {}", error_msg);
     }
 

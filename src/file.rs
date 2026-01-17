@@ -265,13 +265,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let file = File::new(dir.path().join("test.txt"));
 
-        // Write data
         {
             let mut writer = file.writer().unwrap();
             writer.write_all(b"Hello, World!").unwrap();
         }
 
-        // Read data
         let mut reader = file.reader().unwrap();
         let mut content = Vec::new();
         reader.read_to_end(&mut content).unwrap();
@@ -285,11 +283,9 @@ mod tests {
 
         assert!(!file.exists());
 
-        // Create file
         file.writer().unwrap();
         assert!(file.exists());
 
-        // Delete file
         file.delete().unwrap();
         assert!(!file.exists());
     }
@@ -299,13 +295,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut file = File::new(dir.path().join("test.txt"));
 
-        // Should fail - doesn't exist
         assert!(file.validate(true).is_err());
 
-        // Create file
         file.writer().unwrap().write_all(b"content").unwrap();
 
-        // Should pass - exists and not empty
         assert!(file.validate(true).is_ok());
     }
 
@@ -314,13 +307,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut file = File::new(dir.path().join("test.txt"));
 
-        // Should pass - doesn't exist
         assert!(file.validate(false).is_ok());
 
-        // Create file
         file.writer().unwrap();
 
-        // Should fail - exists
         assert!(file.validate(false).is_err());
     }
 
@@ -341,13 +331,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.txt");
 
-        // File doesn't exist
         assert!(File::with_metadata(&path).unwrap().is_none());
 
-        // Create file
         fs::write(&path, b"Hello").unwrap();
 
-        // File exists
         let file = File::with_metadata(&path).unwrap().unwrap();
         assert_eq!(file.path(), path);
         assert_eq!(file.size_if_loaded(), Some(5));
