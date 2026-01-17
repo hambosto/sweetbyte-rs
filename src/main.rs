@@ -1,4 +1,5 @@
 use std::process;
+
 use sweetbyte_rs::cli::Cli;
 
 fn main() {

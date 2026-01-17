@@ -117,6 +117,7 @@ impl Decryptor {
 #[cfg(test)]
 mod tests {
     use std::fs;
+
     use tempfile::tempdir;
 
     use super::*;

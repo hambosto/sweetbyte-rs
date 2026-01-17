@@ -196,9 +196,11 @@ impl<T> Pipe for T {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::{Read, Write};
+
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn test_new() {
