@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 
 use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
 use crate::header::Header;
-use crate::header::mac::compute_mac;
+use crate::header::mac::Mac;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType};
 
 pub struct Serializer<'a> {
@@ -21,7 +21,7 @@ impl<'a> Serializer<'a> {
 
         let magic = MAGIC_BYTES.to_be_bytes();
         let header_data = self.serialize_header_data();
-        let mac = compute_mac(key, &[&magic, salt, &header_data])?;
+        let mac = Mac::compute_bytes(key, &[&magic, salt, &header_data])?;
 
         let sections = self.encode_sections(&magic, salt, &header_data, &mac)?;
         let length_sections = self.encode_length_prefixes(&sections)?;

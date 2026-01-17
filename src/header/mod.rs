@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE};
 use crate::header::deserializer::Deserializer;
-use crate::header::mac::verify_mac;
+use crate::header::mac::Mac;
 use crate::header::section::{SectionType, Sections};
 use crate::header::serializer::Serializer;
 
@@ -120,7 +120,7 @@ impl Header {
         let salt = self.get_section(SectionType::Salt, ARGON_SALT_LEN)?;
         let header_data = self.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?;
 
-        verify_mac(key, expected_mac, &[magic, salt, header_data])
+        Mac::verify_bytes(key, expected_mac, &[magic, salt, header_data])
     }
 
     pub(crate) fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {

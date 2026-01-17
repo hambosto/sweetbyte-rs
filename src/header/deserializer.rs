@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::config::{HEADER_DATA_SIZE, MAGIC_SIZE};
 use crate::header::Header;
-use crate::header::mac::verify_magic;
+use crate::header::mac::Mac;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType, Sections};
 use crate::header::serializer::magic_bytes;
 
@@ -26,7 +26,7 @@ impl<'a> Deserializer<'a> {
         self.header.set_sections(sections);
 
         let magic = self.header.get_section(SectionType::Magic, MAGIC_SIZE)?;
-        if !verify_magic(magic, &magic_bytes()) {
+        if !Mac::verify_magic(magic, &magic_bytes()) {
             bail!("invalid magic bytes");
         }
 

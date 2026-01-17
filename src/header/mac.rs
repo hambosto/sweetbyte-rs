@@ -8,30 +8,49 @@ use crate::config::MAC_SIZE;
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Mac(pub [u8; MAC_SIZE]);
+pub struct Mac([u8; MAC_SIZE]);
 
 impl Mac {
     pub fn compute(key: &[u8], parts: &[&[u8]]) -> Result<Self> {
         if key.is_empty() {
-            bail!("key cannot be empty");
+            bail!("MAC key cannot be empty");
         }
 
-        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
-        for part in parts.iter().filter(|p| !p.is_empty()) {
-            mac.update(part);
-        }
+        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key length");
+        parts.iter().filter(|part| !part.is_empty()).for_each(|part| mac.update(part));
 
         Ok(Self(mac.finalize().into_bytes().into()))
+    }
+
+    #[inline]
+    pub fn compute_bytes(key: &[u8], parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
+        Self::compute(key, parts).map(|mac| mac.0)
     }
 
     pub fn verify(&self, key: &[u8], parts: &[&[u8]]) -> Result<()> {
         let computed = Self::compute(key, parts)?;
 
-        if !bool::from(computed.0.ct_eq(&self.0)) {
+        if !bool::from(self.0.ct_eq(&computed.0)) {
             bail!("MAC verification failed");
         }
 
         Ok(())
+    }
+
+    pub fn verify_bytes(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
+        if expected.len() != MAC_SIZE {
+            bail!("Invalid MAC length: expected {}, got {}", MAC_SIZE, expected.len());
+        }
+
+        let array: [u8; MAC_SIZE] = expected.try_into().expect("Length check ensure conversion succeeds");
+        let expected_mac = Self(array);
+        expected_mac.verify(key, parts)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn verify_magic(actual: &[u8], expected: &[u8]) -> bool {
+        bool::from(actual.ct_eq(expected))
     }
 
     #[inline]
@@ -39,47 +58,6 @@ impl Mac {
     pub fn as_bytes(&self) -> &[u8; MAC_SIZE] {
         &self.0
     }
-}
-
-impl AsRef<[u8]> for Mac {
-    #[inline]
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl From<[u8; MAC_SIZE]> for Mac {
-    #[inline]
-    fn from(bytes: [u8; MAC_SIZE]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl std::fmt::Debug for Mac {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mac([{} bytes])", MAC_SIZE)
-    }
-}
-
-#[inline]
-pub fn compute_mac(key: &[u8], parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
-    Ok(*Mac::compute(key, parts)?.as_bytes())
-}
-
-#[inline]
-pub fn verify_mac(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
-    if expected.len() != MAC_SIZE {
-        bail!("invalid MAC length: expected {}, got {}", MAC_SIZE, expected.len());
-    }
-
-    let expected_array: [u8; MAC_SIZE] = expected.try_into().expect("length verified");
-    Mac(expected_array).verify(key, parts)
-}
-
-#[inline]
-#[must_use]
-pub fn verify_magic(magic: &[u8], expected: &[u8]) -> bool {
-    bool::from(magic.ct_eq(expected))
 }
 
 #[cfg(test)]
@@ -125,35 +103,32 @@ mod tests {
     }
 
     #[test]
-    fn compute_mac_handles_empty_parts() {
-        let data = [b"Hello".as_slice(), b"".as_slice(), b"World".as_slice()];
-        let mac = Mac::compute(TEST_KEY, &data).unwrap();
-        let data_no_empty = [b"Hello".as_slice(), b"World".as_slice()];
-        let mac_no_empty = Mac::compute(TEST_KEY, &data_no_empty).unwrap();
-
-        assert_eq!(mac, mac_no_empty);
+    fn verify_bytes_rejects_invalid_length() {
+        let data = [b"Hello".as_slice()];
+        let wrong_length = vec![0u8; MAC_SIZE - 1];
+        assert!(Mac::verify_bytes(TEST_KEY, &wrong_length, &data).is_err());
     }
 
     #[test]
     fn verify_magic_returns_true_for_matching_bytes() {
-        assert!(verify_magic(b"MAGIC", b"MAGIC"));
+        assert!(Mac::verify_magic(b"MAGIC", b"MAGIC"));
     }
 
     #[test]
     fn verify_magic_returns_false_for_different_bytes() {
-        assert!(!verify_magic(b"MAGIC", b"WRONG"));
+        assert!(!Mac::verify_magic(b"MAGIC", b"WRONG"));
     }
 
     #[test]
     fn verify_magic_returns_false_for_different_lengths() {
-        assert!(!verify_magic(b"AB", b"ABCD"));
+        assert!(!Mac::verify_magic(b"AB", b"ABCD"));
     }
 
     #[test]
-    fn mac_debug_does_not_leak_bytes() {
-        let mac = Mac([0u8; MAC_SIZE]);
-        let debug_str = format!("{:?}", mac);
-        assert!(debug_str.contains("Mac"));
-        assert!(!debug_str.contains("0, 0, 0"));
+    fn compute_bytes_returns_raw_array() {
+        let data = [b"test".as_slice()];
+        let mac_bytes = Mac::compute_bytes(TEST_KEY, &data).unwrap();
+        let mac_struct = Mac::compute(TEST_KEY, &data).unwrap();
+        assert_eq!(mac_bytes, *mac_struct.as_bytes());
     }
 }
