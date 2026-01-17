@@ -1,5 +1,4 @@
 use anyhow::{Result, anyhow, bail};
-
 use argon2::Algorithm::Argon2id;
 use argon2::Version::V0x13;
 use argon2::{Argon2, Params};

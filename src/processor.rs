@@ -117,9 +117,11 @@ impl Decryptor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
