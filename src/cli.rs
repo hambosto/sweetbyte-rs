@@ -93,8 +93,6 @@ impl Commands {
     }
 }
 
-/* ============================== CLI helpers ============================== */
-
 fn run_cli(input: String, output: Option<String>, password: Option<String>, processing: Processing) -> Result<()> {
     let mut input = File::new(input);
     let output = File::new(output.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
