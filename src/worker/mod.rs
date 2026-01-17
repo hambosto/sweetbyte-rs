@@ -37,7 +37,7 @@ impl Worker {
         R: Read + Send + 'static,
         W: Write + Send + 'static,
     {
-        let progress = ProgressBar::new(total_size, self.mode.description())?;
+        let progress = ProgressBar::new(total_size, self.mode.label())?;
 
         let channel_size = self.concurrency * 2;
         let (task_sender, task_receiver) = bounded(channel_size);

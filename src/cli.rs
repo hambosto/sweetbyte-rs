@@ -4,7 +4,7 @@ use clap_complete::Shell;
 
 use crate::file::File;
 use crate::processor::{Decryptor, Encryptor};
-use crate::types::ProcessorMode;
+use crate::types::{Processing, ProcessorMode};
 use crate::ui::display::*;
 use crate::ui::prompt::Prompt;
 
@@ -85,21 +85,23 @@ pub enum Commands {
 impl Commands {
     pub fn run(self) -> Result<()> {
         match self {
-            Self::Encrypt { input, output, password } => run_cli(input, output, password, ProcessorMode::Encrypt),
-            Self::Decrypt { input, output, password } => run_cli(input, output, password, ProcessorMode::Decrypt),
+            Self::Encrypt { input, output, password } => run_cli(input, output, password, Processing::Encryption),
+            Self::Decrypt { input, output, password } => run_cli(input, output, password, Processing::Decryption),
             Self::Interactive => run_interactive(),
             Self::Completions { shell } => generate_completions(shell),
         }
     }
 }
 
-fn run_cli(input: String, output: Option<String>, password: Option<String>, mode: ProcessorMode) -> Result<()> {
-    let mut input = File::new(input);
-    let output = File::new(output.unwrap_or_else(|| input.output_path(mode).to_string_lossy().into_owned()));
-    let password = password.unwrap_or_else(|| prompt_password(mode).unwrap());
+/* ============================== CLI helpers ============================== */
 
-    process(mode, &mut input, &output, &password)?;
-    println!("✓ {}: {} -> {}", mode, input.path().display(), output.path().display());
+fn run_cli(input: String, output: Option<String>, password: Option<String>, processing: Processing) -> Result<()> {
+    let mut input = File::new(input);
+    let output = File::new(output.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
+    let password = password.unwrap_or_else(|| prompt_password(processing).unwrap());
+
+    process_file(processing, &mut input, &output, &password)?;
+    println!("✓ {}: {} -> {}", processing, input.path().display(), output.path().display());
     Ok(())
 }
 
@@ -118,27 +120,33 @@ fn run_interactive() -> Result<()> {
         bail!("operation canceled");
     }
 
-    let password = prompt_password(mode)?;
-    process(mode, &mut input, &output, &password)?;
+    let processing = match mode {
+        ProcessorMode::Encrypt => Processing::Encryption,
+        ProcessorMode::Decrypt => Processing::Decryption,
+    };
+
+    let password = prompt_password(processing)?;
+
+    process_file(processing, &mut input, &output, &password)?;
 
     show_success(mode, output.path());
     delete_source(&prompt, &input, mode)?;
     Ok(())
 }
 
-fn process(mode: ProcessorMode, input: &mut File, output: &File, password: &str) -> Result<()> {
-    match mode {
-        ProcessorMode::Encrypt => Encryptor::new(password).encrypt(input, output),
-        ProcessorMode::Decrypt => Decryptor::new(password).decrypt(input, output),
+fn process_file(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
+    match processing {
+        Processing::Encryption => Encryptor::new(password).encrypt(input, output),
+        Processing::Decryption => Decryptor::new(password).decrypt(input, output),
     }
-    .with_context(|| format!("{} failed: {}", mode, input.path().display()))
+    .with_context(|| format!("{} failed: {}", processing, input.path().display()))
 }
 
-fn prompt_password(mode: ProcessorMode) -> Result<String> {
+fn prompt_password(processing: Processing) -> Result<String> {
     let prompt = Prompt::new();
-    match mode {
-        ProcessorMode::Encrypt => prompt.prompt_encryption_password(),
-        ProcessorMode::Decrypt => prompt.prompt_decryption_password(),
+    match processing {
+        Processing::Encryption => prompt.prompt_encryption_password(),
+        Processing::Decryption => prompt.prompt_decryption_password(),
     }
 }
 

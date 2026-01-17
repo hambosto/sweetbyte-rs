@@ -7,7 +7,9 @@ pub enum ProcessorMode {
 }
 
 impl ProcessorMode {
-    pub fn as_str(&self) -> &'static str {
+    pub const ALL: &'static [Self] = &[Self::Encrypt, Self::Decrypt];
+
+    pub fn label(self) -> &'static str {
         match self {
             Self::Encrypt => "Encrypt",
             Self::Decrypt => "Decrypt",
@@ -16,8 +18,9 @@ impl ProcessorMode {
 }
 
 impl Display for ProcessorMode {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.as_str())
+        f.write_str(self.label())
     }
 }
 
@@ -28,17 +31,26 @@ pub enum Processing {
 }
 
 impl Processing {
-    pub fn description(&self) -> &'static str {
+    #[inline]
+    pub fn label(self) -> &'static str {
         match self {
             Self::Encryption => "Encrypting...",
             Self::Decryption => "Decrypting...",
         }
     }
+
+    pub fn mode(&self) -> ProcessorMode {
+        match self {
+            Self::Encryption => ProcessorMode::Encrypt,
+            Self::Decryption => ProcessorMode::Decrypt,
+        }
+    }
 }
 
 impl Display for Processing {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.description())
+        f.write_str(self.label())
     }
 }
 
@@ -57,14 +69,17 @@ pub struct TaskResult {
 }
 
 impl TaskResult {
-    pub fn success(index: u64, data: Vec<u8>, size: usize) -> Self {
+    #[inline]
+    pub fn ok(index: u64, data: Vec<u8>, size: usize) -> Self {
         Self { data, error: None, index, size }
     }
 
-    pub fn failure(index: u64, error: anyhow::Error) -> Self {
+    #[inline]
+    pub fn err(index: u64, error: anyhow::Error) -> Self {
         Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
     }
 
+    #[inline]
     pub fn is_ok(&self) -> bool {
         self.error.is_none()
     }

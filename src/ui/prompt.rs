@@ -37,15 +37,17 @@ impl Prompt {
     }
 
     pub fn select_processing_mode(&self) -> Result<ProcessorMode> {
-        let options = [ProcessorMode::Encrypt, ProcessorMode::Decrypt];
-        let selection = Select::with_theme(&self.theme)
+        let modes = ProcessorMode::ALL;
+        let display_names: Vec<&str> = modes.iter().map(|m| m.label()).collect();
+
+        let idx = Select::with_theme(&self.theme)
             .with_prompt("Select operation")
-            .items(options)
+            .items(&display_names)
             .default(0)
             .interact()
             .map_err(|e| anyhow!("mode selection failed: {}", e))?;
 
-        options.get(selection).cloned().ok_or_else(|| anyhow!("Invalid selection index"))
+        Ok(modes[idx])
     }
 
     pub fn select_file(&self, files: &[File]) -> Result<PathBuf> {

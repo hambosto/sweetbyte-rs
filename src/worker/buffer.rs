@@ -80,7 +80,7 @@ mod tests {
     use super::*;
 
     fn make_result(index: u64) -> TaskResult {
-        TaskResult::success(index, vec![index as u8], 1)
+        TaskResult::ok(index, vec![index as u8], 1)
     }
 
     #[test]
