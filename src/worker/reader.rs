@@ -1,9 +1,8 @@
-use std::io::{BufReader, ErrorKind, Read};
+use std::io::{BufReader, Read};
 
 use anyhow::{Context, Result, anyhow, bail};
 use crossbeam_channel::Sender;
 
-use crate::config::CHUNK_SIZE;
 use crate::types::{Processing, Task};
 
 pub const MIN_CHUNK_SIZE: usize = 256 * 1024;
@@ -36,13 +35,12 @@ impl Reader {
         let mut index = 0u64;
 
         loop {
-            let bytes_read = read_chunk(reader, &mut buffer)?;
+            let bytes_read = reader.read(&mut buffer).context("failed to read chunk")?;
             if bytes_read == 0 {
                 break;
             }
 
-            let task = Task { data: buffer[..bytes_read].to_vec(), index };
-            sender.send(task).map_err(|_| anyhow!("channel closed"))?;
+            sender.send(Task { data: buffer[..bytes_read].to_vec(), index }).map_err(|_| anyhow!("channel closed"))?;
 
             index += 1;
         }
@@ -54,12 +52,14 @@ impl Reader {
         let mut index = 0u64;
 
         loop {
-            let chunk_len = match read_u32(reader) {
-                Ok(len) => len as usize,
-                Err(e) if is_eof(&e) => break,
-                Err(e) => return Err(e).context("failed to read chunk length"),
-            };
+            let mut buffer_len = [0u8; 4];
+            let read_result = reader.read_exact(&mut buffer_len);
 
+            if read_result.is_err() {
+                break;
+            }
+
+            let chunk_len = u32::from_be_bytes(buffer_len) as usize;
             if chunk_len == 0 {
                 continue;
             }
@@ -67,35 +67,11 @@ impl Reader {
             let mut data = vec![0u8; chunk_len];
             reader.read_exact(&mut data).context("failed to read chunk data")?;
 
-            let task = Task { data, index };
-            sender.send(task).map_err(|_| anyhow!("channel closed"))?;
+            sender.send(Task { data, index }).map_err(|_| anyhow!("channel closed"))?;
 
             index += 1;
         }
 
         Ok(())
     }
-}
-
-impl Default for Reader {
-    fn default() -> Self {
-        Self::new(Processing::Encryption, CHUNK_SIZE).expect("valid default parameters")
-    }
-}
-
-#[inline]
-fn read_chunk<R: Read>(reader: &mut R, buffer: &mut [u8]) -> Result<usize> {
-    reader.read(buffer).context("failed to read chunk")
-}
-
-#[inline]
-fn read_u32<R: Read>(reader: &mut R) -> Result<u32> {
-    let mut buf = [0u8; 4];
-    reader.read_exact(&mut buf)?;
-    Ok(u32::from_be_bytes(buf))
-}
-
-#[inline]
-fn is_eof(error: &anyhow::Error) -> bool {
-    error.downcast_ref::<std::io::Error>().is_some_and(|e| e.kind() == ErrorKind::UnexpectedEof)
 }

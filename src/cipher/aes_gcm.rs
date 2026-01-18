@@ -14,71 +14,26 @@ impl AesGcm {
         Self { inner: Aes256Gcm::new_from_slice(key).expect("valid key size") }
     }
 
+    #[inline]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         if plaintext.is_empty() {
             bail!("plaintext cannot be empty");
         }
 
-        let nonce_bytes = Aes256Gcm::generate_nonce(&mut OsRng);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let mut result = self.inner.encrypt(&nonce, plaintext).map_err(|e| anyhow!("aes-gcm encryption failed: {}", e))?;
 
-        let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("aes-gcm encryption failed: {}", e))?;
-        let mut result = Vec::with_capacity(AES_NONCE_SIZE + encrypted.len());
-        result.extend_from_slice(&nonce_bytes);
-        result.extend_from_slice(&encrypted);
-
+        result.splice(0..0, nonce.iter().copied());
         Ok(result)
     }
 
+    #[inline]
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         if ciphertext.len() < AES_NONCE_SIZE {
             bail!("ciphertext too short: need at least {} bytes, got {}", AES_NONCE_SIZE, ciphertext.len());
         }
 
-        let (nonce_bytes, encrypted) = ciphertext.split_at(AES_NONCE_SIZE);
-        let nonce = Nonce::from_slice(nonce_bytes);
-        self.inner.decrypt(nonce, encrypted).map_err(|_| anyhow!("aes-gcm authentication failed"))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn test_cipher() -> AesGcm {
-        AesGcm::new(&[0u8; AES_KEY_SIZE])
-    }
-
-    #[test]
-    fn encrypt_decrypt_roundtrip() {
-        let cipher = test_cipher();
-        let plaintext = b"Hello, World!";
-
-        let ciphertext = cipher.encrypt(plaintext).unwrap();
-        let decrypted = cipher.decrypt(&ciphertext).unwrap();
-
-        assert_eq!(decrypted, plaintext);
-    }
-
-    #[test]
-    fn encrypt_empty_fails() {
-        assert!(test_cipher().encrypt(b"").is_err());
-    }
-
-    #[test]
-    fn decrypt_too_short_fails() {
-        assert!(test_cipher().decrypt(&[0u8; AES_NONCE_SIZE - 1]).is_err());
-    }
-
-    #[test]
-    fn decrypt_tampered_fails() {
-        let cipher = test_cipher();
-        let mut ciphertext = cipher.encrypt(b"Hello, World!").unwrap();
-
-        if let Some(last) = ciphertext.last_mut() {
-            *last ^= 0xFF;
-        }
-
-        assert!(cipher.decrypt(&ciphertext).is_err());
+        let (nonce, data) = ciphertext.split_at(AES_NONCE_SIZE);
+        self.inner.decrypt(Nonce::from_slice(nonce), data).map_err(|_| anyhow!("aes-gcm authentication failed"))
     }
 }

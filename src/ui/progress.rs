@@ -15,14 +15,17 @@ impl ProgressBar {
         Ok(Self { bar })
     }
 
+    #[inline]
     pub fn add(&self, delta: u64) {
         self.bar.inc(delta);
     }
 
+    #[inline]
     pub fn finish(&self) {
         self.bar.finish();
     }
 
+    #[inline]
     pub fn set_message(&self, msg: &str) {
         self.bar.set_message(msg.to_string());
     }

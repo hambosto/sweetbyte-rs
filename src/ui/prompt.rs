@@ -4,21 +4,21 @@ use anyhow::{Result, anyhow, bail};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Password, Select};
 
-use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
 use crate::types::ProcessorMode;
 
 pub struct Prompt {
+    password_min_length: usize,
     theme: ColorfulTheme,
 }
 
 impl Prompt {
-    pub fn new() -> Self {
-        Self { theme: ColorfulTheme::default() }
+    pub fn new(password_min_length: usize) -> Self {
+        Self { password_min_length, theme: ColorfulTheme::default() }
     }
 
-    pub fn with_theme(theme: ColorfulTheme) -> Self {
-        Self { theme }
+    pub fn with_theme(theme: ColorfulTheme, password_min_length: usize) -> Self {
+        Self { theme, password_min_length }
     }
 
     pub fn prompt_encryption_password(&self) -> Result<String> {
@@ -56,7 +56,6 @@ impl Prompt {
         }
 
         let display_names: Vec<String> = files.iter().map(|f| f.path().display().to_string()).collect();
-
         let selection = Select::with_theme(&self.theme)
             .with_prompt("Select file")
             .items(&display_names)
@@ -83,8 +82,8 @@ impl Prompt {
                     bail!("password cannot be empty or whitespace only");
                 }
 
-                if input.len() < PASSWORD_MIN_LENGTH {
-                    bail!("password must be at least {} characters long", PASSWORD_MIN_LENGTH);
+                if input.len() < self.password_min_length {
+                    bail!("password must be at least {} characters long", self.password_min_length);
                 }
 
                 Ok(())
@@ -99,11 +98,5 @@ impl Prompt {
             .default(false)
             .interact()
             .map_err(|e| anyhow!("confirmation failed: {}", e))
-    }
-}
-
-impl Default for Prompt {
-    fn default() -> Self {
-        Self::new()
     }
 }
