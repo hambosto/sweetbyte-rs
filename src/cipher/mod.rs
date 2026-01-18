@@ -1,9 +1,10 @@
+use anyhow::{Context, Result};
+
 mod aes_gcm;
 mod chacha20poly1305;
 mod derive;
 
 pub use aes_gcm::AesGcm;
-use anyhow::{Context, Result};
 pub use chacha20poly1305::ChaCha20Poly1305;
 pub use derive::{derive_key, random_bytes};
 
@@ -51,8 +52,8 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &[u8; ARGON_KEY_LEN]) -> Result<Self> {
-        let aes_key: [u8; AES_KEY_SIZE] = key[..AES_KEY_SIZE].try_into().context("invalid AES key")?;
-        let chacha_key: [u8; CHACHA_KEY_SIZE] = key[AES_KEY_SIZE..AES_KEY_SIZE + CHACHA_KEY_SIZE].try_into().context("invalid ChaCha key")?;
+        let aes_key: [u8; AES_KEY_SIZE] = key[..AES_KEY_SIZE].try_into().context("invalid aes-gcm key")?;
+        let chacha_key: [u8; CHACHA_KEY_SIZE] = key[AES_KEY_SIZE..AES_KEY_SIZE + CHACHA_KEY_SIZE].try_into().context("invalid chacha20poly1305 key")?;
 
         Ok(Self { aes: AesGcm::new(&aes_key), chacha: ChaCha20Poly1305::new(&chacha_key) })
     }

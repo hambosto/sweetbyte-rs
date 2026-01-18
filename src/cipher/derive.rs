@@ -12,7 +12,7 @@ pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
     }
 
     if salt.len() != ARGON_SALT_LEN {
-        bail!("expected {} bytes salt, got {}", ARGON_SALT_LEN,  salt.len());
+        bail!("expected {} bytes salt, got {}", ARGON_SALT_LEN, salt.len());
     }
 
     let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_THREADS, Some(ARGON_KEY_LEN)).map_err(|e| anyhow!("invalid argon2 parameters: {}", e))?;
