@@ -13,10 +13,10 @@ pub struct Mac([u8; MAC_SIZE]);
 impl Mac {
     pub fn compute(key: &[u8], parts: &[&[u8]]) -> Result<Self> {
         if key.is_empty() {
-            bail!("MAC key cannot be empty");
+            bail!("mac key cannot be empty");
         }
 
-        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key length");
+        let mut mac = HmacSha256::new_from_slice(key).expect("hmac-sha256 accepts any key length");
         parts.iter().filter(|part| !part.is_empty()).for_each(|part| mac.update(part));
 
         Ok(Self(mac.finalize().into_bytes().into()))
@@ -31,7 +31,7 @@ impl Mac {
         let computed = Self::compute(key, parts)?;
 
         if !bool::from(self.0.ct_eq(&computed.0)) {
-            bail!("MAC verification failed");
+            bail!("mac verification failed");
         }
 
         Ok(())
@@ -39,10 +39,10 @@ impl Mac {
 
     pub fn verify_bytes(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
         if expected.len() != MAC_SIZE {
-            bail!("Invalid MAC length: expected {}, got {}", MAC_SIZE, expected.len());
+            bail!("invalid mac length: expected {}, got {}", MAC_SIZE, expected.len());
         }
 
-        let array: [u8; MAC_SIZE] = expected.try_into().expect("Length check ensure conversion succeeds");
+        let array: [u8; MAC_SIZE] = expected.try_into().expect("length check ensure conversion succeeds");
         let expected_mac = Self(array);
         expected_mac.verify(key, parts)
     }

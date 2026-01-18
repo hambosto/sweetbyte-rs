@@ -23,7 +23,7 @@ impl ChaCha20Poly1305 {
         let nonce_bytes = XChaCha20Poly1305::generate_nonce(&mut OsRng);
         let nonce = XNonce::from_slice(&nonce_bytes);
 
-        let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("ChaCha20Poly1305 encryption failed: {e}"))?;
+        let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("chacha20poly1305 encryption failed: {}", e))?;
         let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE + encrypted.len());
         result.extend_from_slice(&nonce_bytes);
         result.extend_from_slice(&encrypted);
@@ -33,13 +33,13 @@ impl ChaCha20Poly1305 {
 
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         if ciphertext.len() < CHACHA_NONCE_SIZE {
-            bail!("ciphertext too short: need at least {CHACHA_NONCE_SIZE} bytes, got {}", ciphertext.len());
+            bail!("ciphertext too short: need at least {} bytes, got {}", CHACHA_NONCE_SIZE, ciphertext.len());
         }
 
         let (nonce_bytes, encrypted) = ciphertext.split_at(CHACHA_NONCE_SIZE);
         let nonce = XNonce::from_slice(nonce_bytes);
 
-        self.inner.decrypt(nonce, encrypted).map_err(|_| anyhow!("ChaCha20Poly1305 authentication failed"))
+        self.inner.decrypt(nonce, encrypted).map_err(|_| anyhow!("chacha20poly1305 authentication failed"))
     }
 }
 

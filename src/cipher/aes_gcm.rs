@@ -22,7 +22,7 @@ impl AesGcm {
         let nonce_bytes = Aes256Gcm::generate_nonce(&mut OsRng);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
-        let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("AES encryption failed: {e}"))?;
+        let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("aes-gcm encryption failed: {}", e))?;
         let mut result = Vec::with_capacity(AES_NONCE_SIZE + encrypted.len());
         result.extend_from_slice(&nonce_bytes);
         result.extend_from_slice(&encrypted);
@@ -32,12 +32,12 @@ impl AesGcm {
 
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         if ciphertext.len() < AES_NONCE_SIZE {
-            bail!("ciphertext too short: need at least {AES_NONCE_SIZE} bytes, got {}", ciphertext.len());
+            bail!("ciphertext too short: need at least {} bytes, got {}", AES_NONCE_SIZE, ciphertext.len());
         }
 
         let (nonce_bytes, encrypted) = ciphertext.split_at(AES_NONCE_SIZE);
         let nonce = Nonce::from_slice(nonce_bytes);
-        self.inner.decrypt(nonce, encrypted).map_err(|_| anyhow!("AES authentication failed"))
+        self.inner.decrypt(nonce, encrypted).map_err(|_| anyhow!("aes-gcm authentication failed"))
     }
 }
 

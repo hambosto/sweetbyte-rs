@@ -13,7 +13,7 @@ pub struct Encoding {
 
 impl Encoding {
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
-        let encoder = ReedSolomon::new(data_shards, parity_shards).map_err(|e| anyhow!("failed to create Reed-Solomon encoder: {:?}", e))?;
+        let encoder = ReedSolomon::new(data_shards, parity_shards).map_err(|e| anyhow!("failed to create reed-solomon encoder: {:?}", e))?;
 
         Ok(Self { encoder, shards: Shards::new(data_shards, parity_shards) })
     }
@@ -28,7 +28,7 @@ impl Encoding {
         }
 
         let mut shards = self.shards.split(data);
-        self.encoder.encode(&mut shards).map_err(|e| anyhow!("Reed-Solomon encoding failed: {:?}", e))?;
+        self.encoder.encode(&mut shards).map_err(|e| anyhow!("reed-solomon encoding failed: {}", e))?;
         Ok(self.shards.combine(&shards))
     }
 
@@ -44,7 +44,7 @@ impl Encoding {
         }
 
         let mut shards: Vec<Option<Vec<u8>>> = self.shards.split_encoded(encoded).into_iter().map(Some).collect();
-        self.encoder.reconstruct(&mut shards).map_err(|e| anyhow!("Reed-Solomon reconstruction failed: {:?}", e))?;
+        self.encoder.reconstruct(&mut shards).map_err(|e| anyhow!("reed-solomon reconstruction failed: {}", e))?;
 
         let reconstructed: Vec<Vec<u8>> = shards.into_iter().flatten().collect();
         self.shards.extract(&reconstructed)

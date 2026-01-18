@@ -12,14 +12,14 @@ pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
     }
 
     if salt.len() != ARGON_SALT_LEN {
-        bail!("expected {ARGON_SALT_LEN} bytes salt, got {}", salt.len());
+        bail!("expected {} bytes salt, got {}", ARGON_SALT_LEN,  salt.len());
     }
 
-    let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_THREADS, Some(ARGON_KEY_LEN)).map_err(|e| anyhow!("invalid Argon2 parameters: {e:?}"))?;
+    let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_THREADS, Some(ARGON_KEY_LEN)).map_err(|e| anyhow!("invalid argon2 parameters: {}", e))?;
     let argon2 = Argon2::new(Argon2id, V0x13, params);
 
     let mut key = [0u8; ARGON_KEY_LEN];
-    argon2.hash_password_into(password, salt, &mut key).map_err(|e| anyhow!("key derivation failed: {e:?}"))?;
+    argon2.hash_password_into(password, salt, &mut key).map_err(|e| anyhow!("key derivation failed: {}", e))?;
 
     Ok(key)
 }
@@ -27,7 +27,7 @@ pub fn derive_key(password: &[u8], salt: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
 #[inline]
 pub fn random_bytes<const N: usize>() -> Result<[u8; N]> {
     let mut bytes = [0u8; N];
-    OsRng.try_fill_bytes(&mut bytes).map_err(|e| anyhow!("failed to generate random bytes: {e:?}"))?;
+    OsRng.try_fill_bytes(&mut bytes).map_err(|e| anyhow!("failed to generate random bytes: {}", e))?;
     Ok(bytes)
 }
 
