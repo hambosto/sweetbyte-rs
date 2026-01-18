@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use hmac::{Hmac, Mac as HmacMac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
@@ -16,7 +16,7 @@ impl Mac {
             bail!("mac key cannot be empty");
         }
 
-        let mut mac = HmacSha256::new_from_slice(key).expect("hmac-sha256 accepts any key length");
+        let mut mac = HmacSha256::new_from_slice(key).map_err(|e| anyhow!("hmac creation failed: {}", e))?;
         parts.iter().filter(|part| !part.is_empty()).for_each(|part| mac.update(part));
 
         Ok(Self(mac.finalize().into_bytes().into()))
@@ -42,7 +42,7 @@ impl Mac {
             bail!("invalid mac length: expected {}, got {}", MAC_SIZE, expected.len());
         }
 
-        let array: [u8; MAC_SIZE] = expected.try_into().expect("length check ensure conversion succeeds");
+        let array: [u8; MAC_SIZE] = expected.try_into().map_err(|_| anyhow!("length check ensure conversion succeeds"))?;
         let expected_mac = Self(array);
         expected_mac.verify(key, parts)
     }

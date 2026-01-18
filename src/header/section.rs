@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
@@ -84,7 +84,7 @@ impl Sections {
     }
 
     pub fn get_with_min_len(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
-        let data = self.get(section_type).ok_or_else(|| anyhow::anyhow!("{} section not found", section_type))?;
+        let data = self.get(section_type).ok_or_else(|| anyhow!("{} section not found", section_type))?;
 
         if data.len() < min_len {
             bail!("{} section too short: expected {}, got {}", section_type, min_len, data.len());
@@ -134,7 +134,7 @@ impl SectionEncoder {
             bail!("invalid length prefix size");
         }
 
-        let bytes: [u8; 4] = decoded[..4].try_into().expect("slice length verified");
+        let bytes: [u8; 4] = decoded[..4].try_into().map_err(|_| anyhow!("slice length verified"))?;
         Ok(u32::from_be_bytes(bytes))
     }
 }

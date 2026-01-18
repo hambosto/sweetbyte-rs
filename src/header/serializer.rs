@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
 use crate::header::Header;
@@ -26,8 +26,8 @@ impl<'a> Serializer<'a> {
         let sections = self.encode_sections(&magic, salt, &header_data, &mac)?;
         let length_sections = self.encode_length_prefixes(&sections)?;
 
-        let lengths_header = self.build_lengths_header(&length_sections);
-        Ok(self.assemble_header(&lengths_header, &length_sections, &sections))
+        let lengths_header = self.build_lengths_header(&length_sections)?;
+        self.assemble_header(&lengths_header, &length_sections, &sections)
     }
 
     fn validate_inputs(&self, salt: &[u8], key: &[u8]) -> Result<()> {
@@ -62,19 +62,19 @@ impl<'a> Serializer<'a> {
         ])
     }
 
-    fn build_lengths_header(&self, length_sections: &[(SectionType, EncodedSection); 4]) -> [u8; 16] {
+    fn build_lengths_header(&self, length_sections: &[(SectionType, EncodedSection); 4]) -> Result<[u8; 16]> {
         let mut header = [0u8; 16];
 
         for (i, section_type) in SECTION_ORDER.iter().enumerate() {
-            let section = length_sections.iter().find(|(t, _)| t == section_type).expect("section must exist");
+            let section = length_sections.iter().find(|(t, _)| t == section_type).ok_or_else(|| anyhow!("section must exist"))?;
             let bytes = section.1.length().to_be_bytes();
             header[i * 4..i * 4 + 4].copy_from_slice(&bytes);
         }
 
-        header
+        Ok(header)
     }
 
-    fn assemble_header(&self, lengths_header: &[u8], length_sections: &[(SectionType, EncodedSection); 4], sections: &[(SectionType, EncodedSection); 4]) -> Vec<u8> {
+    fn assemble_header(&self, lengths_header: &[u8], length_sections: &[(SectionType, EncodedSection); 4], sections: &[(SectionType, EncodedSection); 4]) -> Result<Vec<u8>> {
         let total_size = lengths_header.len() + length_sections.iter().map(|(_, s)| s.data().len()).sum::<usize>() + sections.iter().map(|(_, s)| s.data().len()).sum::<usize>();
 
         let mut result = Vec::with_capacity(total_size);
@@ -82,12 +82,12 @@ impl<'a> Serializer<'a> {
 
         for section_list in [length_sections, sections] {
             for section_type in SECTION_ORDER {
-                let section = section_list.iter().find(|(t, _)| *t == section_type).expect("section must exist");
+                let section = section_list.iter().find(|(t, _)| *t == section_type).ok_or_else(|| anyhow!("section must exist"))?;
                 result.extend_from_slice(section.1.data());
             }
         }
 
-        result
+        Ok(result)
     }
 
     #[inline]

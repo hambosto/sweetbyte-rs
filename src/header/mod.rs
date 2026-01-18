@@ -23,6 +23,7 @@ pub struct Header {
 
 impl Header {
     #[inline]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self { original_size: 0, flags: 0, version: CURRENT_VERSION, sections: None }
     }
@@ -126,11 +127,5 @@ impl Header {
     pub(crate) fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
         let sections = self.sections.as_ref().context("header not unmarshalled yet")?;
         sections.get_with_min_len(section_type, min_len)
-    }
-}
-
-impl Default for Header {
-    fn default() -> Self {
-        Self::new()
     }
 }

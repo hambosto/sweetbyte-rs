@@ -10,8 +10,9 @@ pub struct ChaCha20Poly1305 {
 
 impl ChaCha20Poly1305 {
     #[inline]
-    pub fn new(key: &[u8; CHACHA_KEY_SIZE]) -> Self {
-        Self { inner: XChaCha20Poly1305::new_from_slice(key).expect("valid key size") }
+    pub fn new(key: &[u8; CHACHA_KEY_SIZE]) -> Result<Self> {
+        let inner = XChaCha20Poly1305::new_from_slice(key)?;
+        Ok(Self { inner })
     }
 
     #[inline]

@@ -10,8 +10,9 @@ pub struct AesGcm {
 
 impl AesGcm {
     #[inline]
-    pub fn new(key: &[u8; AES_KEY_SIZE]) -> Self {
-        Self { inner: Aes256Gcm::new_from_slice(key).expect("valid key size") }
+    pub fn new(key: &[u8; AES_KEY_SIZE]) -> Result<Self> {
+        let inner = Aes256Gcm::new_from_slice(key)?;
+        Ok(Self { inner })
     }
 
     #[inline]

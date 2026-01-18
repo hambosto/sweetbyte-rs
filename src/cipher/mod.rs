@@ -55,7 +55,7 @@ impl Cipher {
         let aes_key: [u8; AES_KEY_SIZE] = key[..AES_KEY_SIZE].try_into().context("invalid aes-gcm key")?;
         let chacha_key: [u8; CHACHA_KEY_SIZE] = key[AES_KEY_SIZE..AES_KEY_SIZE + CHACHA_KEY_SIZE].try_into().context("invalid chacha20poly1305 key")?;
 
-        Ok(Self { aes: AesGcm::new(&aes_key), chacha: ChaCha20Poly1305::new(&chacha_key) })
+        Ok(Self { aes: AesGcm::new(&aes_key)?, chacha: ChaCha20Poly1305::new(&chacha_key)? })
     }
 
     #[inline]

@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 use std::thread;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use crossbeam_channel::bounded;
 
 use crate::config::{ARGON_KEY_LEN, CHUNK_SIZE};
@@ -54,8 +54,8 @@ impl Worker {
         });
 
         let write_result = writer.write_all(output, result_receiver, Some(&progress));
-        let read_result = reader_handle.join().map_err(|_| anyhow::anyhow!("reader thread panicked"))?;
-        executor_handle.join().map_err(|_| anyhow::anyhow!("executor thread panicked"))?;
+        let read_result = reader_handle.join().map_err(|_| anyhow!("reader thread panicked"))?;
+        executor_handle.join().map_err(|_| anyhow!("executor thread panicked"))?;
 
         progress.finish();
 

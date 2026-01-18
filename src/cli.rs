@@ -73,7 +73,10 @@ impl Commands {
 fn run_cli_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
     let mut input = File::new(input_path);
     let output = File::new(output_path.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
-    let password = password.unwrap_or_else(|| prompt_password(prompt, processing).unwrap());
+    let password = match password {
+        Some(pwd) => pwd,
+        None => prompt_password(prompt, processing)?,
+    };
 
     process_file(processing, &mut input, &output, &password)?;
     println!("✓ {}: {} -> {}", processing, input.path().display(), output.path().display());

@@ -41,10 +41,10 @@ impl<'a> Deserializer<'a> {
         let header = read_exact::<16, _>(reader).context("failed to read lengths header")?;
 
         Ok([
-            (SectionType::Magic, u32::from_be_bytes(header[0..4].try_into().unwrap())),
-            (SectionType::Salt, u32::from_be_bytes(header[4..8].try_into().unwrap())),
-            (SectionType::HeaderData, u32::from_be_bytes(header[8..12].try_into().unwrap())),
-            (SectionType::Mac, u32::from_be_bytes(header[12..16].try_into().unwrap())),
+            (SectionType::Magic, u32::from_be_bytes(header[0..4].try_into().context("slice has incorrect length for u32 conversion")?)),
+            (SectionType::Salt, u32::from_be_bytes(header[4..8].try_into().context("slice has incorrect length for u32 conversion")?)),
+            (SectionType::HeaderData, u32::from_be_bytes(header[8..12].try_into().context("slice has incorrect length for u32 conversion")?)),
+            (SectionType::Mac, u32::from_be_bytes(header[12..16].try_into().context("slice has incorrect length for u32 conversion")?)),
         ])
     }
 
@@ -87,9 +87,12 @@ impl<'a> Deserializer<'a> {
             bail!("invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
         }
 
-        self.header.set_version(u16::from_be_bytes(data[0..2].try_into().unwrap()));
-        self.header.set_flags(u32::from_be_bytes(data[2..6].try_into().unwrap()));
-        self.header.set_original_size(u64::from_be_bytes(data[6..14].try_into().unwrap()));
+        self.header
+            .set_version(u16::from_be_bytes(data[0..2].try_into().context("slice has incorrect length for u16 conversion")?));
+        self.header
+            .set_flags(u32::from_be_bytes(data[2..6].try_into().context("slice has incorrect length for u32 conversion")?));
+        self.header
+            .set_original_size(u64::from_be_bytes(data[6..14].try_into().context("slice has incorrect length for u64 conversion")?));
 
         Ok(())
     }
