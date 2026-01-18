@@ -140,7 +140,7 @@ mod tests {
     use std::io::Cursor;
 
     use super::*;
-    use crate::cipher::{derive_key, random_bytes};
+    use crate::cipher::KDF;
 
     #[test]
     fn header_new_has_correct_defaults() {
@@ -164,14 +164,14 @@ mod tests {
 
     #[test]
     fn header_marshal_unmarshal_roundtrip() {
-        let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
-        let key = derive_key(b"password", &salt).unwrap();
+        let salt: [u8; ARGON_SALT_LEN] = KDF::generate_salt().unwrap();
+        let key = KDF::derive(b"password", &salt).unwrap();
 
         let mut header = Header::new();
         header.set_original_size(12345);
         header.set_protected(true);
 
-        let serialized = header.marshal(&salt, &key).unwrap();
+        let serialized = header.marshal(&salt, key.as_bytes()).unwrap();
         let mut new_header = Header::new();
         new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 
@@ -182,35 +182,35 @@ mod tests {
 
     #[test]
     fn header_verify_succeeds_with_correct_key() {
-        let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
-        let key = derive_key(b"password", &salt).unwrap();
+        let salt: [u8; ARGON_SALT_LEN] = KDF::generate_salt().unwrap();
+        let key = KDF::derive(b"password", &salt).unwrap();
         let mut header = Header::new();
 
         header.set_original_size(12345);
         header.set_protected(true);
 
-        let serialized = header.marshal(&salt, &key).unwrap();
+        let serialized = header.marshal(&salt, key.as_bytes()).unwrap();
         let mut new_header = Header::new();
         new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 
-        assert!(new_header.verify(&key).is_ok());
+        assert!(new_header.verify(key.as_bytes()).is_ok());
     }
 
     #[test]
     fn header_verify_fails_with_wrong_key() {
-        let salt: [u8; ARGON_SALT_LEN] = random_bytes().unwrap();
-        let key = derive_key(b"password", &salt).unwrap();
-        let wrong_key = derive_key(b"wrong_password", &salt).unwrap();
+        let salt: [u8; ARGON_SALT_LEN] = KDF::generate_salt().unwrap();
+        let key = KDF::derive(b"password", &salt).unwrap();
+        let wrong_key = KDF::derive(b"wrong_password", &salt).unwrap();
 
         let mut header = Header::new();
         header.set_original_size(12345);
         header.set_protected(true);
 
-        let serialized = header.marshal(&salt, &key).unwrap();
+        let serialized = header.marshal(&salt, key.as_bytes()).unwrap();
 
         let mut new_header = Header::new();
         new_header.unmarshal(Cursor::new(&serialized)).unwrap();
 
-        assert!(new_header.verify(&wrong_key).is_err());
+        assert!(new_header.verify(wrong_key.as_bytes()).is_err());
     }
 }

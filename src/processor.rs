@@ -2,7 +2,7 @@ use std::io::{BufReader, Write};
 
 use anyhow::{Context, Result, bail};
 
-use crate::cipher::{derive_key, random_bytes};
+use crate::cipher::KDF;
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
 use crate::file::File;
 use crate::header::Header;
@@ -25,17 +25,17 @@ impl Encryptor {
             bail!("cannot encrypt a file with zero size");
         }
 
-        let salt: [u8; ARGON_SALT_LEN] = random_bytes()?;
-        let key = derive_key(self.password.as_bytes(), &salt)?;
+        let salt: [u8; ARGON_SALT_LEN] = KDF::generate_salt()?;
+        let key = KDF::derive(self.password.as_bytes(), &salt)?;
 
-        let header = build_header(size, &salt, &key)?;
+        let header = build_header(size, &salt, key.as_bytes())?;
         let mut writer = dest.writer()?;
         writer.write_all(&header)?;
 
         let reader = src.reader()?.into_inner();
         let writer = writer.into_inner().context("failed to get inner writer")?;
 
-        Worker::new(&key, Processing::Encryption)?.process(reader, writer, size)?;
+        Worker::new(key.as_bytes(), Processing::Encryption)?.process(reader, writer, size)?;
         Ok(())
     }
 }
@@ -62,11 +62,11 @@ impl Decryptor {
             bail!("cannot decrypt a file with zero size");
         }
 
-        let key = derive_key(self.password.as_bytes(), header.salt()?)?;
+        let key = KDF::derive(self.password.as_bytes(), header.salt()?)?;
         let reader = reader.into_inner();
         let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
 
-        Worker::new(&key, Processing::Decryption)?.process(reader, writer, size)?;
+        Worker::new(key.as_bytes(), Processing::Decryption)?.process(reader, writer, size)?;
         Ok(())
     }
 }
@@ -82,8 +82,8 @@ fn read_and_verify_header(reader: &mut BufReader<std::fs::File>, password: &[u8]
     let mut h = Header::new();
     h.unmarshal(reader.get_mut())?;
 
-    let key = derive_key(password, h.salt()?)?;
-    h.verify(&key).context("incorrect password or corrupt file")?;
+    let key = KDF::derive(password, h.salt()?)?;
+    h.verify(key.as_bytes()).context("incorrect password or corrupt file")?;
 
     if !h.is_protected() {
         bail!("file is not protected");
