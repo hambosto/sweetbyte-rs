@@ -1,5 +1,7 @@
 use anyhow::{Result, anyhow, bail};
-use argon2::{Algorithm::Argon2id, Argon2, Params, Version::V0x13};
+use argon2::Algorithm::Argon2id;
+use argon2::Version::V0x13;
+use argon2::{Argon2, Params};
 use rand::rand_core::{OsRng, TryRngCore};
 
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME};
