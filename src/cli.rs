@@ -9,7 +9,7 @@ use crate::ui::display::*;
 use crate::ui::prompt::Prompt;
 
 #[derive(Parser)]
-#[command(name = "sweetbyte-rs", version = "1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
+#[command(name = "sweetbyte-rs", version = "26.1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
 pub struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,

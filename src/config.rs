@@ -2,7 +2,7 @@
 pub const APP_NAME: &str = "SweetByte";
 
 /// Application version.
-pub const APP_VERSION: &str = "1.0";
+pub const APP_VERSION: &str = "26.1.0";
 
 /// Encrypted file extension.
 pub const FILE_EXTENSION: &str = ".swx";

@@ -1,6 +1,6 @@
 [package]
 name = "sweetbyte-rs"
-version = "1.0.0"
+version = "26.1.0"
 edition = "2024"
 description = "A very small, very simple, yet very secure encryption tool written in rust."
 license = "MIT"
@@ -8,6 +8,8 @@ authors = ["Ilham Putra Husada <hambosto@gmail.com>"]
 readme = "README.md"
 keywords = ["encryption", "security", "crypto", "aes", "chacha20"]
 categories = ["cryptography", "command-line-utilities"]
+homepage = "https://github.com/hambosto/sweetbyte-rs"
+repository = "https://github.com/hambosto/sweetbyte-rs"
 
 [dependencies]
 aes-gcm = "0.10.3"
