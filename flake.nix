@@ -37,9 +37,7 @@
 
             cargoLock.lockFile = ./Cargo.lock;
 
-            doCheck = false;
-            CARGO_BUILD_INCREMENTAL = "false";
-            RUST_BACKTRACE = "full";
+            doCheck = true;
 
             meta = {
               description = "A very small, very simple, yet very secure encryption tool written in rust.";
