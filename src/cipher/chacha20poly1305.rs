@@ -1,8 +1,8 @@
+use aes_gcm::AeadCore;
 use anyhow::{Result, anyhow, bail};
-use chacha20poly1305::aead::{Aead, KeyInit};
+use chacha20poly1305::aead::{Aead, KeyInit, OsRng};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 
-use super::random_bytes;
 use crate::config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE};
 
 pub struct ChaCha20Poly1305 {
@@ -20,13 +20,13 @@ impl ChaCha20Poly1305 {
             bail!("plaintext cannot be empty");
         }
 
-        let nonce_bytes: [u8; CHACHA_NONCE_SIZE] = random_bytes()?;
+        let nonce_bytes = XChaCha20Poly1305::generate_nonce(&mut OsRng);
         let nonce = XNonce::from_slice(&nonce_bytes);
 
         let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("ChaCha20Poly1305 encryption failed: {e}"))?;
         let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE + encrypted.len());
         result.extend_from_slice(&nonce_bytes);
-        result.extend(encrypted);
+        result.extend_from_slice(&encrypted);
 
         Ok(result)
     }

@@ -1,8 +1,7 @@
-use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::aead::{Aead, KeyInit, OsRng};
+use aes_gcm::{AeadCore, Aes256Gcm, Nonce};
 use anyhow::{Result, anyhow, bail};
 
-use super::random_bytes;
 use crate::config::{AES_KEY_SIZE, AES_NONCE_SIZE};
 
 pub struct AesGcm {
@@ -20,13 +19,13 @@ impl AesGcm {
             bail!("plaintext cannot be empty");
         }
 
-        let nonce_bytes: [u8; AES_NONCE_SIZE] = random_bytes()?;
+        let nonce_bytes = Aes256Gcm::generate_nonce(&mut OsRng);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         let encrypted = self.inner.encrypt(nonce, plaintext).map_err(|e| anyhow!("AES encryption failed: {e}"))?;
         let mut result = Vec::with_capacity(AES_NONCE_SIZE + encrypted.len());
         result.extend_from_slice(&nonce_bytes);
-        result.extend(encrypted);
+        result.extend_from_slice(&encrypted);
 
         Ok(result)
     }
