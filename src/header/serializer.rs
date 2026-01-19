@@ -5,25 +5,24 @@ use crate::header::Header;
 use crate::header::mac::Mac;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType};
 
-pub struct Serializer<'a> {
-    header: &'a Header,
+pub struct Serializer {
     encoder: SectionEncoder,
 }
 
-impl<'a> Serializer<'a> {
-    pub fn new(header: &'a Header) -> Result<Self> {
+impl Serializer {
+    pub fn new() -> Result<Self> {
         let encoder = SectionEncoder::new()?;
-        Ok(Self { header, encoder })
+        Ok(Self { encoder })
     }
 
-    pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        self.header.validate()?;
+    pub fn marshal(&self, header: &Header, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+        header.validate()?;
 
         ensure!(salt.len() == ARGON_SALT_LEN, "invalid salt size: expected {}, got {}", ARGON_SALT_LEN, salt.len());
         ensure!(!key.is_empty(), "key cannot be empty");
 
         let magic = MAGIC_BYTES.to_be_bytes();
-        let header_data = self.serialize_header_data();
+        let header_data = self.serialize_header_data(header);
         let mac = Mac::compute_bytes(key, &[&magic, salt, &header_data])?;
 
         let sections = self.encode_sections(&magic, salt, &header_data, &mac)?;
@@ -80,11 +79,11 @@ impl<'a> Serializer<'a> {
     }
 
     #[inline]
-    fn serialize_header_data(&self) -> [u8; HEADER_DATA_SIZE] {
+    fn serialize_header_data(&self, header: &Header) -> [u8; HEADER_DATA_SIZE] {
         let mut data = [0u8; HEADER_DATA_SIZE];
-        data[0..2].copy_from_slice(&self.header.version().to_be_bytes());
-        data[2..6].copy_from_slice(&self.header.flags().to_be_bytes());
-        data[6..14].copy_from_slice(&self.header.original_size().to_be_bytes());
+        data[0..2].copy_from_slice(&header.version().to_be_bytes());
+        data[2..6].copy_from_slice(&header.flags().to_be_bytes());
+        data[6..14].copy_from_slice(&header.original_size().to_be_bytes());
         data
     }
 }

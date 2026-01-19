@@ -86,13 +86,13 @@ impl Header {
     }
 
     pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        let serializer = Serializer::new(self)?;
-        serializer.marshal(salt, key)
+        let serializer = Serializer::new()?;
+        serializer.marshal(self, salt, key)
     }
 
     pub fn unmarshal<R: Read>(&mut self, reader: R) -> Result<()> {
-        let mut deserializer = Deserializer::new(self)?;
-        deserializer.unmarshal(reader)
+        let mut deserializer = Deserializer::new()?;
+        deserializer.unmarshal(reader, self)
     }
 
     pub fn salt(&self) -> Result<&[u8]> {

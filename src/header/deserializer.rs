@@ -7,29 +7,28 @@ use crate::header::Header;
 use crate::header::mac::Mac;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType, Sections};
 
-pub struct Deserializer<'a> {
-    header: &'a mut Header,
+pub struct Deserializer {
     encoder: SectionEncoder,
 }
 
-impl<'a> Deserializer<'a> {
-    pub fn new(header: &'a mut Header) -> Result<Self> {
+impl Deserializer {
+    pub fn new() -> Result<Self> {
         let encoder = SectionEncoder::new()?;
-        Ok(Self { header, encoder })
+        Ok(Self { encoder })
     }
 
-    pub fn unmarshal<R: Read>(&mut self, mut reader: R) -> Result<()> {
+    pub fn unmarshal<R: Read>(&mut self, mut reader: R, header: &mut Header) -> Result<()> {
         let length_sizes = self.read_length_sizes(&mut reader)?;
         let section_lengths = self.read_and_decode_lengths(&mut reader, &length_sizes)?;
         let sections = self.read_and_decode_data(&mut reader, &section_lengths)?;
-        self.header.set_sections(sections);
+        header.set_sections(sections);
 
-        let magic = self.header.get_section(SectionType::Magic, MAGIC_SIZE)?;
+        let magic = header.get_section(SectionType::Magic, MAGIC_SIZE)?;
         ensure!(Mac::verify_magic(magic, &MAGIC_BYTES.to_be_bytes()), "invalid magic bytes");
 
-        let header_data = self.header.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?.to_vec();
-        self.deserialize_header_data(&header_data)?;
-        self.header.validate()?;
+        let header_data_vec = header.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?.to_vec();
+        self.deserialize_header_data(&header_data_vec, header)?;
+        header.validate()?;
 
         Ok(())
     }
@@ -79,14 +78,14 @@ impl<'a> Deserializer<'a> {
         Ok(sections)
     }
 
-    fn deserialize_header_data(&mut self, data: &[u8]) -> Result<()> {
+    fn deserialize_header_data(&mut self, data: &[u8], header: &mut Header) -> Result<()> {
         ensure!(data.len() >= HEADER_DATA_SIZE, "invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
 
-        self.header
+        header
             .set_version(u16::from_be_bytes(data[0..2].try_into().context("slice has incorrect length for u16 conversion")?));
-        self.header
+        header
             .set_flags(u32::from_be_bytes(data[2..6].try_into().context("slice has incorrect length for u32 conversion")?));
-        self.header
+        header
             .set_original_size(u64::from_be_bytes(data[6..14].try_into().context("slice has incorrect length for u64 conversion")?));
 
         Ok(())
