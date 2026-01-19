@@ -14,12 +14,12 @@ use crate::types::ProcessorMode;
 
 pub fn show_file_info(files: &mut [File]) -> Result<()> {
     if files.is_empty() {
-        println!("{}", console::style("No files found").yellow().bold());
+        println!("{}", console::style("No files found").yellow());
         return Ok(());
     }
 
     println!();
-    println!("{} {}", console::style("✔").green(), console::style(format!("Found {} file(s):", files.len())).bold());
+    println!("{} {}", console::style("✔").green(), console::style(format!("Found {} file(s):", files.len())).white());
     println!();
 
     let mut table = Table::new();
@@ -50,11 +50,11 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
     };
 
     println!();
-    println!("{} {}", console::style("✔").green(), console::style(format!("File {} successfully: {}", action, path.display())).bold());
+    println!("{} {}", console::style("✔").green(), console::style(format!("File {} successfully: {}", action, path.display())).white());
 }
 
 pub fn show_source_deleted(path: &Path) {
-    println!("{} {}", console::style("✔").green(), console::style(format!("Source file deleted: {}", path.display())).bold());
+    println!("{} {}", console::style("✔").green(), console::style(format!("Source file deleted: {}", path.display())).white());
 }
 
 pub fn clear_screen() -> Result<()> {

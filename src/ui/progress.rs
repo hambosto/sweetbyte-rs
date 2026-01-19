@@ -28,8 +28,8 @@ impl ProgressBar {
 
 impl Drop for ProgressBar {
     fn drop(&mut self) {
-        if !self.bar.is_finished() {
-            self.bar.finish();
+        if self.bar.is_finished() {
+            self.bar.finish_with_message("Done");
         }
     }
 }
