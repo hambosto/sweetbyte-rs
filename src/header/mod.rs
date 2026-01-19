@@ -13,7 +13,6 @@ pub mod mac;
 pub mod section;
 pub mod serializer;
 
-#[derive(Default)]
 pub struct Header {
     original_size: u64,
     flags: u32,
@@ -22,9 +21,8 @@ pub struct Header {
 }
 
 impl Header {
-    #[inline]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(version: u16) -> Self {
+        Self { original_size: 0, flags: 0, version, sections: None }
     }
 
     #[inline]
