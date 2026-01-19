@@ -48,6 +48,7 @@ impl Writer {
                 bar.add(r.size as u64);
             }
         }
+
         Ok(())
     }
 }

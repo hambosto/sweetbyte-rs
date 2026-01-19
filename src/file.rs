@@ -10,7 +10,7 @@ use walkdir::WalkDir;
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::types::ProcessorMode;
 
-static EXCLUSION_MATCHERS: LazyLock<Vec<String>> = LazyLock::new(|| EXCLUDED_PATTERNS.iter().map(|s| s.to_string()).collect());
+static EXCLUSION_MATCHERS: LazyLock<Vec<String>> = LazyLock::new(|| EXCLUDED_PATTERNS.iter().map(|s| (*s).to_string()).collect());
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {
