@@ -1,6 +1,4 @@
-use anyhow::{Result, anyhow, bail};
-
-pub const MAX_BLOCK_SIZE: usize = 255;
+use anyhow::{Result, ensure};
 
 pub struct Padding {
     block_size: usize,
@@ -8,30 +6,33 @@ pub struct Padding {
 
 impl Padding {
     pub fn new(block_size: usize) -> Result<Self> {
-        (block_size > 0 && block_size <= MAX_BLOCK_SIZE)
-            .then_some(Self { block_size })
-            .ok_or_else(|| anyhow!("block size must be between 1 and 255, got {}", block_size))
+        ensure!(block_size > 0, "block size must be greater than 0");
+        Ok(Self { block_size })
     }
 
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            bail!("data cannot be empty");
-        }
+        ensure!(!data.is_empty(), "data cannot be empty");
+        let padding_len = self.block_size - (data.len() % self.block_size as usize);
+        let mut padded = Vec::with_capacity(data.len() + padding_len as usize);
+        padded.extend_from_slice(data);
+        padded.resize(padded.len() + padding_len as usize, padding_len as u8);
 
-        let padding_len = self.block_size - (data.len() % self.block_size);
-        let mut padded_data = Vec::with_capacity(data.len() + padding_len);
-        padded_data.extend_from_slice(data);
-        padded_data.extend(std::iter::repeat_n(padding_len as u8, padding_len));
-        Ok(padded_data)
+        Ok(padded)
     }
 
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            bail!("data cannot be empty");
-        }
+        ensure!(!data.is_empty(), "cannot unpad empty data");
+        let padding_len = *data.last().unwrap();
 
+        ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {}", padding_len);
+        let padding_len = padding_len as usize;
+
+        ensure!(data.len() >= padding_len, "data too short for padding length");
         let data_len = data.len();
-        let padding_len = data[data_len - 1] as usize;
+
+        let padding_bytes = &data[data_len - padding_len..];
+        ensure!(padding_bytes.iter().all(|&b| b == padding_len as u8), "invalid PKCS#7 padding bytes");
+
         Ok(data[..data_len - padding_len].to_vec())
     }
 }
