@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, ensure};
 
 use crate::config::{HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
 use crate::header::Header;
@@ -25,9 +25,7 @@ impl<'a> Deserializer<'a> {
         self.header.set_sections(sections);
 
         let magic = self.header.get_section(SectionType::Magic, MAGIC_SIZE)?;
-        if !Mac::verify_magic(magic, &MAGIC_BYTES.to_be_bytes()) {
-            bail!("invalid magic bytes");
-        }
+        ensure!(Mac::verify_magic(magic, &MAGIC_BYTES.to_be_bytes()), "invalid magic bytes");
 
         let header_data = self.header.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?.to_vec();
         self.deserialize_header_data(&header_data)?;
@@ -82,9 +80,7 @@ impl<'a> Deserializer<'a> {
     }
 
     fn deserialize_header_data(&mut self, data: &[u8]) -> Result<()> {
-        if data.len() < HEADER_DATA_SIZE {
-            bail!("invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
-        }
+        ensure!(data.len() >= HEADER_DATA_SIZE, "invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
 
         self.header
             .set_version(u16::from_be_bytes(data[0..2].try_into().context("slice has incorrect length for u16 conversion")?));

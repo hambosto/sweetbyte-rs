@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, ensure};
 use reed_solomon_erasure::galois_8::ReedSolomon;
 
 pub struct Encoding {
@@ -16,13 +16,8 @@ impl Encoding {
     }
 
     pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            bail!("input data cannot be empty");
-        }
-
-        if data.len() > MAX_DATA_LEN {
-            bail!("data size {} exceeds maximum {} bytes", data.len(), MAX_DATA_LEN);
-        }
+        ensure!(!data.is_empty(), "input data cannot be empty");
+        ensure!(data.len() <= MAX_DATA_LEN, "data size {} exceeds maximum {} bytes", data.len(), MAX_DATA_LEN);
 
         let mut shards = self.split(data, false);
         self.encoder.encode(&mut shards)?;
@@ -30,14 +25,10 @@ impl Encoding {
     }
 
     pub fn decode(&self, encoded: &[u8]) -> Result<Vec<u8>> {
-        if encoded.is_empty() {
-            bail!("encoded data cannot be empty");
-        }
+        ensure!(!encoded.is_empty(), "encoded data cannot be empty");
 
         let total_shards = self.data_shards + self.parity_shards;
-        if !encoded.len().is_multiple_of(total_shards) {
-            bail!("encoded data length {} not divisible by total shards {}", encoded.len(), total_shards);
-        }
+        ensure!(encoded.len().is_multiple_of(total_shards), "encoded data length {} not divisible by total shards {}", encoded.len(), total_shards);
 
         let mut shards: Vec<Option<Vec<u8>>> = self.split(encoded, true).into_iter().map(Some).collect();
         self.encoder.reconstruct(&mut shards)?;

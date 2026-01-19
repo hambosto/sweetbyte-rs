@@ -1,6 +1,6 @@
 use std::io::{BufReader, Read};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, ensure};
 use crossbeam_channel::Sender;
 
 use crate::types::{Processing, Task};
@@ -14,9 +14,7 @@ pub struct Reader {
 
 impl Reader {
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
-        if chunk_size < MIN_CHUNK_SIZE {
-            bail!("chunk size must be at least {} bytes, got {}", MIN_CHUNK_SIZE, chunk_size);
-        }
+        ensure!(chunk_size >= MIN_CHUNK_SIZE, "chunk size must be at least {} bytes, got {}", MIN_CHUNK_SIZE, chunk_size);
 
         Ok(Self { mode, chunk_size })
     }

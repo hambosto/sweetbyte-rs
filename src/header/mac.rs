@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, ensure};
 use hmac::{Hmac, Mac as HmacMac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
@@ -11,9 +11,7 @@ pub struct Mac([u8; MAC_SIZE]);
 
 impl Mac {
     pub fn compute(key: &[u8], parts: &[&[u8]]) -> Result<Self> {
-        if key.is_empty() {
-            bail!("mac key cannot be empty");
-        }
+        ensure!(!key.is_empty(), "mac key cannot be empty");
 
         let mut mac = HmacSha256::new_from_slice(key).map_err(|e| anyhow!("hmac creation failed: {}", e))?;
         parts.iter().filter(|part| !part.is_empty()).for_each(|part| mac.update(part));
@@ -29,17 +27,13 @@ impl Mac {
     pub fn verify(&self, key: &[u8], parts: &[&[u8]]) -> Result<()> {
         let computed = Self::compute(key, parts)?;
 
-        if !bool::from(self.0.ct_eq(&computed.0)) {
-            bail!("mac verification failed");
-        }
+        ensure!(bool::from(self.0.ct_eq(&computed.0)), "mac verification failed");
 
         Ok(())
     }
 
     pub fn verify_bytes(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
-        if expected.len() != MAC_SIZE {
-            bail!("invalid mac length: expected {}, got {}", MAC_SIZE, expected.len());
-        }
+        ensure!(expected.len() == MAC_SIZE, "invalid mac length: expected {}, got {}", MAC_SIZE, expected.len());
 
         let array: [u8; MAC_SIZE] = expected.try_into().map_err(|_| anyhow!("length check ensure conversion succeeds"))?;
         let expected_mac = Self(array);

@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, ensure};
 
 use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES};
 use crate::header::Header;
@@ -19,13 +19,8 @@ impl<'a> Serializer<'a> {
     pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         self.header.validate()?;
 
-        if salt.len() != ARGON_SALT_LEN {
-            bail!("invalid salt size: expected {}, got {}", ARGON_SALT_LEN, salt.len());
-        }
-
-        if key.is_empty() {
-            bail!("key cannot be empty");
-        }
+        ensure!(salt.len() == ARGON_SALT_LEN, "invalid salt size: expected {}, got {}", ARGON_SALT_LEN, salt.len());
+        ensure!(!key.is_empty(), "key cannot be empty");
 
         let magic = MAGIC_BYTES.to_be_bytes();
         let header_data = self.serialize_header_data();

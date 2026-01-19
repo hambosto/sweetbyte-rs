@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, ensure};
 use argon2::Algorithm::Argon2id;
 use argon2::Version::V0x13;
 use argon2::{Argon2, Params};
@@ -10,9 +10,7 @@ pub struct Kdf([u8; ARGON_KEY_LEN]);
 
 impl Kdf {
     pub fn derive(password: &[u8], salt: &[u8]) -> Result<Self> {
-        if password.is_empty() {
-            bail!("password cannot be empty");
-        }
+        ensure!(!password.is_empty(), "password cannot be empty");
 
         let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_THREADS, Some(ARGON_KEY_LEN)).map_err(|e| anyhow!("invalid argon2 parameters: {}", e))?;
         let argon2 = Argon2::new(Argon2id, V0x13, params);

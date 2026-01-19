@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, ensure};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Password, Select};
 
@@ -21,9 +21,7 @@ impl Prompt {
         let password = self.prompt_password("Enter encryption password")?;
         let confirmation = self.prompt_password("Confirm password")?;
 
-        if password != confirmation {
-            bail!("passwords do not match");
-        }
+        ensure!(password == confirmation, "password do not math");
 
         Ok(password)
     }
@@ -47,9 +45,7 @@ impl Prompt {
     }
 
     pub fn select_file(&self, files: &[File]) -> Result<PathBuf> {
-        if files.is_empty() {
-            bail!("no files available for selection");
-        }
+        ensure!(!files.is_empty(), "no files available for selection");
 
         let display_names: Vec<String> = files.iter().map(|f| f.path().display().to_string()).collect();
         let selection = Select::with_theme(&self.theme)
@@ -74,13 +70,8 @@ impl Prompt {
         Password::with_theme(&self.theme)
             .with_prompt(prompt)
             .validate_with(|input: &String| -> Result<()> {
-                if input.trim().is_empty() {
-                    bail!("password cannot be empty or whitespace only");
-                }
-
-                if input.len() < self.password_min_length {
-                    bail!("password must be at least {} characters long", self.password_min_length);
-                }
+                ensure!(!input.trim().is_empty(), "password cannot be empty or whitespace only");
+                ensure!(input.len() >= self.password_min_length, "password must be at least {} characters long", self.password_min_length);
 
                 Ok(())
             })

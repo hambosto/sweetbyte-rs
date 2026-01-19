@@ -1,6 +1,6 @@
 use std::io::{BufReader, Write};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, ensure};
 
 use crate::cipher::Kdf;
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
@@ -21,9 +21,7 @@ impl Encryptor {
     pub fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
         src.validate(true)?;
         let size = src.size()?;
-        if size == 0 {
-            bail!("cannot encrypt a file with zero size");
-        }
+        ensure!(size != 0, "cannot encrypt a file with zero size");
 
         let salt: [u8; ARGON_SALT_LEN] = Kdf::generate_salt()?;
         let key = Kdf::derive(self.password.as_bytes(), &salt)?;
@@ -50,17 +48,13 @@ impl Decryptor {
     }
 
     pub fn decrypt(&self, src: &File, dest: &File) -> Result<()> {
-        if !src.exists() {
-            bail!("source file not found: {}", src.path().display());
-        }
+        ensure!(src.exists(), "source file not found: {}", src.path().display());
 
         let mut reader = src.reader()?;
         let header = read_and_verify_header(&mut reader, self.password.as_bytes())?;
 
         let size = header.original_size();
-        if size == 0 {
-            bail!("cannot decrypt a file with zero size");
-        }
+        ensure!(size != 0, "cannot decrypt a file with zero size");
 
         let key = Kdf::derive(self.password.as_bytes(), header.salt()?)?;
         let reader = reader.into_inner();
@@ -85,9 +79,7 @@ fn read_and_verify_header(reader: &mut BufReader<std::fs::File>, password: &[u8]
     let key = Kdf::derive(password, h.salt()?)?;
     h.verify(key.as_bytes()).context("incorrect password or corrupt file")?;
 
-    if !h.is_protected() {
-        bail!("file is not protected");
-    }
+    ensure!(h.is_protected(), "file is not protected");
 
     Ok(h)
 }

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 
@@ -129,9 +129,7 @@ fn prompt_password(prompt: &Prompt, processing: Processing) -> Result<String> {
 
 fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
     let mut files = File::discover(mode)?;
-    if files.is_empty() {
-        bail!("no eligible files found");
-    }
+    ensure!(!files.is_empty(), "no eligible files found"); 
 
     show_file_info(&mut files)?;
     let path = prompt.select_file(&files)?;

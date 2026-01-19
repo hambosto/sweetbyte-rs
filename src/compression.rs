@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, ensure};
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -37,9 +37,7 @@ impl Compressor {
 
     #[inline]
     pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            bail!("data cannot be empty");
-        }
+        ensure!(!data.is_empty(), "data cannot be empty");
 
         let mut encoder = ZlibEncoder::new(Vec::new(), self.level);
         encoder.write_all(data).context("compression failed")?;
@@ -48,9 +46,7 @@ impl Compressor {
 
     #[inline]
     pub fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            bail!("data cannot be empty");
-        }
+        ensure!(!data.is_empty(), "data cannot be empty");
 
         let mut decompressed = Vec::with_capacity(data.len() * 2);
         ZlibDecoder::new(data).read_to_end(&mut decompressed).context("decompression failed")?;

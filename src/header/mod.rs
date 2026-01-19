@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, ensure};
 
 use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE};
 use crate::header::deserializer::Deserializer;
@@ -81,13 +81,8 @@ impl Header {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.version > CURRENT_VERSION {
-            bail!("unsupported version: {} (current: {})", self.version, CURRENT_VERSION);
-        }
-
-        if self.original_size == 0 {
-            bail!("original size cannot be zero");
-        }
+        ensure!(self.version <= CURRENT_VERSION, "unsupported version: {} (current: {})", self.version, CURRENT_VERSION);
+        ensure!(self.original_size != 0, "original size cannot be zero");
 
         Ok(())
     }
@@ -107,9 +102,7 @@ impl Header {
     }
 
     pub fn verify(&self, key: &[u8]) -> Result<()> {
-        if key.is_empty() {
-            bail!("key cannot be empty");
-        }
+        ensure!(!key.is_empty(), "key cannot be empty");
 
         let expected_mac = self.get_section(SectionType::Mac, MAC_SIZE)?;
         let magic = self.get_section(SectionType::Magic, MAGIC_SIZE)?;

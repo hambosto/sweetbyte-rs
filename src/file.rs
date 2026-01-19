@@ -3,7 +3,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, ensure};
 use fast_glob::glob_match;
 use walkdir::WalkDir;
 
@@ -110,29 +110,20 @@ impl File {
     }
 
     pub fn delete(&self) -> Result<()> {
-        if !self.exists() {
-            bail!("file not found: {}", self.path.display());
-        }
+        ensure!(self.exists(), "file not found: {}", self.path.display());
 
         fs::remove_file(&self.path).with_context(|| format!("failed to delete file: {}", self.path.display()))
     }
 
     pub fn validate(&mut self, must_exist: bool) -> Result<()> {
         if must_exist {
-            if !self.exists() {
-                bail!("file not found: {}", self.path.display());
-            }
-
-            if self.is_dir() {
-                bail!("path is a directory: {}", self.path.display());
-            }
+            ensure!(self.exists(), "file not found: {}", self.path.display());
+            ensure!(!self.is_dir(), "path is a directory: {}", self.path.display());
 
             let size = self.size()?;
-            if size == 0 {
-                bail!("file is empty: {}", self.path.display());
-            }
-        } else if self.exists() {
-            bail!("file already exists: {}", self.path.display());
+            ensure!(size != 0, "file is empty: {}", self.path.display());
+        } else {
+            ensure!(!self.exists(), "file already exists: {}", self.path.display());
         }
 
         Ok(())

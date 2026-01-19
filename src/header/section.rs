@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, ensure};
 
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
@@ -85,9 +85,7 @@ impl Sections {
     pub fn get_with_min_len(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
         let data = self.get(section_type).ok_or_else(|| anyhow!("{} section not found", section_type))?;
 
-        if data.len() < min_len {
-            bail!("{} section too short: expected {}, got {}", section_type, min_len, data.len());
-        }
+        ensure!(data.len() >= min_len, "{} section too short: expected {}, got {}", section_type, min_len, data.len());
 
         Ok(&data[..min_len])
     }
@@ -104,9 +102,7 @@ impl SectionEncoder {
     }
 
     pub fn encode_section(&self, data: &[u8]) -> Result<EncodedSection> {
-        if data.is_empty() {
-            bail!("data cannot be empty");
-        }
+        ensure!(!data.is_empty(), "data cannot be empty");
 
         let encoded = self.encoder.encode(data)?;
         let length = encoded.len() as u32;
@@ -115,9 +111,7 @@ impl SectionEncoder {
     }
 
     pub fn decode_section(&self, section: &EncodedSection) -> Result<Vec<u8>> {
-        if section.data.is_empty() {
-            bail!("invalid encoded section");
-        }
+        ensure!(!section.data.is_empty(), "invalid encoded section");
 
         self.encoder.decode(&section.data)
     }
@@ -129,9 +123,7 @@ impl SectionEncoder {
 
     pub fn decode_length(&self, section: &EncodedSection) -> Result<u32> {
         let decoded = self.decode_section(section)?;
-        if decoded.len() < 4 {
-            bail!("invalid length prefix size");
-        }
+        ensure!(decoded.len() >= 4, "invalid length prefix size");
 
         let bytes: [u8; 4] = decoded[..4].try_into().map_err(|_| anyhow!("slice length verified"))?;
         Ok(u32::from_be_bytes(bytes))
