@@ -13,7 +13,7 @@ pub mod mac;
 pub mod section;
 pub mod serializer;
 
-#[derive(Debug)]
+#[derive(Default)]
 pub struct Header {
     original_size: u64,
     flags: u32,
@@ -23,9 +23,8 @@ pub struct Header {
 
 impl Header {
     #[inline]
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self { original_size: 0, flags: 0, version: CURRENT_VERSION, sections: None }
+        Self::default()
     }
 
     #[inline]

@@ -7,6 +7,8 @@ pub struct Encoding {
     parity_shards: usize,
 }
 
+const MAX_DATA_LEN: usize = 1 << 30;
+
 impl Encoding {
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
         let encoder = ReedSolomon::new(data_shards, parity_shards)?;
@@ -18,6 +20,10 @@ impl Encoding {
             bail!("input data cannot be empty");
         }
 
+        if data.len() > MAX_DATA_LEN {
+            bail!("data size {} exceeds maximum {} bytes", data.len(), MAX_DATA_LEN);
+        }
+
         let mut shards = self.split(data, false);
         self.encoder.encode(&mut shards)?;
         Ok(self.combine(&shards))
@@ -26,6 +32,11 @@ impl Encoding {
     pub fn decode(&self, encoded: &[u8]) -> Result<Vec<u8>> {
         if encoded.is_empty() {
             bail!("encoded data cannot be empty");
+        }
+
+        let total_shards = self.data_shards + self.parity_shards;
+        if !encoded.len().is_multiple_of(total_shards) {
+            bail!("encoded data length {} not divisible by total shards {}", encoded.len(), total_shards);
         }
 
         let mut shards: Vec<Option<Vec<u8>>> = self.split(encoded, true).into_iter().map(Some).collect();

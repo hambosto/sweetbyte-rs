@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow, bail};
 
-use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
+use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES};
 use crate::header::Header;
 use crate::header::mac::Mac;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType};
@@ -17,20 +17,6 @@ impl<'a> Serializer<'a> {
     }
 
     pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        self.validate_inputs(salt, key)?;
-
-        let magic = MAGIC_BYTES.to_be_bytes();
-        let header_data = self.serialize_header_data();
-        let mac = Mac::compute_bytes(key, &[&magic, salt, &header_data])?;
-
-        let sections = self.encode_sections(&magic, salt, &header_data, &mac)?;
-        let length_sections = self.encode_length_prefixes(&sections)?;
-
-        let lengths_header = self.build_lengths_header(&length_sections)?;
-        self.assemble_header(&lengths_header, &length_sections, &sections)
-    }
-
-    fn validate_inputs(&self, salt: &[u8], key: &[u8]) -> Result<()> {
         self.header.validate()?;
 
         if salt.len() != ARGON_SALT_LEN {
@@ -41,7 +27,15 @@ impl<'a> Serializer<'a> {
             bail!("key cannot be empty");
         }
 
-        Ok(())
+        let magic = MAGIC_BYTES.to_be_bytes();
+        let header_data = self.serialize_header_data();
+        let mac = Mac::compute_bytes(key, &[&magic, salt, &header_data])?;
+
+        let sections = self.encode_sections(&magic, salt, &header_data, &mac)?;
+        let length_sections = self.encode_length_prefixes(&sections)?;
+
+        let lengths_header = self.build_lengths_header(&length_sections)?;
+        self.assemble_header(&lengths_header, &length_sections, &sections)
     }
 
     fn encode_sections(&self, magic: &[u8], salt: &[u8], header_data: &[u8], mac: &[u8]) -> Result<[(SectionType, EncodedSection); 4]> {
@@ -98,10 +92,4 @@ impl<'a> Serializer<'a> {
         data[6..14].copy_from_slice(&self.header.original_size().to_be_bytes());
         data
     }
-}
-
-#[inline]
-#[must_use]
-pub fn magic_bytes() -> [u8; MAGIC_SIZE] {
-    MAGIC_BYTES.to_be_bytes()
 }

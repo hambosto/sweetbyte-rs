@@ -7,7 +7,6 @@ use crate::config::MAC_SIZE;
 
 type HmacSha256 = Hmac<Sha256>;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Mac([u8; MAC_SIZE]);
 
 impl Mac {

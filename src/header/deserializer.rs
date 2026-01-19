@@ -2,11 +2,10 @@ use std::io::Read;
 
 use anyhow::{Context, Result, bail};
 
-use crate::config::{HEADER_DATA_SIZE, MAGIC_SIZE};
+use crate::config::{HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
 use crate::header::Header;
 use crate::header::mac::Mac;
 use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType, Sections};
-use crate::header::serializer::magic_bytes;
 
 pub struct Deserializer<'a> {
     header: &'a mut Header,
@@ -26,7 +25,7 @@ impl<'a> Deserializer<'a> {
         self.header.set_sections(sections);
 
         let magic = self.header.get_section(SectionType::Magic, MAGIC_SIZE)?;
-        if !Mac::verify_magic(magic, &magic_bytes()) {
+        if !Mac::verify_magic(magic, &MAGIC_BYTES.to_be_bytes()) {
             bail!("invalid magic bytes");
         }
 
@@ -38,7 +37,7 @@ impl<'a> Deserializer<'a> {
     }
 
     fn read_length_sizes<R: Read>(&self, reader: &mut R) -> Result<[(SectionType, u32); 4]> {
-        let header = read_exact::<16, _>(reader).context("failed to read lengths header")?;
+        let header = self.read_exact::<16, R>(reader).context("failed to read lengths header")?;
 
         Ok([
             (SectionType::Magic, u32::from_be_bytes(header[0..4].try_into().context("slice has incorrect length for u32 conversion")?)),
@@ -96,11 +95,10 @@ impl<'a> Deserializer<'a> {
 
         Ok(())
     }
-}
 
-#[inline]
-fn read_exact<const N: usize, R: Read>(reader: &mut R) -> Result<[u8; N]> {
-    let mut buf = [0u8; N];
-    reader.read_exact(&mut buf)?;
-    Ok(buf)
+    fn read_exact<const N: usize, R: Read>(&self, reader: &mut R) -> Result<[u8; N]> {
+        let mut buffer = [0u8; N];
+        reader.read_exact(&mut buffer)?;
+        Ok(buffer)
+    }
 }

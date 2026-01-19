@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter, Result};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum ProcessorMode {
     Encrypt,
     Decrypt,
@@ -24,7 +24,7 @@ impl Display for ProcessorMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub enum Processing {
     Encryption,
     Decryption,
@@ -54,13 +54,11 @@ impl Display for Processing {
     }
 }
 
-#[derive(Debug)]
 pub struct Task {
     pub data: Vec<u8>,
     pub index: u64,
 }
 
-#[derive(Debug)]
 pub struct TaskResult {
     pub data: Vec<u8>,
     pub error: Option<Box<str>>,

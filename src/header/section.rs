@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow, bail};
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum SectionType {
     Magic,
     Salt,
@@ -24,7 +24,6 @@ impl std::fmt::Display for SectionType {
 
 pub(crate) const SECTION_ORDER: [SectionType; 4] = [SectionType::Magic, SectionType::Salt, SectionType::HeaderData, SectionType::Mac];
 
-#[derive(Debug)]
 pub struct EncodedSection {
     data: Vec<u8>,
     length: u32,
@@ -49,7 +48,7 @@ impl EncodedSection {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Sections {
     magic: Vec<u8>,
     salt: Vec<u8>,
@@ -95,13 +94,13 @@ impl Sections {
 }
 
 pub struct SectionEncoder {
-    reed_solomon: Encoding,
+    encoder: Encoding,
 }
 
 impl SectionEncoder {
     pub fn new() -> Result<Self> {
-        let reed_solomon = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
-        Ok(Self { reed_solomon })
+        let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
+        Ok(Self { encoder })
     }
 
     pub fn encode_section(&self, data: &[u8]) -> Result<EncodedSection> {
@@ -109,7 +108,7 @@ impl SectionEncoder {
             bail!("data cannot be empty");
         }
 
-        let encoded = self.reed_solomon.encode(data)?;
+        let encoded = self.encoder.encode(data)?;
         let length = encoded.len() as u32;
 
         Ok(EncodedSection::new(encoded, length))
@@ -120,7 +119,7 @@ impl SectionEncoder {
             bail!("invalid encoded section");
         }
 
-        self.reed_solomon.decode(&section.data)
+        self.encoder.decode(&section.data)
     }
 
     #[inline]

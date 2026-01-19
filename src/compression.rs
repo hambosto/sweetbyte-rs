@@ -5,7 +5,7 @@ use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Default)]
 pub enum CompressionLevel {
     None,
     #[default]

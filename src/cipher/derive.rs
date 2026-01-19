@@ -6,7 +6,6 @@ use rand::rand_core::{OsRng, TryRngCore};
 
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_THREADS, ARGON_TIME};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Kdf([u8; ARGON_KEY_LEN]);
 
 impl Kdf {
