@@ -52,10 +52,4 @@ impl Mac {
     pub fn verify_magic(actual: &[u8], expected: &[u8]) -> bool {
         bool::from(actual.ct_eq(expected))
     }
-
-    #[inline]
-    #[must_use]
-    pub fn as_bytes(&self) -> &[u8; MAC_SIZE] {
-        &self.0
-    }
 }

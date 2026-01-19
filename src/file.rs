@@ -40,11 +40,6 @@ impl File {
     }
 
     #[inline]
-    pub fn size_if_loaded(&self) -> Option<u64> {
-        self.size
-    }
-
-    #[inline]
     pub fn is_encrypted(&self) -> bool {
         self.path.as_os_str().to_string_lossy().ends_with(FILE_EXTENSION)
     }

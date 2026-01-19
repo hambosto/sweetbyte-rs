@@ -7,9 +7,9 @@ use rand::rand_core::{OsRng, TryRngCore};
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_THREADS, ARGON_TIME};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct KDF([u8; ARGON_KEY_LEN]);
+pub struct Kdf([u8; ARGON_KEY_LEN]);
 
-impl KDF {
+impl Kdf {
     pub fn derive(password: &[u8], salt: &[u8]) -> Result<Self> {
         if password.is_empty() {
             bail!("password cannot be empty");

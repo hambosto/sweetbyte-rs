@@ -24,11 +24,6 @@ impl ProgressBar {
     pub fn finish(&self) {
         self.bar.finish();
     }
-
-    #[inline]
-    pub fn set_message(&self, msg: &str) {
-        self.bar.set_message(msg.to_string());
-    }
 }
 
 impl Drop for ProgressBar {

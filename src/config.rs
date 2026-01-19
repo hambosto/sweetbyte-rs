@@ -1,9 +1,6 @@
 /// Application name.
 pub const APP_NAME: &str = "SweetByte";
 
-/// Application version.
-pub const APP_VERSION: &str = "26.1.0";
-
 /// Encrypted file extension.
 pub const FILE_EXTENSION: &str = ".swx";
 
@@ -27,9 +24,6 @@ pub const DATA_SHARDS: usize = 4;
 
 /// Number of parity shards.
 pub const PARITY_SHARDS: usize = 10;
-
-/// Total number of shards.
-pub const TOTAL_SHARDS: usize = DATA_SHARDS + PARITY_SHARDS;
 
 /// PKCS7 block size.
 pub const BLOCK_SIZE: usize = 128;

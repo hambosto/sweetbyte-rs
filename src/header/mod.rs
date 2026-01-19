@@ -107,10 +107,6 @@ impl Header {
         self.get_section(SectionType::Salt, ARGON_SALT_LEN)
     }
 
-    pub fn magic(&self) -> Result<&[u8]> {
-        self.get_section(SectionType::Magic, MAGIC_SIZE)
-    }
-
     pub fn verify(&self, key: &[u8]) -> Result<()> {
         if key.is_empty() {
             bail!("key cannot be empty");

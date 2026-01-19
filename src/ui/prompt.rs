@@ -17,10 +17,6 @@ impl Prompt {
         Self { password_min_length, theme: ColorfulTheme::default() }
     }
 
-    pub fn with_theme(theme: ColorfulTheme, password_min_length: usize) -> Self {
-        Self { theme, password_min_length }
-    }
-
     pub fn prompt_encryption_password(&self) -> Result<String> {
         let password = self.prompt_password("Enter encryption password")?;
         let confirmation = self.prompt_password("Confirm password")?;

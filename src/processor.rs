@@ -2,7 +2,7 @@ use std::io::{BufReader, Write};
 
 use anyhow::{Context, Result, bail};
 
-use crate::cipher::KDF;
+use crate::cipher::Kdf;
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN};
 use crate::file::File;
 use crate::header::Header;
@@ -25,8 +25,8 @@ impl Encryptor {
             bail!("cannot encrypt a file with zero size");
         }
 
-        let salt: [u8; ARGON_SALT_LEN] = KDF::generate_salt()?;
-        let key = KDF::derive(self.password.as_bytes(), &salt)?;
+        let salt: [u8; ARGON_SALT_LEN] = Kdf::generate_salt()?;
+        let key = Kdf::derive(self.password.as_bytes(), &salt)?;
 
         let header = build_header(size, &salt, key.as_bytes())?;
         let mut writer = dest.writer()?;
@@ -62,7 +62,7 @@ impl Decryptor {
             bail!("cannot decrypt a file with zero size");
         }
 
-        let key = KDF::derive(self.password.as_bytes(), header.salt()?)?;
+        let key = Kdf::derive(self.password.as_bytes(), header.salt()?)?;
         let reader = reader.into_inner();
         let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
 
@@ -82,7 +82,7 @@ fn read_and_verify_header(reader: &mut BufReader<std::fs::File>, password: &[u8]
     let mut h = Header::new();
     h.unmarshal(reader.get_mut())?;
 
-    let key = KDF::derive(password, h.salt()?)?;
+    let key = Kdf::derive(password, h.salt()?)?;
     h.verify(key.as_bytes()).context("incorrect password or corrupt file")?;
 
     if !h.is_protected() {

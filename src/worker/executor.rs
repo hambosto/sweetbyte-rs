@@ -25,21 +25,15 @@ impl Executor {
                 let results = results.clone();
 
                 scope.spawn(move || {
-                    Self::worker_loop(pipeline, tasks, results);
+                    for task in tasks {
+                        let result = pipeline.process(task);
+                        if results.send(result).is_err() {
+                            break;
+                        }
+                    }
                 });
             }
-
             drop(results);
         });
-    }
-
-    #[inline]
-    fn worker_loop(pipeline: Arc<Pipeline>, tasks: Receiver<Task>, results: Sender<TaskResult>) {
-        for task in tasks {
-            let result = pipeline.process(task);
-            if results.send(result).is_err() {
-                break;
-            }
-        }
     }
 }

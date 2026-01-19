@@ -78,9 +78,4 @@ impl TaskResult {
     pub fn err(index: u64, error: anyhow::Error) -> Self {
         Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
     }
-
-    #[inline]
-    pub fn is_ok(&self) -> bool {
-        self.error.is_none()
-    }
 }

@@ -41,7 +41,6 @@ impl Reader {
             }
 
             sender.send(Task { data: buffer[..bytes_read].to_vec(), index }).map_err(|_| anyhow!("channel closed"))?;
-
             index += 1;
         }
 
@@ -68,7 +67,6 @@ impl Reader {
             reader.read_exact(&mut data).context("failed to read chunk data")?;
 
             sender.send(Task { data, index }).map_err(|_| anyhow!("channel closed"))?;
-
             index += 1;
         }
 
