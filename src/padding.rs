@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow, ensure};
 
 pub struct Padding {
     block_size: usize,
@@ -12,17 +12,19 @@ impl Padding {
 
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         ensure!(!data.is_empty(), "data cannot be empty");
-        let padding_len = self.block_size - (data.len() % self.block_size as usize);
-        let mut padded = Vec::with_capacity(data.len() + padding_len as usize);
+        let padding_len = self.block_size - (data.len() % self.block_size);
+
+        let mut padded = Vec::with_capacity(data.len() + padding_len);
+
         padded.extend_from_slice(data);
-        padded.resize(padded.len() + padding_len as usize, padding_len as u8);
+        padded.resize(padded.len() + padding_len, padding_len as u8);
 
         Ok(padded)
     }
 
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         ensure!(!data.is_empty(), "cannot unpad empty data");
-        let padding_len = *data.last().unwrap();
+        let padding_len = *data.last().ok_or_else(|| anyhow!("cannot unpad empty data"))?;
 
         ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {}", padding_len);
         let padding_len = padding_len as usize;
