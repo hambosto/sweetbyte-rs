@@ -34,7 +34,7 @@ impl Buffer {
             return Vec::new();
         }
 
-        let mut results: Vec<_> = self.buffer.drain().collect();
+        let mut results: Vec<(u64, TaskResult)> = self.buffer.drain().collect();
         results.sort_unstable_by_key(|(idx, _)| *idx);
 
         self.next_idx = 0;
