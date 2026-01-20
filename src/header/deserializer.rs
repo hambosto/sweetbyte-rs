@@ -81,12 +81,9 @@ impl Deserializer {
     fn deserialize_header_data(&mut self, data: &[u8], header: &mut Header) -> Result<()> {
         ensure!(data.len() >= HEADER_DATA_SIZE, "invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
 
-        header
-            .set_version(u16::from_be_bytes(data[0..2].try_into().context("slice has incorrect length for u16 conversion")?));
-        header
-            .set_flags(u32::from_be_bytes(data[2..6].try_into().context("slice has incorrect length for u32 conversion")?));
-        header
-            .set_original_size(u64::from_be_bytes(data[6..14].try_into().context("slice has incorrect length for u64 conversion")?));
+        header.set_version(u16::from_be_bytes(data[0..2].try_into().context("slice has incorrect length for u16 conversion")?));
+        header.set_flags(u32::from_be_bytes(data[2..6].try_into().context("slice has incorrect length for u32 conversion")?));
+        header.set_original_size(u64::from_be_bytes(data[6..14].try_into().context("slice has incorrect length for u64 conversion")?));
 
         Ok(())
     }

@@ -13,28 +13,21 @@ impl Padding {
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         ensure!(!data.is_empty(), "data cannot be empty");
         let padding_len = self.block_size - (data.len() % self.block_size);
-
-        let mut padded = Vec::with_capacity(data.len() + padding_len);
-
-        padded.extend_from_slice(data);
-        padded.resize(padded.len() + padding_len, padding_len as u8);
+        let padded = data.iter().copied().chain(std::iter::repeat_n(padding_len as u8, padding_len)).collect();
 
         Ok(padded)
     }
 
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        ensure!(!data.is_empty(), "cannot unpad empty data");
-        let padding_len = *data.last().ok_or_else(|| anyhow!("cannot unpad empty data"))?;
-
+        let padding_len = data.last().copied().ok_or_else(|| anyhow!("cannot unpad empty data"))?;
         ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {}", padding_len);
+
         let padding_len = padding_len as usize;
-
         ensure!(data.len() >= padding_len, "data too short for padding length");
-        let data_len = data.len();
 
-        let padding_bytes = &data[data_len - padding_len..];
+        let (content, padding_bytes) = data.split_at(data.len() - padding_len);
         ensure!(padding_bytes.iter().all(|&b| b == padding_len as u8), "invalid PKCS#7 padding bytes");
 
-        Ok(data[..data_len - padding_len].to_vec())
+        Ok(content.to_vec())
     }
 }

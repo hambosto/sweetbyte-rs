@@ -129,7 +129,7 @@ fn prompt_password(prompt: &Prompt, processing: Processing) -> Result<String> {
 
 fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
     let mut files = File::discover(mode)?;
-    ensure!(!files.is_empty(), "no eligible files found"); 
+    ensure!(!files.is_empty(), "no eligible files found");
 
     show_file_info(&mut files)?;
     let path = prompt.select_file(&files)?;
