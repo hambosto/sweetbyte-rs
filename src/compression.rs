@@ -91,8 +91,8 @@ impl Compressor {
     pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
         ensure!(!data.is_empty(), "data cannot be empty");
 
-        // Pre-allocate output buffer (2x input size as initial capacity).
-        let mut decompressed = Vec::with_capacity(data.len() * 2);
+        // Pre-allocate output buffer.
+        let mut decompressed = Vec::new();
         // Create a zlib decoder and read all decompressed data.
         ZlibDecoder::new(data).read_to_end(&mut decompressed).context("decompression failed")?;
 
