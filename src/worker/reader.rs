@@ -14,21 +14,21 @@ pub struct Reader {
 
 impl Reader {
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
-        ensure!(chunk_size >= MIN_CHUNK_SIZE, "chunk size must be at least {} bytes, got {}", MIN_CHUNK_SIZE, chunk_size);
+        ensure!(chunk_size >= MIN_CHUNK_SIZE, "chunk size must be at least {MIN_CHUNK_SIZE} bytes, got {chunk_size}");
 
         Ok(Self { mode, chunk_size })
     }
 
-    pub fn read_all<R: Read>(&self, input: R, sender: Sender<Task>) -> Result<()> {
+    pub fn read_all<R: Read>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
         let mut reader = BufReader::new(input);
 
         match self.mode {
             Processing::Encryption => self.read_fixed_chunks(&mut reader, sender),
-            Processing::Decryption => self.read_length_prefixed(&mut reader, sender),
+            Processing::Decryption => Self::read_length_prefixed(&mut reader, sender),
         }
     }
 
-    fn read_fixed_chunks<R: Read>(&self, reader: &mut R, sender: Sender<Task>) -> Result<()> {
+    fn read_fixed_chunks<R: Read>(&self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         let mut buffer = vec![0u8; self.chunk_size];
         let mut index = 0u64;
 
@@ -45,7 +45,7 @@ impl Reader {
         Ok(())
     }
 
-    fn read_length_prefixed<R: Read>(&self, reader: &mut R, sender: Sender<Task>) -> Result<()> {
+    fn read_length_prefixed<R: Read>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         let mut index = 0u64;
 
         loop {

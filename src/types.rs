@@ -39,7 +39,7 @@ impl Processing {
         }
     }
 
-    pub fn mode(&self) -> ProcessorMode {
+    pub fn mode(self) -> ProcessorMode {
         match self {
             Self::Encryption => ProcessorMode::Encrypt,
             Self::Decryption => ProcessorMode::Decrypt,
@@ -73,7 +73,7 @@ impl TaskResult {
     }
 
     #[inline]
-    pub fn err(index: u64, error: anyhow::Error) -> Self {
+    pub fn err(index: u64, error: &anyhow::Error) -> Self {
         Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
     }
 }

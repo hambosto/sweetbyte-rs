@@ -20,7 +20,7 @@ impl AesGcm {
         ensure!(!plaintext.is_empty(), "plaintext cannot be empty");
 
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        let mut result = self.inner.encrypt(&nonce, plaintext).map_err(|e| anyhow!("aes-gcm encryption failed: {}", e))?;
+        let mut result = self.inner.encrypt(&nonce, plaintext).map_err(|e| anyhow!("aes-gcm encryption failed: {e}"))?;
 
         result.splice(0..0, nonce.iter().copied());
         Ok(result)

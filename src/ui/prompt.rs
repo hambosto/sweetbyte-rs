@@ -39,7 +39,7 @@ impl Prompt {
             .items(&display_names)
             .default(0)
             .interact()
-            .map_err(|e| anyhow!("mode selection failed: {}", e))?;
+            .map_err(|e| anyhow!("mode selection failed: {e}"))?;
 
         Ok(modes[idx])
     }
@@ -53,7 +53,7 @@ impl Prompt {
             .items(&display_names)
             .default(0)
             .interact()
-            .map_err(|e| anyhow!("file selection failed: {}", e))?;
+            .map_err(|e| anyhow!("file selection failed: {e}"))?;
 
         Ok(files[selection].path().to_path_buf())
     }
@@ -76,7 +76,7 @@ impl Prompt {
                 Ok(())
             })
             .interact()
-            .map_err(|e| anyhow!("password input failed: {}", e))
+            .map_err(|e| anyhow!("password input failed: {e}"))
     }
 
     fn confirm(&self, prompt: &str) -> Result<bool> {
@@ -84,6 +84,6 @@ impl Prompt {
             .with_prompt(prompt)
             .default(false)
             .interact()
-            .map_err(|e| anyhow!("confirmation failed: {}", e))
+            .map_err(|e| anyhow!("confirmation failed: {e}"))
     }
 }

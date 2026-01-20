@@ -23,7 +23,7 @@ impl ChaCha20Poly1305 {
         let mut result = self
             .inner
             .encrypt(XNonce::from_slice(&nonce_bytes), plaintext)
-            .map_err(|e| anyhow!("chacha20poly1305 encryption failed: {}", e))?;
+            .map_err(|e| anyhow!("chacha20poly1305 encryption failed: {e}"))?;
 
         result.splice(0..0, nonce_bytes.iter().copied());
         Ok(result)

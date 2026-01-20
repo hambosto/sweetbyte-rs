@@ -20,7 +20,7 @@ impl Padding {
 
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         let padding_len = data.last().copied().ok_or_else(|| anyhow!("cannot unpad empty data"))?;
-        ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {}", padding_len);
+        ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {padding_len}");
 
         let padding_len = padding_len as usize;
         ensure!(data.len() >= padding_len, "data too short for padding length");

@@ -21,7 +21,7 @@ impl Encoding {
 
         let mut shards = self.split(data, false);
         self.encoder.encode(&mut shards)?;
-        Ok(self.combine(&shards))
+        Ok(Self::combine(&shards))
     }
 
     pub fn decode(&self, encoded: &[u8]) -> Result<Vec<u8>> {
@@ -50,7 +50,7 @@ impl Encoding {
         shards
     }
 
-    fn combine(&self, shards: &[Vec<u8>]) -> Vec<u8> {
+    fn combine(shards: &[Vec<u8>]) -> Vec<u8> {
         shards.iter().flatten().copied().collect()
     }
 

@@ -10,7 +10,7 @@ use walkdir::WalkDir;
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::types::ProcessorMode;
 
-static EXCLUSION_MATCHERS: LazyLock<Vec<String>> = LazyLock::new(|| EXCLUDED_PATTERNS.iter().map(|s| (*s).to_string()).collect());
+static EXCLUSION_MATCHERS: LazyLock<Vec<String>> = LazyLock::new(|| EXCLUDED_PATTERNS.iter().map(|s| (*s).to_owned()).collect());
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct File {
@@ -129,13 +129,13 @@ impl File {
         Ok(())
     }
 
-    pub fn discover(mode: ProcessorMode) -> Result<Vec<Self>> {
-        Ok(WalkDir::new(".")
+    pub fn discover(mode: ProcessorMode) -> Vec<Self> {
+        WalkDir::new(".")
             .into_iter()
             .filter_map(|entry| entry.ok())
             .filter(|entry| entry.file_type().is_file())
-            .map(|entry| File::new(entry.into_path()))
+            .map(|entry| Self::new(entry.into_path()))
             .filter(|file| file.is_eligible(mode))
-            .collect::<Vec<File>>())
+            .collect()
     }
 }

@@ -3,7 +3,7 @@ use std::io::{BufReader, Write};
 use anyhow::{Context, Result, ensure};
 
 use crate::cipher::Kdf;
-use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CURRENT_VERSION};
+use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED};
 use crate::file::File;
 use crate::header::Header;
 use crate::types::Processing;
@@ -66,20 +66,14 @@ impl Decryptor {
 }
 
 fn build_header(size: u64, salt: &[u8; ARGON_SALT_LEN], key: &[u8; ARGON_KEY_LEN]) -> Result<Vec<u8>> {
-    let mut h = Header::new(CURRENT_VERSION);
-    h.set_original_size(size);
-    h.set_protected(true);
-    h.marshal(salt, key)
+    Header::new(CURRENT_VERSION, size, FLAG_PROTECTED)?.serialize(salt, key)
 }
 
 fn read_and_verify_header(reader: &mut BufReader<std::fs::File>, password: &[u8]) -> Result<Header> {
-    let mut h = Header::new(CURRENT_VERSION);
-    h.unmarshal(reader.get_mut())?;
+    let header = Header::deserialize(reader.get_mut())?;
 
-    let key = Kdf::derive(password, h.salt()?)?;
-    h.verify(key.as_bytes()).context("incorrect password or corrupt file")?;
+    let key = Kdf::derive(password, header.salt()?)?;
+    header.verify(key.as_bytes()).context("incorrect password or corrupt file")?;
 
-    ensure!(h.is_protected(), "file is not protected");
-
-    Ok(h)
+    Ok(header)
 }

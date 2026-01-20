@@ -7,14 +7,30 @@ use crate::config::MAC_SIZE;
 
 type HmacSha256 = Hmac<Sha256>;
 
+#[derive(Debug, Clone)]
 pub struct Mac([u8; MAC_SIZE]);
 
 impl Mac {
+    #[inline]
+    #[must_use]
+    pub fn from_bytes(bytes: [u8; MAC_SIZE]) -> Self {
+        Self(bytes)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8; MAC_SIZE] {
+        &self.0
+    }
+
     pub fn compute(key: &[u8], parts: &[&[u8]]) -> Result<Self> {
         ensure!(!key.is_empty(), "mac key cannot be empty");
 
-        let mut mac = HmacSha256::new_from_slice(key).map_err(|e| anyhow!("hmac creation failed: {}", e))?;
-        parts.iter().filter(|part| !part.is_empty()).for_each(|part| mac.update(part));
+        let mut mac = HmacSha256::new_from_slice(key).map_err(|e| anyhow!("hmac creation failed: {e}"))?;
+
+        for part in parts.iter().filter(|p| !p.is_empty()) {
+            mac.update(part);
+        }
 
         Ok(Self(mac.finalize().into_bytes().into()))
     }
@@ -33,16 +49,32 @@ impl Mac {
     }
 
     pub fn verify_bytes(key: &[u8], expected: &[u8], parts: &[&[u8]]) -> Result<()> {
-        ensure!(expected.len() == MAC_SIZE, "invalid mac length: expected {}, got {}", MAC_SIZE, expected.len());
-
-        let array: [u8; MAC_SIZE] = expected.try_into().map_err(|_| anyhow!("length check ensure conversion succeeds"))?;
-        let expected_mac = Self(array);
-        expected_mac.verify(key, parts)
+        let mac = Self::try_from(expected)?;
+        mac.verify(key, parts)
     }
+}
 
+impl AsRef<[u8]> for Mac {
     #[inline]
-    #[must_use]
-    pub fn verify_magic(actual: &[u8], expected: &[u8]) -> bool {
-        bool::from(actual.ct_eq(expected))
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<Mac> for [u8; MAC_SIZE] {
+    #[inline]
+    fn from(mac: Mac) -> Self {
+        mac.0
+    }
+}
+
+impl TryFrom<&[u8]> for Mac {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self> {
+        ensure!(value.len() == MAC_SIZE, "invalid mac length: expected {}, got {}", MAC_SIZE, value.len());
+
+        let array: [u8; MAC_SIZE] = value.try_into().map_err(|_| anyhow!("mac conversion failed"))?;
+        Ok(Self::from_bytes(array))
     }
 }

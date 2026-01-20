@@ -3,92 +3,130 @@ use std::io::Read;
 use anyhow::{Context, Result, ensure};
 
 use crate::config::{HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
-use crate::header::Header;
-use crate::header::mac::Mac;
-use crate::header::section::{EncodedSection, SECTION_ORDER, SectionEncoder, SectionType, Sections};
+use crate::header::section::{EncodedSection, LengthCheck, SECTION_COUNT, SectionEncoder, SectionType, Sections, SectionsBuilder};
 
-pub struct Deserializer {
-    encoder: SectionEncoder,
+#[derive(Debug)]
+pub struct ParsedHeaderData {
+    version: u16,
+    flags: u32,
+    original_size: u64,
+    sections: Sections,
 }
 
-impl Deserializer {
-    pub fn new() -> Result<Self> {
-        let encoder = SectionEncoder::new()?;
-        Ok(Self { encoder })
+impl ParsedHeaderData {
+    #[inline]
+    pub(crate) fn new(version: u16, flags: u32, original_size: u64, sections: Sections) -> Self {
+        Self { version, flags, original_size, sections }
     }
 
-    pub fn unmarshal<R: Read>(&mut self, mut reader: R, header: &mut Header) -> Result<()> {
-        let length_sizes = self.read_length_sizes(&mut reader)?;
+    #[inline]
+    #[must_use]
+    pub fn version(&self) -> u16 {
+        self.version
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn flags(&self) -> u32 {
+        self.flags
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn original_size(&self) -> u64 {
+        self.original_size
+    }
+
+    #[inline]
+    pub fn into_sections(self) -> Sections {
+        self.sections
+    }
+}
+
+pub struct Deserializer<'a> {
+    encoder: &'a SectionEncoder,
+}
+
+impl<'a> Deserializer<'a> {
+    #[inline]
+    #[must_use]
+    pub fn new(encoder: &'a SectionEncoder) -> Self {
+        Self { encoder }
+    }
+
+    pub fn deserialize<R: Read>(&self, mut reader: R) -> Result<ParsedHeaderData> {
+        let length_sizes = Self::read_lengths_header(&mut reader)?;
         let section_lengths = self.read_and_decode_lengths(&mut reader, &length_sizes)?;
-        let sections = self.read_and_decode_data(&mut reader, &section_lengths)?;
-        header.set_sections(sections);
 
-        let magic = header.get_section(SectionType::Magic, MAGIC_SIZE)?;
-        ensure!(Mac::verify_magic(magic, &MAGIC_BYTES.to_be_bytes()), "invalid magic bytes");
+        let sections = self.read_and_decode_sections(&mut reader, &section_lengths)?;
 
-        let header_data_vec = header.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?.to_vec();
-        self.deserialize_header_data(&header_data_vec, header)?;
-        header.validate()?;
+        let magic = sections.get_len(SectionType::Magic, LengthCheck::Exact(MAGIC_SIZE))?;
+        ensure!(magic == MAGIC_BYTES.to_be_bytes(), "invalid magic bytes");
 
-        Ok(())
+        let header_data = sections.get(SectionType::HeaderData).ok_or_else(|| anyhow::anyhow!("HeaderData section not found"))?;
+        let (version, flags, original_size) = Self::parse_header_data(header_data)?;
+
+        Ok(ParsedHeaderData::new(version, flags, original_size, sections))
     }
 
-    fn read_length_sizes<R: Read>(&self, reader: &mut R) -> Result<[(SectionType, u32); 4]> {
-        let header = self.read_exact::<16, R>(reader).context("failed to read lengths header")?;
+    fn read_lengths_header<R: Read>(reader: &mut R) -> Result<[u32; SECTION_COUNT]> {
+        let header = Self::read_exact::<16, R>(reader).context("failed to read lengths header")?;
 
         Ok([
-            (SectionType::Magic, u32::from_be_bytes(header[0..4].try_into().context("slice has incorrect length for u32 conversion")?)),
-            (SectionType::Salt, u32::from_be_bytes(header[4..8].try_into().context("slice has incorrect length for u32 conversion")?)),
-            (SectionType::HeaderData, u32::from_be_bytes(header[8..12].try_into().context("slice has incorrect length for u32 conversion")?)),
-            (SectionType::Mac, u32::from_be_bytes(header[12..16].try_into().context("slice has incorrect length for u32 conversion")?)),
+            u32::from_be_bytes(header[0..4].try_into().context("magic length conversion")?),
+            u32::from_be_bytes(header[4..8].try_into().context("salt length conversion")?),
+            u32::from_be_bytes(header[8..12].try_into().context("header data length conversion")?),
+            u32::from_be_bytes(header[12..16].try_into().context("mac length conversion")?),
         ])
     }
 
-    fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, length_sizes: &[(SectionType, u32); 4]) -> Result<[(SectionType, u32); 4]> {
-        let mut result = [(SectionType::Magic, 0u32); 4];
+    fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, length_sizes: &[u32; SECTION_COUNT]) -> Result<[u32; SECTION_COUNT]> {
+        let mut result = [0u32; SECTION_COUNT];
 
-        for (i, section_type) in SECTION_ORDER.iter().enumerate() {
-            let size = length_sizes.iter().find(|(t, _)| t == section_type).map(|(_, s)| *s).context("missing length size")?;
+        for (i, &size) in length_sizes.iter().enumerate() {
+            let section_type = SectionType::ALL[i];
 
-            let mut encoded_length = vec![0u8; size as usize];
-            reader.read_exact(&mut encoded_length).with_context(|| format!("failed to read encoded length for {}", section_type))?;
+            let mut encoded = vec![0u8; size as usize];
+            reader.read_exact(&mut encoded).with_context(|| format!("failed to read encoded length for {section_type}"))?;
 
-            let section = EncodedSection::new(encoded_length, size);
-            let length = self.encoder.decode_length(&section)?;
-            result[i] = (*section_type, length);
+            let section = EncodedSection::new(encoded);
+            result[i] = self.encoder.decode_length(&section)?;
         }
 
         Ok(result)
     }
 
-    fn read_and_decode_data<R: Read>(&self, reader: &mut R, section_lengths: &[(SectionType, u32); 4]) -> Result<Sections> {
-        let mut sections = Sections::new();
+    fn read_and_decode_sections<R: Read>(&self, reader: &mut R, section_lengths: &[u32; SECTION_COUNT]) -> Result<Sections> {
+        let magic = self.read_section(reader, SectionType::Magic, section_lengths[0])?;
+        let mut builder = SectionsBuilder::with_magic(magic);
 
-        for section_type in SECTION_ORDER {
-            let length = section_lengths.iter().find(|(t, _)| *t == section_type).map(|(_, l)| *l).context("missing section length")?;
-
-            let mut encoded_data = vec![0u8; length as usize];
-            reader.read_exact(&mut encoded_data).with_context(|| format!("failed to read encoded {}", section_type))?;
-
-            let section = EncodedSection::new(encoded_data, length);
-            let decoded = self.encoder.decode_section(&section)?;
-            sections.set(section_type, decoded);
+        for (section_type, &length) in SectionType::ALL[1..].iter().zip(&section_lengths[1..]) {
+            let decoded = self.read_section(reader, *section_type, length)?;
+            builder.set(*section_type, decoded);
         }
 
-        Ok(sections)
+        builder.build()
     }
 
-    fn deserialize_header_data(&mut self, data: &[u8], header: &mut Header) -> Result<()> {
+    fn read_section<R: Read>(&self, reader: &mut R, section_type: SectionType, length: u32) -> Result<Vec<u8>> {
+        let mut encoded = vec![0u8; length as usize];
+        reader.read_exact(&mut encoded).with_context(|| format!("failed to read encoded {section_type}"))?;
+
+        let section = EncodedSection::new(encoded);
+        self.encoder.decode_section(&section)
+    }
+
+    fn parse_header_data(data: &[u8]) -> Result<(u16, u32, u64)> {
         ensure!(data.len() >= HEADER_DATA_SIZE, "invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
 
-        header.set_version(u16::from_be_bytes(data[0..2].try_into().context("slice has incorrect length for u16 conversion")?));
-        header.set_flags(u32::from_be_bytes(data[2..6].try_into().context("slice has incorrect length for u32 conversion")?));
-        header.set_original_size(u64::from_be_bytes(data[6..14].try_into().context("slice has incorrect length for u64 conversion")?));
+        let version = u16::from_be_bytes(data[0..2].try_into().context("version conversion")?);
+        let flags = u32::from_be_bytes(data[2..6].try_into().context("flags conversion")?);
+        let original_size = u64::from_be_bytes(data[6..14].try_into().context("original size conversion")?);
 
-        Ok(())
+        Ok((version, flags, original_size))
     }
 
-    fn read_exact<const N: usize, R: Read>(&self, reader: &mut R) -> Result<[u8; N]> {
+    fn read_exact<const N: usize, R: Read>(reader: &mut R) -> Result<[u8; N]> {
         let mut buffer = [0u8; N];
         reader.read_exact(&mut buffer)?;
         Ok(buffer)

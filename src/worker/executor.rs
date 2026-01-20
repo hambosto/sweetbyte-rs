@@ -17,7 +17,7 @@ impl Executor {
         Self { pipeline: Arc::new(pipeline), concurrency }
     }
 
-    pub fn process(&self, tasks: Receiver<Task>, results: Sender<TaskResult>) {
+    pub fn process(&self, tasks: &Receiver<Task>, results: Sender<TaskResult>) {
         thread::scope(|scope| {
             for _ in 0..self.concurrency {
                 let pipeline = Arc::clone(&self.pipeline);
@@ -26,7 +26,7 @@ impl Executor {
 
                 scope.spawn(move || {
                     for task in tasks {
-                        let result = pipeline.process(task);
+                        let result = pipeline.process(&task);
                         if results.send(result).is_err() {
                             break;
                         }

@@ -2,10 +2,10 @@ use std::io::Read;
 
 use anyhow::{Context, Result, ensure};
 
-use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE};
-use crate::header::deserializer::Deserializer;
+use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, DATA_SHARDS, FLAG_PROTECTED, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE, PARITY_SHARDS};
+use crate::header::deserializer::{Deserializer, ParsedHeaderData};
 use crate::header::mac::Mac;
-use crate::header::section::{SectionType, Sections};
+use crate::header::section::{LengthCheck, SectionEncoder, SectionType, Sections};
 use crate::header::serializer::Serializer;
 
 pub mod deserializer;
@@ -14,26 +14,17 @@ pub mod section;
 pub mod serializer;
 
 pub struct Header {
-    original_size: u64,
-    flags: u32,
+    encoder: SectionEncoder,
     version: u16,
+    flags: u32,
+    original_size: u64,
     sections: Option<Sections>,
 }
 
 impl Header {
-    pub fn new(version: u16) -> Self {
-        Self { original_size: 0, flags: 0, version, sections: None }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn original_size(&self) -> u64 {
-        self.original_size
-    }
-
-    #[inline]
-    pub fn set_original_size(&mut self, size: u64) {
-        self.original_size = size;
+    pub fn new(version: u16, original_size: u64, flags: u32) -> Result<Self> {
+        let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
+        Ok(Self { encoder, version, original_size, flags, sections: None })
     }
 
     #[inline]
@@ -43,19 +34,15 @@ impl Header {
     }
 
     #[inline]
-    pub(crate) fn set_version(&mut self, version: u16) {
-        self.version = version;
-    }
-
-    #[inline]
     #[must_use]
     pub fn flags(&self) -> u32 {
         self.flags
     }
 
     #[inline]
-    pub(crate) fn set_flags(&mut self, flags: u32) {
-        self.flags = flags;
+    #[must_use]
+    pub fn original_size(&self) -> u64 {
+        self.original_size
     }
 
     #[inline]
@@ -64,54 +51,52 @@ impl Header {
         self.flags & FLAG_PROTECTED != 0
     }
 
-    #[inline]
-    pub fn set_protected(&mut self, protected: bool) {
-        if protected {
-            self.flags |= FLAG_PROTECTED;
-        } else {
-            self.flags &= !FLAG_PROTECTED;
-        }
-    }
-
-    #[inline]
-    pub(crate) fn set_sections(&mut self, sections: Sections) {
-        self.sections = Some(sections);
-    }
-
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.version <= CURRENT_VERSION, "unsupported version: {} (current: {})", self.version, CURRENT_VERSION);
-        ensure!(self.original_size != 0, "original size cannot be zero");
+        ensure!(self.version() >= 1 && self.version() <= CURRENT_VERSION, "unsupported version: {} (valid: 1-{})", self.version(), CURRENT_VERSION);
+        ensure!(self.original_size() != 0, "original size cannot be zero");
+        ensure!(self.is_protected(), "file is not protected");
 
         Ok(())
     }
 
-    pub fn marshal(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        let serializer = Serializer::new()?;
-        serializer.marshal(self, salt, key)
+    pub fn serialize(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+        self.validate()?;
+
+        let serializer = Serializer::new(&self.encoder);
+        serializer.serialize(self.version(), self.flags(), self.original_size(), salt, key)
     }
 
-    pub fn unmarshal<R: Read>(&mut self, reader: R) -> Result<()> {
-        let mut deserializer = Deserializer::new()?;
-        deserializer.unmarshal(reader, self)
+    pub fn deserialize<R: Read>(reader: R) -> Result<Self> {
+        let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
+        let deserializer = Deserializer::new(&encoder);
+
+        let parsed = deserializer.deserialize(reader)?;
+        Self::from_parsed_data(parsed, encoder)
     }
 
     pub fn salt(&self) -> Result<&[u8]> {
-        self.get_section(SectionType::Salt, ARGON_SALT_LEN)
+        self.get_section(SectionType::Salt, LengthCheck::Exact(ARGON_SALT_LEN))
     }
 
     pub fn verify(&self, key: &[u8]) -> Result<()> {
         ensure!(!key.is_empty(), "key cannot be empty");
 
-        let expected_mac = self.get_section(SectionType::Mac, MAC_SIZE)?;
-        let magic = self.get_section(SectionType::Magic, MAGIC_SIZE)?;
-        let salt = self.get_section(SectionType::Salt, ARGON_SALT_LEN)?;
-        let header_data = self.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?;
+        let expected_mac = self.get_section(SectionType::Mac, LengthCheck::Exact(MAC_SIZE))?;
+        let magic = self.get_section(SectionType::Magic, LengthCheck::Exact(MAGIC_SIZE))?;
+        let salt = self.get_section(SectionType::Salt, LengthCheck::Exact(ARGON_SALT_LEN))?;
+        let header_data = self.get_section(SectionType::HeaderData, LengthCheck::Min(HEADER_DATA_SIZE))?;
 
         Mac::verify_bytes(key, expected_mac, &[magic, salt, header_data])
     }
 
-    pub(crate) fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
-        let sections = self.sections.as_ref().context("header not unmarshalled yet")?;
-        sections.get_with_min_len(section_type, min_len)
+    fn from_parsed_data(data: ParsedHeaderData, encoder: SectionEncoder) -> Result<Self> {
+        let header = Self { encoder, version: data.version(), flags: data.flags(), original_size: data.original_size(), sections: Some(data.into_sections()) };
+        header.validate()?;
+        Ok(header)
+    }
+
+    fn get_section(&self, section_type: SectionType, check: LengthCheck) -> Result<&[u8]> {
+        let sections = self.sections.as_ref().context("header not deserialized yet")?;
+        sections.get_len(section_type, check)
     }
 }

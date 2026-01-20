@@ -44,15 +44,3 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
-
-[lints.clippy]
-inefficient_to_string = "warn"
-large_types_passed_by_value = "warn"
-manual_ok_or = "warn"
-module_name_repetitions = "allow"
-similar_names = "allow"
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "warn"
-cognitive_complexity = "warn"
-too_many_lines = "warn"

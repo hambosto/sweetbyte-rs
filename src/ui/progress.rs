@@ -11,7 +11,7 @@ impl ProgressBar {
     pub fn new(total: u64, description: &str) -> Result<Self> {
         let bar = Bar::new(total);
         bar.set_style(Style::with_template(PROGRESS_TEMPLATE)?.progress_chars("●○ "));
-        bar.set_message(description.to_string());
+        bar.set_message(description.to_owned());
         Ok(Self { bar })
     }
 

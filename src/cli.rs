@@ -65,7 +65,10 @@ impl Commands {
             Self::Encrypt { input, output, password } => run_cli_mode(input, output, password, Processing::Encryption, prompt),
             Self::Decrypt { input, output, password } => run_cli_mode(input, output, password, Processing::Decryption, prompt),
             Self::Interactive => run_interactive(prompt),
-            Self::Completions { shell } => generate_completions(shell),
+            Self::Completions { shell } => {
+                generate_completions(shell);
+                Ok(())
+            }
         }
     }
 }
@@ -128,7 +131,7 @@ fn prompt_password(prompt: &Prompt, processing: Processing) -> Result<String> {
 }
 
 fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
-    let mut files = File::discover(mode)?;
+    let mut files: Vec<File> = File::discover(mode);
     ensure!(!files.is_empty(), "no eligible files found");
 
     show_file_info(&mut files)?;
@@ -146,8 +149,7 @@ fn delete_source(prompt: &Prompt, file: &File, mode: ProcessorMode) -> Result<()
     Ok(())
 }
 
-fn generate_completions(shell: Shell) -> Result<()> {
+fn generate_completions(shell: Shell) {
     let mut cmd = Cli::command();
     clap_complete::generate(shell, &mut cmd, "sweetbyte-rs", &mut std::io::stdout());
-    Ok(())
 }

@@ -17,10 +17,10 @@ pub enum CompressionLevel {
 impl From<CompressionLevel> for Compression {
     fn from(level: CompressionLevel) -> Self {
         match level {
-            CompressionLevel::None => Compression::none(),
-            CompressionLevel::Fast => Compression::fast(),
-            CompressionLevel::Default => Compression::default(),
-            CompressionLevel::Best => Compression::best(),
+            CompressionLevel::None => Self::none(),
+            CompressionLevel::Fast => Self::fast(),
+            CompressionLevel::Default => Self::default(),
+            CompressionLevel::Best => Self::best(),
         }
     }
 }
@@ -45,7 +45,7 @@ impl Compressor {
     }
 
     #[inline]
-    pub fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
+    pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
         ensure!(!data.is_empty(), "data cannot be empty");
 
         let mut decompressed = Vec::with_capacity(data.len() * 2);

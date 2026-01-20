@@ -14,12 +14,12 @@ use crate::types::ProcessorMode;
 
 pub fn show_file_info(files: &mut [File]) -> Result<()> {
     if files.is_empty() {
-        println!("{}", console::style("No files found").yellow());
+        println!("{}", console::style("No files found").yellow().bright().bold());
         return Ok(());
     }
 
     println!();
-    println!("{} {}", console::style("✔").green(), console::style(format!("Found {} file(s):", files.len())).white());
+    println!("{} {}", console::style("✔").green().bright().bold(), console::style(format!("Found {} file(s):", files.len())).white().bright().bold());
     println!();
 
     let mut table = Table::new();
@@ -31,7 +31,7 @@ pub fn show_file_info(files: &mut [File]) -> Result<()> {
 
     for (i, file) in files.iter_mut().enumerate() {
         let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-        let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_string() };
+        let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_owned() };
         let (status_text, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
         let size = file.size()?;
 
@@ -50,22 +50,22 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
     };
 
     println!();
-    println!("{} {}", console::style("✔").green(), console::style(format!("File {} successfully: {}", action, path.display())).white());
+    println!("{} {}", console::style("✔").green().bright().bold(), console::style(format!("File {} successfully: {}", action, path.display())).white().bright().bold());
 }
 
 pub fn show_source_deleted(path: &Path) {
-    println!("{} {}", console::style("✔").green(), console::style(format!("Source file deleted: {}", path.display())).white());
+    println!("{} {}", console::style("✔").green().bright().bold(), console::style(format!("Source file deleted: {}", path.display())).white().bright().bold());
 }
 
 pub fn clear_screen() -> Result<()> {
     let term = Term::stdout();
-    term.clear_screen().map_err(|e| anyhow!("failed to clear screen: {}", e))
+    term.clear_screen().map_err(|e| anyhow!("failed to clear screen: {e}"))
 }
 
 pub fn print_banner() -> Result<()> {
-    let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow!("failed to load font: {}", e))?;
+    let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow!("failed to load font: {e}"))?;
     let fig = font.convert(APP_NAME).ok_or_else(|| anyhow!("failed to convert text to banner"))?;
 
-    println!("{}", console::style(fig).green().bold());
+    println!("{}", console::style(fig).green().bright().bold());
     Ok(())
 }

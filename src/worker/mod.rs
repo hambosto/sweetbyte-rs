@@ -46,11 +46,11 @@ impl Worker {
         let reader = Reader::new(self.mode, CHUNK_SIZE)?;
         let mut writer = Writer::new(self.mode);
 
-        let reader_handle = thread::spawn(move || reader.read_all(input, task_sender));
+        let reader_handle = thread::spawn(move || reader.read_all(input, &task_sender));
 
         let executor = Executor::new(self.pipeline, self.concurrency);
         let executor_handle = thread::spawn(move || {
-            executor.process(task_receiver, result_sender);
+            executor.process(&task_receiver, result_sender);
         });
 
         let write_result = writer.write_all(output, result_receiver, Some(&progress));
