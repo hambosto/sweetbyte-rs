@@ -23,7 +23,7 @@ impl Pipeline {
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
         let cipher = Cipher::new(key)?;
         let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
-        let compressor = Compressor::new(CompressionLevel::Fast);
+        let compressor = Compressor::new(CompressionLevel::Fast)?;
         let padding = Padding::new(BLOCK_SIZE)?;
 
         Ok(Self { cipher, encoder, compressor, padding, mode })
