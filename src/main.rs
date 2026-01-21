@@ -6,7 +6,8 @@
 //! command-line interfaces.
 //!
 //! This is a Rust rewrite of the [original Go implementation](https://github.com/hambosto/sweetbyte),
-//! maintaining full file format compatibility while leveraging Rust's memory safety and performance.
+//! maintaining full file format compatibility while leveraging Rust's memory safety and
+//! performance.
 //!
 //! # Why SweetByte?
 //!
@@ -26,8 +27,8 @@
 //!
 //! - **Dual-Algorithm Encryption**: Chains **AES-256-GCM** and **XChaCha20-Poly1305** for a layered
 //!   defense, combining the AES standard with the modern, high-performance ChaCha20 stream cipher.
-//! - **Strong Key Derivation**: Utilizes **Argon2id**, the winner of the Password Hashing Competition,
-//!   to protect against brute-force attacks on your password.
+//! - **Strong Key Derivation**: Utilizes **Argon2id**, the winner of the Password Hashing
+//!   Competition, to protect against brute-force attacks on your password.
 //! - **Resilient File Format**: Integrates **Reed-Solomon error correction codes**, which add
 //!   redundancy to the data. This allows the file to be successfully decrypted even if it suffers
 //!   from partial corruption.
@@ -36,8 +37,10 @@
 //! - **Efficient Streaming**: Processes files in concurrent chunks using crossbeam channels,
 //!   ensuring low memory usage and high throughput, even for very large files.
 //! - **Dual-Mode Operation**:
-//!   - **Interactive Mode**: A user-friendly, wizard-style interface that guides you through every step.
-//!   - **Command-Line (CLI) Mode**: A powerful and scriptable interface for automation and power users.
+//!   - **Interactive Mode**: A user-friendly, wizard-style interface that guides you through every
+//!     step.
+//!   - **Command-Line (CLI) Mode**: A powerful and scriptable interface for automation and power
+//!     users.
 //! - **Secure Deletion**: Offers an option to securely wipe source files after an operation by
 //!   overwriting them with random data.
 //!
@@ -51,13 +54,13 @@
 //! When encrypting a file, the data passes through the following stages:
 //!
 //! 1. **Zlib Compression**: The raw data is compressed to reduce its size.
-//! 2. **PKCS7 Padding**: The compressed data is padded to a specific block size, a prerequisite
-//!    for block ciphers.
+//! 2. **PKCS7 Padding**: The compressed data is padded to a specific block size, a prerequisite for
+//!    block ciphers.
 //! 3. **AES-256-GCM Encryption**: The padded data is encrypted with AES, the industry standard.
 //! 4. **XChaCha20-Poly1305 Encryption**: The AES-encrypted ciphertext is then encrypted *again*
 //!    with XChaCha20, adding a second, distinct layer of security.
-//! 5. **Reed-Solomon Encoding**: The final ciphertext is encoded with error correction data,
-//!    making it resilient to corruption.
+//! 5. **Reed-Solomon Encoding**: The final ciphertext is encoded with error correction data, making
+//!    it resilient to corruption.
 //!
 //! This multi-stage process results in a final file that is not only encrypted but also compressed
 //! and fortified against data rot.
@@ -70,7 +73,8 @@
 //! # Architecture
 //!
 //! SweetByte is designed with a modular, layered architecture that separates concerns and promotes
-//! code reuse. The system follows a producer-consumer pattern with three-stage concurrent processing.
+//! code reuse. The system follows a producer-consumer pattern with three-stage concurrent
+//! processing.
 //!
 //! ## Processing Pipeline
 //!
@@ -137,8 +141,9 @@
 //! [ Lengths Header (16 bytes) ] [ Encoded Length Prefixes (variable) ] [ Encoded Data Sections (variable) ]
 //! ```
 //!
-//! **Lengths Header (16 bytes)**: The only fixed-size part of the header. Provides the exact encoded
-//! size of each of the four main sections (Magic, Salt, HeaderData, and MAC) using big-endian u32 values.
+//! **Lengths Header (16 bytes)**: The only fixed-size part of the header. Provides the exact
+//! encoded size of each of the four main sections (Magic, Salt, HeaderData, and MAC) using
+//! big-endian u32 values.
 //!
 //! **Encoded Data Sections**: Each section is individually Reed-Solomon encoded with 4 data shards
 //! and 10 parity shards, making each independently recoverable even if partially corrupted.
@@ -170,8 +175,8 @@
 //! ## Data Chunks
 //!
 //! Following the header, the file contains encrypted data split into chunks. For encryption, chunks
-//! are fixed at 256 KB (except the last chunk). For decryption, each chunk is prefixed with a 4-byte
-//! big-endian length field.
+//! are fixed at 256 KB (except the last chunk). For decryption, each chunk is prefixed with a
+//! 4-byte big-endian length field.
 //!
 //! ```text
 //! [ Length (4 bytes, big-endian) ] [ Encrypted & RS-Encoded Data (...) ]
@@ -181,38 +186,40 @@
 //!
 //! The application is organized into the following modules:
 //!
-//! - [`cipher`]: Dual-algorithm encryption using AES-256-GCM and XChaCha20-Poly1305. Implements
-//!   the [`Cipher`](crate::cipher::Cipher) struct with type-parameterized dispatch via the
-//!   [`CipherAlgorithm`](crate::cipher::CipherAlgorithm) trait. Key splitting provides 32 bytes
-//!   per cipher from 64-byte derived key.
-//! - [`cli`]: Command-line interface using `clap` for argument parsing and `dialoguer` for interactive
-//!   prompts. Provides `encrypt`, `decrypt`, `interactive`, and `completions` commands.
-//! - [`compression`]: Zlib compression/decompression using `flate2`. Configurable levels (None, Fast,
-//!   Default, Best); SweetByte uses Fast level for minimal pipeline overhead.
-//! - [`config`]: Application-wide constants including `FILE_EXTENSION` (`.swx`), `EXCLUDED_PATTERNS`,
-//!   cryptographic parameters (Argon2id, AES, ChaCha20), and chunk sizes.
-//! - [`encoding`]: Reed-Solomon error correction using `reed_solomon_erasure`. Implements 4 data shards
+//! - [`cipher`]: Dual-algorithm encryption using AES-256-GCM and XChaCha20-Poly1305. Implements the
+//!   [`Cipher`](crate::cipher::Cipher) struct with type-parameterized dispatch via the
+//!   [`CipherAlgorithm`](crate::cipher::CipherAlgorithm) trait. Key splitting provides 32 bytes per
+//!   cipher from 64-byte derived key.
+//! - [`cli`]: Command-line interface using `clap` for argument parsing and `dialoguer` for
+//!   interactive prompts. Provides `encrypt`, `decrypt`, `interactive`, and `completions` commands.
+//! - [`compression`]: Zlib compression/decompression using `flate2`. Configurable levels (None,
+//!   Fast, Default, Best); SweetByte uses Fast level for minimal pipeline overhead.
+//! - [`config`]: Application-wide constants including `FILE_EXTENSION` (`.swx`),
+//!   `EXCLUDED_PATTERNS`, cryptographic parameters (Argon2id, AES, ChaCha20), and chunk sizes.
+//! - [`encoding`]: Reed-Solomon error correction using `reed_solomon_erasure`. Implements 4 data
+//!   shards
 //!   + 10 parity shards for recovery from up to 10 corrupted shards.
 //! - [`mod@file`]: File discovery using `walkdir` with glob pattern exclusion. The
-//!   [`File`](crate::file::File) struct wraps `PathBuf` with methods for size caching,
-//!   eligibility checking, and output path generation.
-//! - [`header`]: Secure header format with Reed-Solomon protection and HMAC authentication. Submodules:
-//!   `serializer` (binary format assembly), `deserializer` (parsing with error correction), `section`
-//!   (section encoding), `mac` (constant-time HMAC-SHA256).
-//! - [`padding`]: PKCS7 padding with configurable block size (128 bytes). Ensures plaintext length is
-//!   multiple of block size for block cipher compatibility.
-//! - [`processor`]: High-level orchestration via the [`Encryptor`](crate::processor::Encryptor)
-//!   and [`Decryptor`](crate::processor::Decryptor) structs. Coordinates key derivation, header
+//!   [`File`](crate::file::File) struct wraps `PathBuf` with methods for size caching, eligibility
+//!   checking, and output path generation.
+//! - [`header`]: Secure header format with Reed-Solomon protection and HMAC authentication.
+//!   Submodules: `serializer` (binary format assembly), `deserializer` (parsing with error
+//!   correction), `section` (section encoding), `mac` (constant-time HMAC-SHA256).
+//! - [`padding`]: PKCS7 padding with configurable block size (128 bytes). Ensures plaintext length
+//!   is multiple of block size for block cipher compatibility.
+//! - [`processor`]: High-level orchestration via the [`Encryptor`](crate::processor::Encryptor) and
+//!   [`Decryptor`](crate::processor::Decryptor) structs. Coordinates key derivation, header
 //!   creation/verification, and worker pipeline execution.
 //! - [`types`]: Core type definitions including [`ProcessorMode`](crate::types::ProcessorMode)
 //!   (Encrypt/Decrypt), [`Processing`](crate::types::Processing) (operation state),
 //!   [`Task`](crate::types::Task) (chunk with index), [`TaskResult`](crate::types::TaskResult)
 //!   (processed data or error).
-//! - [`ui`]: User interface components using `indicatif` for progress bars, `comfy-table` for file info
-//!   display, `figlet-rs` for ASCII art banners, and `dialoguer` for interactive prompts.
+//! - [`ui`]: User interface components using `indicatif` for progress bars, `comfy-table` for file
+//!   info display, `figlet-rs` for ASCII art banners, and `dialoguer` for interactive prompts.
 //! - [`worker`]: Concurrent three-thread pipeline using `flume` channels and `rayon` parallelism.
 //!   Components: `Reader` (chunk production), `Executor` (parallel processing via `par_bridge`),
-//!   `Writer` (ordered output), `Buffer` (result reordering), `Pipeline` (per-chunk encryption/decryption).
+//!   `Writer` (ordered output), `Buffer` (result reordering), `Pipeline` (per-chunk
+//!   encryption/decryption).
 //!
 //! # Usage
 //!
@@ -267,13 +274,14 @@
 //!
 //! SweetByte is designed with a strong focus on security. However, keep the following in mind:
 //!
-//! - **Password Strength**: The security of your encrypted files depends heavily on password strength.
-//!   Use long, complex, unique passwords.
-//! - **Secure Environment**: Run SweetByte in a secure environment. Compromised systems can capture passwords.
-//! - **Source File Deletion**: Secure deletion depends on hardware and filesystem. SSD wear leveling and
-//!   journaling filesystems may retain data.
-//! - **Side-Channel Attacks**: Constant-time comparison is used for MAC verification, but this tool is
-//!   not hardened against all side-channel attacks.
+//! - **Password Strength**: The security of your encrypted files depends heavily on password
+//!   strength. Use long, complex, unique passwords.
+//! - **Secure Environment**: Run SweetByte in a secure environment. Compromised systems can capture
+//!   passwords.
+//! - **Source File Deletion**: Secure deletion depends on hardware and filesystem. SSD wear
+//!   leveling and journaling filesystems may retain data.
+//! - **Side-Channel Attacks**: Constant-time comparison is used for MAC verification, but this tool
+//!   is not hardened against all side-channel attacks.
 //!
 //! # Differences from the Go Version
 //!
