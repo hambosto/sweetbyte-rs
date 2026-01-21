@@ -1,7 +1,7 @@
 use std::io::{BufReader, Read};
 
 use anyhow::{Context, Result, anyhow, ensure};
-use crossbeam_channel::Sender;
+use flume::Sender;
 
 use crate::types::{Processing, Task};
 

@@ -58,10 +58,20 @@ impl Encoding {
     }
 
     fn combine(shards: &[Vec<u8>]) -> Vec<u8> {
-        shards.iter().flatten().copied().collect()
+        let total: usize = shards.iter().map(|s| s.len()).sum();
+        let mut result = Vec::with_capacity(total);
+        for shard in shards {
+            result.extend_from_slice(shard);
+        }
+        result
     }
 
     fn extract(&self, shards: &[Vec<u8>]) -> Vec<u8> {
-        shards.iter().take(self.data_shards).flatten().copied().collect()
+        let total: usize = shards.iter().take(self.data_shards).map(|s| s.len()).sum();
+        let mut result = Vec::with_capacity(total);
+        for shard in shards.iter().take(self.data_shards) {
+            result.extend_from_slice(shard);
+        }
+        result
     }
 }

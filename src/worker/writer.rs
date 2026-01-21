@@ -1,7 +1,7 @@
 use std::io::{BufWriter, Write};
 
 use anyhow::{Context, Result, bail};
-use crossbeam_channel::Receiver;
+use flume::Receiver;
 
 use crate::types::{Processing, TaskResult};
 use crate::ui::progress::ProgressBar;
