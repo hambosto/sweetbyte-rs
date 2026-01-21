@@ -12,10 +12,10 @@
 //!
 //! # How It Works
 //!
-//! 1. **Encoding**: Data is split into N data shards, then M parity shards
-//!    are computed algebraically. Total shards = N + M.
-//! 2. **Decoding**: If some shards are corrupted/missing, the decoder uses
-//!    the remaining good shards to reconstruct the original data.
+//! 1. **Encoding**: Data is split into N data shards, then M parity shards are computed
+//!    algebraically. Total shards = N + M.
+//! 2. **Decoding**: If some shards are corrupted/missing, the decoder uses the remaining good
+//!    shards to reconstruct the original data.
 
 use anyhow::{Result, ensure};
 use reed_solomon_erasure::galois_8::ReedSolomon;
@@ -134,8 +134,8 @@ impl Encoding {
     /// # Arguments
     ///
     /// * `data` - The data to split.
-    /// * `exact` - If true, shard size is data_len / total_shards.
-    ///   If false, shard size is ceil(data_len / data_shards).
+    /// * `exact` - If true, shard size is data_len / total_shards. If false, shard size is
+    ///   ceil(data_len / data_shards).
     ///
     /// # Returns
     ///

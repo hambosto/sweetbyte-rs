@@ -8,8 +8,8 @@
 //!
 //! The header consists of:
 //!
-//! 1. **Lengths Header** (16 bytes): Fixed-size, contains 4 big-endian u32s
-//!    specifying the encoded length of each section
+//! 1. **Lengths Header** (16 bytes): Fixed-size, contains 4 big-endian u32s specifying the encoded
+//!    length of each section
 //! 2. **Length Prefixes** (variable): Reed-Solomon encoded lengths of each section
 //! 3. **Data Sections** (variable): Reed-Solomon encoded sections containing:
 //!    - Magic bytes (4 bytes): `0xCAFEBABE`
@@ -262,8 +262,8 @@ impl Header {
     ///
     /// # Arguments
     ///
-    /// * `key` - The derived cryptographic key for HMAC verification.
-    ///   This should be the same key used during encryption.
+    /// * `key` - The derived cryptographic key for HMAC verification. This should be the same key
+    ///   used during encryption.
     ///
     /// # Returns
     ///

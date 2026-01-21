@@ -145,8 +145,8 @@ impl Prompt {
     ///
     /// # Arguments
     ///
-    /// * `files` - List of File objects to display for selection.
-    ///   Must be non-empty; caller should handle the "no files" case.
+    /// * `files` - List of File objects to display for selection. Must be non-empty; caller should
+    ///   handle the "no files" case.
     ///
     /// # Returns
     ///
@@ -224,7 +224,8 @@ impl Prompt {
     /// # Arguments
     ///
     /// * `path` - The source file that could be deleted.
-    /// * `file_type` - Description of file type: "original" for encryption, "encrypted" for decryption.
+    /// * `file_type` - Description of file type: "original" for encryption, "encrypted" for
+    ///   decryption.
     ///
     /// # Returns
     ///

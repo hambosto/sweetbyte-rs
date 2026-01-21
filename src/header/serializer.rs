@@ -87,8 +87,8 @@ impl<'a> Serializer<'a> {
     ///
     /// # Arguments
     ///
-    /// * `raw` - Array of 4 references to raw section data.
-    ///   Index 0 = Magic, 1 = Salt, 2 = HeaderData, 3 = Mac.
+    /// * `raw` - Array of 4 references to raw section data. Index 0 = Magic, 1 = Salt, 2 =
+    ///   HeaderData, 3 = Mac.
     ///
     /// # Returns
     ///

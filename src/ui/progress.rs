@@ -71,8 +71,8 @@ impl ProgressBar {
     ///
     /// # Arguments
     ///
-    /// * `delta` - Number of bytes to add to the progress counter.
-    ///   Typically the original input size of a processed chunk.
+    /// * `delta` - Number of bytes to add to the progress counter. Typically the original input
+    ///   size of a processed chunk.
     #[inline]
     pub fn add(&self, delta: u64) {
         // Delegate to the underlying indicatif bar's inc() method.

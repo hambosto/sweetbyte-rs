@@ -445,8 +445,8 @@ impl File {
     ///
     /// # Arguments
     ///
-    /// * `must_exist` - If `true`, validates the file exists and is a non-empty file.
-    ///   If `false`, validates the file does not exist.
+    /// * `must_exist` - If `true`, validates the file exists and is a non-empty file. If `false`,
+    ///   validates the file does not exist.
     ///
     /// # Errors
     ///
