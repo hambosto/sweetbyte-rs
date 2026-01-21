@@ -80,53 +80,83 @@ Decryption is the exact reverse of the encryption pipeline, unwrapping each laye
 
 ## Architecture
 
-SweetByte is designed with a modular, layered architecture that separates concerns and promotes code reuse.
+SweetByte is designed with a modular, layered architecture that separates concerns and promotes code reuse. The system follows a producer-consumer pattern with three-stage concurrent processing.
 
 ```mermaid
 graph TD
+    subgraph User Interface
         A[CLI Mode]
         B[Interactive Mode]
+    end
 
-        C[Processor]
-        E[Stream]
-        D[Executor]
+    subgraph Core Orchestration
+        C[Processor<br/>Encryptor/Decryptor]
+    end
 
+    subgraph Worker Pipeline
+        D[Reader Thread<br/>Chunk Production]
+        E[Executor Pool<br/>Rayon Parallel]
+        F[Writer Thread<br/>Result Ordering]
+    end
 
-        F[Cipher]
-        G[Derive]
-        H[Header]
-        I[Compression]
-        J[Encoding]
-        K[Padding]
+    subgraph Cryptography Layer
+        G[Cipher<br/>Dual-Layer Encryption]
+        H[Derive<br/>Argon2id Key Derivation]
+        I[Header<br/>Secure Header Format]
+    end
 
-        L[File]
-        M[UI]
-        N[Config]
-        Q[Types]
+    subgraph Data Processing
+        J[Compression<br/>Zlib]
+        K[Padding<br/>PKCS7]
+        L[Encoding<br/>Reed-Solomon]
+    end
+
+    subgraph Utilities
+        M[File<br/>Discovery & Operations]
+        N[UI<br/>Prompts & Display]
+        O[Config<br/>Constants]
+        P[Types<br/>Mode & Task Types]
+    end
 
     A --> C
     B --> C
 
-    C --> E
-    E --> D
+    C --> D
+    D --> E
+    E --> F
 
-    D --> F
-    D --> G
-    D --> H
-    D --> I
-    D --> J
-    D --> K
+    E --> G
+    E --> H
+    E --> I
+    E --> J
+    E --> K
+    E --> L
 
-    C --> L
-    B --> M
-    E --> N
-    C --> Q
+    C --> M
+    B --> N
+    D --> O
+    C --> P
 ```
 
-- **User Interfaces:** The `cli` module provides both command-line and interactive modes for users to interact with the application. Both interfaces are built on top of the `processor` module.
-- **Core Logic:** The `processor`, `stream`, and `executor` modules form the core of the application. The `processor` module orchestrates the high-level workflow, the `stream` module handles concurrent chunk-based file processing with crossbeam channels.
-- **Cryptographic & Data Processing:** This layer contains the modules that implement the cryptographic and data processing primitives. These modules are responsible for encryption, key derivation, header serialization, compression, error correction, and padding.
-- **Utilities & Support:** This layer provides utility and support modules for file management, UI components, configuration, and type definitions.
+### Processing Pipeline
+
+SweetByte uses a three-thread concurrent architecture:
+
+1. **Reader Thread** - Reads input file in chunks, sends tasks via channel
+2. **Executor Pool** - Receives tasks, processes in parallel via Rayon work-stealing
+3. **Writer Thread** - Receives results, reorders for sequential output, writes to file
+
+The Executor uses `par_bridge()` to convert the sequential channel iterator into a parallel iterator, distributing work across available CPU cores.
+
+### Module Responsibilities
+
+- **User Interfaces:** The `cli` module provides both command-line and interactive modes. Both interfaces build on the `processor` module for high-level orchestration.
+- **Core Processing:** The `processor` module provides `Encryptor` and `Decryptor` structs that coordinate the complete encryption/decryption workflow including key derivation, header management, and worker pipeline execution.
+- **Worker Pipeline:** The `worker` module implements the three-thread concurrent architecture with `Reader`, `Executor`, and `Writer` components, plus a `Buffer` for result reordering.
+- **Cryptographic Layer:** The `cipher` module implements dual-algorithm encryption with `AesGcm` and `ChaCha20Poly1305`, plus `Derive` for Argon2id key derivation. Uses marker types for static dispatch.
+- **Header System:** The `header` module provides Reed-Solomon protected headers with HMAC authentication, split across `Serializer`, `Deserializer`, `SectionEncoder`, and `Mac` components.
+- **Data Processing:** Dedicated modules for compression (`compression`), padding (`padding`), and error correction (`encoding`).
+- **Utilities:** File management (`file`), UI components (`ui`), configuration (`config`), and type definitions (`types`).
 
 ## File Format
 
@@ -140,57 +170,67 @@ An encrypted file consists of a resilient, variable-size header followed by a se
 ```
 
 #### Secure Header
+
 The header is designed for extreme resilience to withstand data corruption. Instead of a simple, fixed structure, it's a multi-layered, self-verifying format where every component is protected by **Reed-Solomon error correction codes**.
 
-The header is composed of three main parts:
+The header layout is:
 
 `[ Lengths Header (16 bytes) ] [ Encoded Length Prefixes (variable) ] [ Encoded Data Sections (variable) ]`
 
 **1. Lengths Header (16 bytes)**
 
-This is the only fixed-size part of the header. It provides the exact size of the encoded length prefix for each of the four main sections (Magic, Salt, Header Data, and MAC).
+This is the only fixed-size part of the header. It provides the exact encoded size of each of the four main sections (Magic, Salt, HeaderData, and MAC) using big-endian u32 values.
 
 **2. Encoded Length Prefixes (Variable Size)**
 
-Following the lengths header are four variable-size blocks. Each block is a Reed-Solomon encoded value that, when decoded, reveals the size of the corresponding encoded data section.
+Following the lengths header are four Reed-Solomon encoded blocks. Each block encodes the length of its corresponding data section, allowing recovery from corruption.
 
 **3. Encoded Data Sections (Variable Size)**
 
-This is the core of the header, containing the actual metadata. Each section is individually encoded with Reed-Solomon, making it independently recoverable.
+Each section is individually Reed-Solomon encoded with 4 data shards and 10 parity shards, making each independently recoverable even if partially corrupted.
 
-| Section         | Raw Size | Description                                                                                   |
-|-----------------|----------|-----------------------------------------------------------------------------------------------|
-| **Magic Bytes**   | 4 bytes  | `0xCAFEBABE` - Identifies the file as a SweetByte encrypted file.                             |
-| **Salt**          | 32 bytes | Unique random value for Argon2id key derivation.                                              |
-| **Header Data**   | 14 bytes | Serialized file metadata (version, flags, original size).                                     |
-| **MAC**           | 32 bytes | HMAC-SHA256 for integrity and authenticity of the raw header sections.                        |
+| Section | Raw Size | Description |
+|---------|----------|-------------|
+| **Magic Bytes** | 4 bytes | `0xCAFEBABE` - Identifies the file as a SweetByte encrypted file. |
+| **Salt** | 32 bytes | Unique random value for Argon2id key derivation. |
+| **HeaderData** | 14 bytes | Serialized file metadata (version, flags, original size). |
+| **MAC** | 32 bytes | HMAC-SHA256 for integrity and authenticity using constant-time comparison. |
 
-**Header Data Layout**
+**HeaderData Layout**
 
-| Field          | Size     | Description                                                      |
-|----------------|----------|------------------------------------------------------------------|
-| **Version**      | 2 bytes  | File format version (currently `0x0001`).                        |
-| **Flags**        | 4 bytes  | Bitfield of processing options.                                  |
-| **OriginalSize** | 8 bytes  | Original uncompressed file size.                                 |
+| Field | Size | Description |
+|-------|------|-------------|
+| **Version** | 2 bytes | File format version (currently `0x0001`). |
+| **Flags** | 4 bytes | Bitfield of processing options (FLAG_PROTECTED = bit 0). |
+| **OriginalSize** | 8 bytes | Original uncompressed file size in bytes. |
 
 #### Cryptographic Parameters
 
-| Parameter | Value |
-|-----------|-------|
-| Argon2id time cost | 3 |
-| Argon2id memory | 64 KB |
-| Argon2id parallelism | 4 |
-| Key length | 64 bytes (split between ciphers) |
-| Salt length | 32 bytes |
-| AES nonce | 12 bytes |
-| XChaCha20 nonce | 24 bytes |
-| Reed-Solomon data shards | 4 |
-| Reed-Solomon parity shards | 10 |
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Argon2id time cost | 3 iterations | Balances security vs. usability |
+| Argon2id memory | 64 MB | Resists GPU/ASIC attacks |
+| Argon2id parallelism | 4 lanes | Efficient multi-threaded hashing |
+| Derived key length | 64 bytes | First 32 bytes: encryption, last 32 bytes: HMAC |
+| Salt length | 32 bytes | Unique per file, prevents rainbow tables |
+| AES-256-GCM key | 32 bytes | Industry-standard authenticated encryption |
+| AES-256-GCM nonce | 12 bytes | Randomly generated per encryption |
+| XChaCha20-Poly1305 key | 32 bytes | Modern stream cipher |
+| XChaCha20-Poly1305 nonce | 24 bytes | Extended nonce for higher throughput |
+| HMAC | SHA-256 | 32-byte authentication tag |
+| Reed-Solomon data shards | 4 | Input data split into 4 parts |
+| Reed-Solomon parity shards | 10 | Recovery capacity for 10 corrupted shards |
 
 #### Data Chunks
-Following the header, the file contains the encrypted data split into chunks. Each chunk is prefixed with a 4-byte big-endian length header.
+
+Following the header, the file contains encrypted data split into chunks. For encryption, chunks are fixed at 256 KB (except the last chunk). For decryption, each chunk is prefixed with a 4-byte big-endian length field.
 
 ```
+[ Length (4 bytes, big-endian) ] [ Encrypted & RS-Encoded Data (...) ]
+```
+
+The encryption pipeline processes each chunk independently:
+1. Compress → Pad → AES-256-GCM → XChaCha20-Poly1305 → Reed-Solomon
 [ Chunk Size (4 bytes) ] [ Encrypted & Encoded Data (...) ]
 ```
 
@@ -261,7 +301,8 @@ sweetbyte-rs decrypt -i document.swx
 SweetByte is built with Rust 2024 edition.
 
 ### Prerequisites
-- Rust 1.85 or higher
+
+- Rust (latest stable recommended)
 - Git
 
 ### Build Process
@@ -272,56 +313,57 @@ cd sweetbyte-rs
 cargo build --release
 ```
 
-### Cross-Compilation
+The binary will be at `target/release/sweetbyte-rs`.
+
+### Development Commands
 
 ```sh
-# Build for Windows
-cargo build --release --target x86_64-pc-windows-msvc
+# Format code
+cargo fmt
 
-# Build for Linux
-cargo build --release --target x86_64-unknown-linux-gnu
+# Check for lints
+cargo clippy
 
-# Build for macOS
-cargo build --release --target x86_64-apple-darwin
-```
-
-### Running Tests
-
-```sh
+# Run tests
 cargo test
-```
 
-The test suite includes 71 tests covering roundtrip encryption/decryption, wrong-password rejection, and component unit tests.
+# Generate documentation
+cargo doc --no-deps
+
+# Build with all warnings enabled
+cargo build --release --all-features
+```
 
 ## Module Overview
 
 SweetByte is built with a modular architecture, with each module handling a specific responsibility.
 
-| Module           | Description                                                              |
-|------------------|--------------------------------------------------------------------------|
-| `cipher`         | Implements AES-256-GCM and XChaCha20-Poly1305 encryption with proper nonce generation and authenticated encryption. Manages both ciphers for layered encryption. |
-| `cli`            | Command-line interface using clap. Provides `encrypt`, `decrypt`, and `interactive` commands with flags for input/output paths and passwords. |
-| `compression`    | Zlib compression and decompression with configurable compression levels. |
-| `config`         | Application-wide constants including file extension, exclusion patterns, and cryptographic parameters. |
-| `encoding`       | Reed-Solomon error correction with 4 data shards and 10 parity shards. Handles splitting, combining, and recovering data from potentially corrupted shards. |
-| `file`           | File discovery, path validation, and file operations. Handles finding eligible files and creating output paths. |
-| `header`         | Serialization, deserialization, and verification of the secure file header. Includes Reed-Solomon protection and HMAC authentication with constant-time comparison. |
-| `padding`        | PKCS7 padding with configurable block size. |
-| `processor`      | High-level encrypt/decrypt orchestration. Coordinates between modules to execute the complete pipeline. |
-| `stream`         | Concurrent chunk-based file processing using crossbeam channels. Includes buffered reading, sequential writing, and a thread pool executor. |
-| `types`          | Common type definitions including processing modes and task structures. |
-| `ui`             | User interface components: progress bars with indicatif, file info display with comfy-table, and user prompts with dialoguer. |
+| Module | Description |
+|--------|-------------|
+| `cipher` | Dual-algorithm encryption using AES-256-GCM and XChaCha20-Poly1305. Implements `Cipher` struct with type-parameterized dispatch via `CipherAlgorithm` trait. Key splitting provides 32 bytes per cipher from 64-byte derived key. |
+| `cli` | Command-line interface using `clap` for argument parsing and `dialoguer` for interactive prompts. Provides `encrypt`, `decrypt`, `interactive`, and `completions` commands with input/output path and password options. |
+| `compression` | Zlib compression/decompression using `flate2`. Configurable levels (None, Fast, Default, Best); SweetByte uses Fast level for minimal pipeline overhead. |
+| `config` | Application-wide constants including `FILE_EXTENSION` (`.swx`), `EXCLUDED_PATTERNS`, cryptographic parameters (Argon2id, AES, ChaCha20), and chunk sizes. |
+| `encoding` | Reed-Solomon error correction using `reed_solomon_erasure`. Implements 4 data shards + 10 parity shards for recovery from up to 10 corrupted shards. Handles shard splitting, parity computation, and reconstruction. |
+| `file` | File discovery using `walkdir` with glob pattern exclusion. `File` struct wraps `PathBuf` with methods for size caching, eligibility checking, output path generation, and validation. |
+| `header` | Secure header format with Reed-Solomon protection and HMAC authentication. Submodules: `serializer` (binary format assembly), `deserializer` (parsing with error correction), `section` (section encoding), `mac` (constant-time HMAC-SHA256). |
+| `padding` | PKCS7 padding with configurable block size (128 bytes). Ensures plaintext length is multiple of block size for block cipher compatibility. |
+| `processor` | High-level orchestration via `Encryptor` and `Decryptor` structs. Coordinates key derivation, header creation/verification, and worker pipeline execution. |
+| `worker` | Concurrent three-thread pipeline using `flume` channels and `rayon` parallelism. Components: `Reader` (chunk production), `Executor` (parallel processing via `par_bridge`), `Writer` (ordered output), `Buffer` (result reordering), `Pipeline` (per-chunk encryption/decryption). |
+| `types` | Core type definitions including `ProcessorMode` (Encrypt/Decrypt), `Processing` (operation state), `Task` (chunk with index), `TaskResult` (processed data or error). |
+| `ui` | User interface components using `indicatif` for progress bars, `comfy-table` for file info display, `figlet-rs` for ASCII art banners, and `dialoguer` for interactive prompts. Submodules: `display`, `progress`, `prompt`. |
 
 ## Differences from the Go Version
 
-This Rust port maintains full file format compatibility with the Go version while leveraging Rust's strengths:
+This Rust port maintains full file format compatibility with the Go version while leveraging Rust's unique strengths:
 
-- **Memory Safety:** Compile-time guarantees without garbage collection overhead.
-- **Performance:** Zero-cost abstractions and efficient concurrent processing with crossbeam.
-- **Error Handling:** Uses `anyhow` for ergonomic error propagation with full context.
-- **Native Byte Order:** Uses Rust's built-in `to_be_bytes()` and `from_be_bytes()` instead of external crates.
+- **Memory Safety:** Compile-time borrow checking eliminates data races and use-after-free bugs without garbage collection overhead.
+- **Type System:** Marker types (`Algorithm::Aes256Gcm`, `Algorithm::XChaCha20Poly1305`) enable static dispatch for cipher selection, avoiding runtime trait object overhead.
+- **Concurrency:** Uses `flume` channels for producer-consumer communication and `rayon` for parallel processing via `par_bridge()`, distributing work across CPU cores.
+- **Error Handling:** Uses `anyhow` for ergonomic error propagation with full context chaining; native byte order conversion via `to_be_bytes()`/`from_be_bytes()`.
+- **Zero-Cost Abstractions:** Inline functions, const generics, and iterator adapters compile away to efficient machine code.
 
-Files encrypted with the Go version can be decrypted with the Rust version and vice versa.
+Files encrypted with the Go version can be decrypted with the Rust version and vice versa. The file format is identical.
 
 ## Security Considerations
 
@@ -332,17 +374,35 @@ SweetByte is designed with a strong focus on security. However, keep the followi
 - **Source File Deletion:** Secure deletion depends on hardware and filesystem. SSD wear leveling and journaling filesystems may retain data.
 - **Side-Channel Attacks:** Constant-time comparison is used for MAC verification, but this tool is not hardened against all side-channel attacks.
 
+## Shell Completions
+
+Generate shell completion scripts for your shell:
+
+```sh
+# Bash
+sweetbyte-rs completions bash >> ~/.bashrc
+
+# Zsh
+sweetbyte-rs completions zsh >> ~/.zshrc
+
+# Fish
+sweetbyte-rs completions fish > ~/.config/fish/completions/sweetbyte-rs.fish
+```
+
 ## Contributing
 
 Contributions are welcome. For major changes, please open an issue first to discuss the approach.
 
-Before submitting:
+Before submitting a pull request:
 
 ```sh
 cargo fmt
 cargo clippy
 cargo test
+cargo doc --no-deps
 ```
+
+Ensure all checks pass with no warnings.
 
 ## License
 
