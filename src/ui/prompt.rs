@@ -49,7 +49,10 @@ impl Prompt {
     pub fn select_file(&self, files: &[File]) -> Result<PathBuf> {
         ensure!(!files.is_empty(), "no files available for selection");
 
-        let display_names: Vec<String> = files.iter().map(|f| f.path().display().to_string()).collect();
+        let display_names: Vec<String> = files
+            .iter()
+            .map(|f| f.path().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| f.path().display().to_string()))
+            .collect();
 
         let selection = Select::with_theme(&self.theme)
             .with_prompt("Select file")
@@ -62,11 +65,13 @@ impl Prompt {
     }
 
     pub fn confirm_file_overwrite(&self, path: &Path) -> Result<bool> {
-        self.confirm(&format!("Output file {} already exists. Overwrite?", path.display()))
+        let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
+        self.confirm(&format!("Output file {} already exists. Overwrite?", filename))
     }
 
     pub fn confirm_file_deletion(&self, path: &Path, file_type: &str) -> Result<bool> {
-        self.confirm(&format!("Delete {} file {}?", file_type, path.display()))
+        let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
+        self.confirm(&format!("Delete {} file {}?", file_type, filename))
     }
 
     fn prompt_password(&self, prompt: &str) -> Result<String> {

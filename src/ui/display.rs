@@ -14,12 +14,12 @@ use crate::types::ProcessorMode;
 
 pub fn show_file_info(files: &mut [File]) -> Result<()> {
     if files.is_empty() {
-        println!("{}", console::style("No files found").yellow().bright().bold());
+        println!("{}", console::style("No files found").yellow().bright());
         return Ok(());
     }
 
     println!();
-    println!("{} {}", console::style("✔").green().bright().bold(), console::style(format!("Found {} file(s):", files.len())).white().bright().bold());
+    println!("{} {}", console::style("✔").green().bright(), console::style(format!("Found {} file(s):", files.len())).white().bright());
     println!();
 
     let mut table = Table::new();
@@ -52,17 +52,20 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
         ProcessorMode::Decrypt => "decrypted",
     };
 
+    let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
     println!();
-    println!("{} {}", console::style("✔").green().bright().bold(), console::style(format!("File {} successfully: {}", action, path.display())).white().bright().bold());
+    println!("{} {}", console::style("✔").green().bright(), console::style(format!("File {} successfully: {}", action, filename)).white().bright());
 }
 
 pub fn show_source_deleted(path: &Path) {
-    println!("{} {}", console::style("✔").green().bright().bold(), console::style(format!("Source file deleted: {}", path.display())).white().bright().bold());
+    let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
+    println!("{} {}", console::style("✔").green().bright(), console::style(format!("Source file deleted: {}", filename)).white().bright());
 }
 
 pub fn clear_screen() -> Result<()> {
     let term = Term::stdout();
-    term.clear_screen().map_err(|e| anyhow!("failed to clear screen: {e}"))
+    term.clear_screen().map_err(|e| anyhow!("failed to clear screen: {e}"))?;
+    Ok(())
 }
 
 pub fn print_banner() -> Result<()> {
@@ -70,6 +73,6 @@ pub fn print_banner() -> Result<()> {
 
     let fig = font.convert(APP_NAME).ok_or_else(|| anyhow!("failed to convert text to banner"))?;
 
-    println!("{}", console::style(fig).green().bright().bold());
+    println!("{}", console::style(fig).green().bright());
     Ok(())
 }
