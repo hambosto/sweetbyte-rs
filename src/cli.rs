@@ -87,9 +87,7 @@ fn run_cli_mode(input_path: String, output_path: Option<String>, password: Optio
     };
 
     process_file(processing, &mut input, &output, &password)?;
-    let input_name = input.path().file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| input.path().display().to_string().into());
-    let output_name = output.path().file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| output.path().display().to_string().into());
-    println!("✓ {}: {} -> {}", processing, input_name, output_name);
+    show_success(processing.mode(), output.path());
 
     Ok(())
 }
