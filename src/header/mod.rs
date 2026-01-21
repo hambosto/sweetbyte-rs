@@ -15,13 +15,9 @@ pub mod serializer;
 
 pub struct Header {
     encoder: SectionEncoder,
-
     version: u16,
-
     flags: u32,
-
     original_size: u64,
-
     sections: Option<Sections>,
 }
 
@@ -32,36 +28,24 @@ impl Header {
         Ok(Self { encoder, version, original_size, flags, sections: None })
     }
 
-    #[inline]
-    #[must_use]
-    pub fn version(&self) -> u16 {
-        self.version
+    pub fn deserialize<R: Read>(reader: R) -> Result<Self> {
+        let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
+        let deserializer = Deserializer::new(&encoder);
+        let parsed = deserializer.deserialize(reader)?;
+
+        Self::from_parsed_data(parsed, encoder)
     }
 
     #[inline]
     #[must_use]
-    pub fn flags(&self) -> u32 {
-        self.flags
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn original_size(&self) -> u64 {
+    pub const fn original_size(&self) -> u64 {
         self.original_size
     }
 
-    #[inline]
-    #[must_use]
-    pub fn is_protected(&self) -> bool {
-        self.flags & FLAG_PROTECTED != 0
-    }
-
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.version() >= 1 && self.version() <= CURRENT_VERSION, "unsupported version: {} (valid: 1-{})", self.version(), CURRENT_VERSION);
-
-        ensure!(self.original_size() != 0, "original size cannot be zero");
-
-        ensure!(self.is_protected(), "file is not protected");
+        ensure!(self.version >= 1 && self.version <= CURRENT_VERSION, "unsupported version: {} (valid: 1-{}", self.version, CURRENT_VERSION);
+        ensure!(self.original_size != 0, "original size cannot be zero");
+        ensure!(self.flags & FLAG_PROTECTED != 0, "file is not protected");
 
         Ok(())
     }
@@ -70,18 +54,7 @@ impl Header {
         self.validate()?;
 
         let serializer = Serializer::new(&self.encoder);
-
-        serializer.serialize(self.version(), self.flags(), self.original_size(), salt, key)
-    }
-
-    pub fn deserialize<R: Read>(reader: R) -> Result<Self> {
-        let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
-
-        let deserializer = Deserializer::new(&encoder);
-
-        let parsed = deserializer.deserialize(reader)?;
-
-        Self::from_parsed_data(parsed, encoder)
+        serializer.serialize(self.version, self.flags, self.original_size, salt, key)
     }
 
     pub fn salt(&self) -> Result<&[u8]> {
@@ -107,8 +80,6 @@ impl Header {
     }
 
     fn get_section(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
-        let sections = self.sections.as_ref().context("header not deserialized yet")?;
-
-        sections.get_with_min_len(section_type, min_len)
+        self.sections.as_ref().context("header not deserialized yet")?.get_with_min_len(section_type, min_len)
     }
 }
