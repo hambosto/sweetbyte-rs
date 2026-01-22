@@ -38,6 +38,8 @@ pub const CONTENT_HASH_SIZE: usize = 32;
 
 pub const COMPRESSION_ZLIB: u8 = 0x01;
 
+pub const ENCODING_REED_SOLOMON: u8 = 0x01;
+
 pub const MAX_FILENAME_LENGTH: usize = 256;
 
 pub const AES_KEY_SIZE: usize = 32;

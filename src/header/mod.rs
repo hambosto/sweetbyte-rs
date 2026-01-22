@@ -4,8 +4,8 @@ use anyhow::{Context, Result, ensure};
 
 use crate::cipher::Mac;
 use crate::config::{
-    ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, COMPRESSION_ZLIB, CONTENT_HASH_SIZE, CURRENT_VERSION, DATA_SHARDS, HEADER_DATA_SIZE,
-    MAC_SIZE, MAGIC_SIZE, PARITY_SHARDS,
+    ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, COMPRESSION_ZLIB, CONTENT_HASH_SIZE, CURRENT_VERSION, DATA_SHARDS,
+    ENCODING_REED_SOLOMON, HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE, PARITY_SHARDS,
 };
 use crate::header::deserializer::{Deserializer, HeaderData};
 use crate::header::metadata::FileMetadata;
@@ -25,6 +25,8 @@ pub struct Header {
     algorithm: u8,
 
     compression: u8,
+
+    encoding: u8,
 
     kdf_memory: u32,
 
@@ -48,6 +50,7 @@ impl Header {
             version: CURRENT_VERSION,
             algorithm: ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305,
             compression: COMPRESSION_ZLIB,
+            encoding: ENCODING_REED_SOLOMON,
             kdf_memory: ARGON_MEMORY,
             kdf_time: ARGON_TIME as u8,
             kdf_parallelism: ARGON_THREADS as u8,
@@ -96,6 +99,12 @@ impl Header {
 
     #[inline]
     #[must_use]
+    pub const fn encoding(&self) -> u8 {
+        self.encoding
+    }
+
+    #[inline]
+    #[must_use]
     pub const fn kdf_memory(&self) -> u32 {
         self.kdf_memory
     }
@@ -123,6 +132,8 @@ impl Header {
 
         ensure!(self.compression == COMPRESSION_ZLIB, "invalid compression identifier: {:#04x}", self.compression);
 
+        ensure!(self.encoding == ENCODING_REED_SOLOMON, "invalid encoding identifier: {:#04x}", self.encoding);
+
         ensure!(self.file_size() != 0, "file size cannot be zero");
 
         Ok(())
@@ -139,6 +150,7 @@ impl Header {
             version: self.version,
             algorithm: self.algorithm,
             compression: self.compression,
+            encoding: self.encoding,
             kdf_memory: self.kdf_memory,
             kdf_time: self.kdf_time,
             kdf_parallelism: self.kdf_parallelism,
@@ -171,6 +183,7 @@ impl Header {
             version: data.version(),
             algorithm: data.algorithm(),
             compression: data.compression(),
+            encoding: data.encoding(),
             kdf_memory: data.kdf_memory(),
             kdf_time: data.kdf_time(),
             kdf_parallelism: data.kdf_parallelism(),
