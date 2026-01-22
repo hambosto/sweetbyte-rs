@@ -34,9 +34,9 @@ pub const ALGORITHM_AES_256_GCM: u8 = 0x01;
 
 pub const ALGORITHM_CHACHA20_POLY1305: u8 = 0x02;
 
-pub const ALGORITHM_DUAL_LAYER: u8 = 0x03;
-
 pub const CONTENT_HASH_SIZE: usize = 32;
+
+pub const COMPRESSION_ZLIB: u8 = 0x01;
 
 pub const MAX_FILENAME_LENGTH: usize = 256;
 
