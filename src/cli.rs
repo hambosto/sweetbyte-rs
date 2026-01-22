@@ -1,35 +1,11 @@
 use anyhow::{Context, Result, bail, ensure};
-use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::Shell;
+use clap::{Parser, Subcommand};
 
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
 use crate::processor::Processor;
 use crate::types::{Processing, ProcessorMode};
 use crate::ui::{self, prompt::Prompt};
-
-#[derive(Parser)]
-#[command(name = "sweetbyte-rs", version = "26.1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
-pub struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-impl Cli {
-    #[inline]
-    pub fn init() -> Self {
-        Self::parse()
-    }
-
-    pub fn execute(self) -> Result<()> {
-        let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
-
-        match self.command {
-            Some(cmd) => cmd.run(&prompt),
-            None => run_interactive(&prompt),
-        }
-    }
-}
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -56,125 +32,95 @@ pub enum Commands {
     },
 
     Interactive,
-
-    Completions {
-        #[arg(value_enum)]
-        shell: Shell,
-    },
 }
 
-impl Commands {
-    pub fn run(self, prompt: &Prompt) -> Result<()> {
-        match self {
-            Self::Encrypt { input, output, password } => run_cli_mode(input, output, password, Processing::Encryption, prompt),
+#[derive(Parser)]
+#[command(name = "sweetbyte-rs", version = "26.1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
+pub struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
 
-            Self::Decrypt { input, output, password } => run_cli_mode(input, output, password, Processing::Decryption, prompt),
+impl Cli {
+    pub fn init() -> Self {
+        Self::parse()
+    }
 
-            Self::Interactive => run_interactive(prompt),
+    pub fn execute(self) -> Result<()> {
+        let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
 
-            Self::Completions { shell } => {
-                generate_completions(shell);
-                Ok(())
-            }
+        match self.command {
+            Some(Commands::Encrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Encryption, &prompt),
+            Some(Commands::Decrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Decryption, &prompt),
+            Some(Commands::Interactive) | None => Self::run_interactive(&prompt),
         }
     }
-}
 
-fn run_cli_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
-    let mut input = File::new(input_path);
+    fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
+        let mut input = File::new(input_path);
+        let output = File::new(output_path.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
+        let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
 
-    let output = File::new(output_path.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
+        Self::process(processing, &mut input, &output, &password)?;
+        ui::show_success(processing.mode(), output.path());
 
-    let password = match password {
-        Some(pwd) => pwd,
-
-        None => prompt_password(prompt, processing)?,
-    };
-
-    process_file(processing, &mut input, &output, &password)?;
-
-    ui::show_success(processing.mode(), output.path());
-
-    Ok(())
-}
-
-fn run_interactive(prompt: &Prompt) -> Result<()> {
-    ui::clear_screen()?;
-
-    ui::print_banner()?;
-
-    let mode = prompt.select_processing_mode()?;
-
-    let input = select_file(prompt, mode)?;
-
-    let processing = match mode {
-        ProcessorMode::Encrypt => Processing::Encryption,
-        ProcessorMode::Decrypt => Processing::Decryption,
-    };
-
-    let mut input_file = File::new(input.path().to_string_lossy().into_owned());
-    input_file.validate(true)?;
-
-    let output = File::new(input_file.output_path(processing.mode()).to_string_lossy().into_owned());
-
-    if output.exists() && !prompt.confirm_file_overwrite(output.path())? {
-        bail!("operation canceled");
+        Ok(())
     }
 
-    let password = prompt_password(prompt, processing)?;
+    fn run_interactive(prompt: &Prompt) -> Result<()> {
+        ui::clear_screen()?;
+        ui::print_banner()?;
 
-    process_file(processing, &mut input_file, &output, &password)?;
+        let mode = prompt.select_processing_mode()?;
+        let processing = match mode {
+            ProcessorMode::Encrypt => Processing::Encryption,
+            ProcessorMode::Decrypt => Processing::Decryption,
+        };
 
-    ui::show_success(mode, output.path());
+        let mut files = File::discover(mode);
+        ensure!(!files.is_empty(), "no eligible files found");
 
-    delete_source(prompt, &input_file, processing.mode())?;
+        ui::show_file_info(&mut files)?;
 
-    Ok(())
-}
+        let path = prompt.select_file(&files)?;
+        let mut input = File::new(path.to_string_lossy().into_owned());
+        input.validate(true)?;
 
-fn process_file(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
-    let processor = Processor::new(password);
+        let output = File::new(input.output_path(mode).to_string_lossy().into_owned());
 
-    match processing {
-        Processing::Encryption => processor.encrypt(input, output),
-        Processing::Decryption => processor.decrypt(input, output),
+        if output.exists() && !prompt.confirm_file_overwrite(output.path())? {
+            bail!("operation canceled");
+        }
+
+        let password = Self::get_password(prompt, processing)?;
+
+        Self::process(processing, &mut input, &output, &password)?;
+
+        ui::show_success(mode, output.path());
+
+        let label = if mode == ProcessorMode::Encrypt { "original" } else { "encrypted" };
+        if prompt.confirm_file_deletion(input.path(), label)? {
+            input.delete()?;
+            ui::show_source_deleted(input.path());
+        }
+
+        Ok(())
     }
-    .with_context(|| format!("{} failed: {}", processing, input.path().display()))
-}
 
-fn prompt_password(prompt: &Prompt, processing: Processing) -> Result<String> {
-    match processing {
-        Processing::Encryption => prompt.prompt_encryption_password(),
+    fn process(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
+        let processor = Processor::new(password);
 
-        Processing::Decryption => prompt.prompt_decryption_password(),
+        match processing {
+            Processing::Encryption => processor.encrypt(input, output),
+            Processing::Decryption => processor.decrypt(input, output),
+        }
+        .with_context(|| format!("{} failed: {}", processing, input.path().display()))
     }
-}
 
-fn select_file(prompt: &Prompt, mode: ProcessorMode) -> Result<File> {
-    let mut files: Vec<File> = File::discover(mode);
-
-    ensure!(!files.is_empty(), "no eligible files found");
-
-    ui::show_file_info(&mut files)?;
-
-    let path = prompt.select_file(&files)?;
-
-    Ok(File::new(path.to_string_lossy().into_owned()))
-}
-
-fn delete_source(prompt: &Prompt, file: &File, mode: ProcessorMode) -> Result<()> {
-    let label = if mode == ProcessorMode::Encrypt { "original" } else { "encrypted" };
-
-    if prompt.confirm_file_deletion(file.path(), label)? {
-        file.delete()?;
-
-        ui::show_source_deleted(file.path());
+    fn get_password(prompt: &Prompt, processing: Processing) -> Result<String> {
+        match processing {
+            Processing::Encryption => prompt.prompt_encryption_password(),
+            Processing::Decryption => prompt.prompt_decryption_password(),
+        }
     }
-    Ok(())
-}
-
-fn generate_completions(shell: Shell) {
-    let mut cmd = Cli::command();
-
-    clap_complete::generate(shell, &mut cmd, "sweetbyte-rs", &mut std::io::stdout());
 }

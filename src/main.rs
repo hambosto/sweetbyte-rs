@@ -11,13 +11,9 @@ mod types;
 mod ui;
 mod worker;
 
-use std::process;
-
+use anyhow::Result;
 use cli::Cli;
 
-fn main() {
-    if let Err(e) = Cli::init().execute() {
-        eprintln!("Error: {e:?}");
-        process::exit(1);
-    }
+fn main() -> Result<()> {
+    Cli::init().execute()
 }

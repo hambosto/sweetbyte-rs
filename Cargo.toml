@@ -18,8 +18,7 @@ argon2 = "0.5.3"
 blake3 = "1.8.3"
 bytesize = "2.3.1"
 chacha20poly1305 = "0.10.1"
-clap = { version = "4.5.54", features = ["derive"], default-features = false }
-clap_complete = "4.5.65"
+clap = { version = "4.5.54", features = ["derive"] }
 comfy-table = "7.2.2"
 console = "0.16.2"
 dialoguer = "0.12.0"
