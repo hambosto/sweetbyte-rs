@@ -51,9 +51,8 @@ impl Reader {
 
         loop {
             let mut buffer_len = [0u8; 4];
-            let read_result = reader.read_exact(&mut buffer_len);
 
-            if read_result.is_err() {
+            if reader.read_exact(&mut buffer_len).is_err() {
                 break;
             }
 

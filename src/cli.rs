@@ -98,7 +98,10 @@ impl Cli {
 
         ui::show_success(mode, output.path());
 
-        let label = if mode == ProcessorMode::Encrypt { "original" } else { "encrypted" };
+        let label = match mode {
+            ProcessorMode::Encrypt => "original",
+            ProcessorMode::Decrypt => "encrypted",
+        };
         if prompt.confirm_file_deletion(input.path(), label)? {
             input.delete()?;
             ui::show_source_deleted(input.path());

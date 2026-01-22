@@ -6,6 +6,17 @@ use crate::config::{CONTENT_HASH_SIZE, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE
 use crate::header::metadata::FileMetadata;
 use crate::header::section::{EncodedSection, SectionEncoder, SectionType, Sections, SectionsBuilder};
 
+struct HeaderParams {
+    version: u16,
+    algorithm: u8,
+    compression: u8,
+    encoding: u8,
+    kdf: u8,
+    kdf_memory: u32,
+    kdf_time: u8,
+    kdf_parallelism: u8,
+}
+
 pub struct HeaderData {
     version: u16,
 
@@ -119,7 +130,9 @@ impl<'a> Deserializer<'a> {
         ensure!(magic == MAGIC_BYTES.to_be_bytes(), "invalid magic bytes: expected {:?}, got {:?}", MAGIC_BYTES.to_be_bytes(), magic);
 
         let header_data = sections.get(SectionType::HeaderData).ok_or_else(|| anyhow::anyhow!("HeaderData section not found"))?;
-        let (version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism) = Self::parse_header_data(header_data)?;
+        let params = Self::parse_header_data(header_data)?;
+        let (version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism) =
+            (params.version, params.algorithm, params.compression, params.encoding, params.kdf, params.kdf_memory, params.kdf_time, params.kdf_parallelism);
 
         let metadata_bytes = sections.get(SectionType::Metadata).ok_or_else(|| anyhow::anyhow!("Metadata section not found"))?;
         let metadata = FileMetadata::deserialize(metadata_bytes)?;
@@ -178,7 +191,7 @@ impl<'a> Deserializer<'a> {
         self.encoder.decode_section(&section)
     }
 
-    fn parse_header_data(data: &[u8]) -> Result<(u16, u8, u8, u8, u8, u32, u8, u8)> {
+    fn parse_header_data(data: &[u8]) -> Result<HeaderParams> {
         ensure!(data.len() >= HEADER_DATA_SIZE, "invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
 
         let version = u16::from_be_bytes(data[0..2].try_into().context("version conversion")?);
@@ -190,7 +203,7 @@ impl<'a> Deserializer<'a> {
         let kdf_time = data[10];
         let kdf_parallelism = data[11];
 
-        Ok((version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism))
+        Ok(HeaderParams { version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism })
     }
 
     fn read_exact<const N: usize, R: Read>(reader: &mut R) -> Result<[u8; N]> {

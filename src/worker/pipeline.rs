@@ -1,6 +1,7 @@
 use anyhow::Result;
 
-use crate::cipher::{Algorithm, Cipher};
+use crate::cipher::Cipher;
+use crate::cipher::{Aes256Gcm, XChaCha20Poly1305};
 use crate::compression::{CompressionLevel, Compressor};
 use crate::config::{ARGON_KEY_LEN, BLOCK_SIZE, DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
@@ -50,12 +51,12 @@ impl Pipeline {
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        let aes_encrypted = match self.cipher.encrypt::<Algorithm::Aes256Gcm>(&padded_data) {
+        let aes_encrypted = match self.cipher.encrypt::<Aes256Gcm>(&padded_data) {
             Ok(aes_encrypted) => aes_encrypted,
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        let chacha_encrypted = match self.cipher.encrypt::<Algorithm::XChaCha20Poly1305>(&aes_encrypted) {
+        let chacha_encrypted = match self.cipher.encrypt::<XChaCha20Poly1305>(&aes_encrypted) {
             Ok(chacha_encrypted) => chacha_encrypted,
             Err(e) => return TaskResult::err(task.index, &e),
         };
@@ -74,12 +75,12 @@ impl Pipeline {
             Err(e) => return TaskResult::err(task.index, &e.context("failed to decode data")),
         };
 
-        let chacha_decrypted = match self.cipher.decrypt::<Algorithm::XChaCha20Poly1305>(&decoded_data) {
+        let chacha_decrypted = match self.cipher.decrypt::<XChaCha20Poly1305>(&decoded_data) {
             Ok(chacha_decrypted) => chacha_decrypted,
             Err(e) => return TaskResult::err(task.index, &e.context("chacha20poly1305 decryption failed")),
         };
 
-        let aes_decrypted = match self.cipher.decrypt::<Algorithm::Aes256Gcm>(&chacha_decrypted) {
+        let aes_decrypted = match self.cipher.decrypt::<Aes256Gcm>(&chacha_decrypted) {
             Ok(aes_decrypted) => aes_decrypted,
             Err(e) => return TaskResult::err(task.index, &e.context("aes256gcm decryption failed")),
         };

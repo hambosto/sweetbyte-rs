@@ -14,13 +14,13 @@ pub use mac::Mac;
 
 use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};
 
-#[allow(non_snake_case)]
-pub mod Algorithm {
-
+pub mod algorithm {
     pub struct Aes256Gcm;
 
     pub struct XChaCha20Poly1305;
 }
+
+pub use algorithm::{Aes256Gcm, XChaCha20Poly1305};
 
 pub trait CipherAlgorithm {
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>>;
@@ -28,7 +28,7 @@ pub trait CipherAlgorithm {
     fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>>;
 }
 
-impl CipherAlgorithm for Algorithm::Aes256Gcm {
+impl CipherAlgorithm for algorithm::Aes256Gcm {
     #[inline]
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
         cipher.aes.encrypt(plaintext)
@@ -40,7 +40,7 @@ impl CipherAlgorithm for Algorithm::Aes256Gcm {
     }
 }
 
-impl CipherAlgorithm for Algorithm::XChaCha20Poly1305 {
+impl CipherAlgorithm for algorithm::XChaCha20Poly1305 {
     #[inline]
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
         cipher.chacha.encrypt(plaintext)

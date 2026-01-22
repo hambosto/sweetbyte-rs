@@ -48,7 +48,7 @@ impl<'a> Serializer<'a> {
 
         let magic = MAGIC_BYTES.to_be_bytes();
 
-        let header_data = Self::serialize_header_data(params.version, params.algorithm, params.compression, params.encoding, params.kdf, params.kdf_memory, params.kdf_time, params.kdf_parallelism);
+        let header_data = Self::serialize_header_data(params);
 
         let metadata_bytes = params.metadata.serialize();
 
@@ -111,24 +111,24 @@ impl<'a> Serializer<'a> {
     }
 
     #[inline]
-    fn serialize_header_data(version: u16, algorithm: u8, compression: u8, encoding: u8, kdf: u8, kdf_memory: u32, kdf_time: u8, kdf_parallelism: u8) -> [u8; HEADER_DATA_SIZE] {
+    fn serialize_header_data(params: &SerializeParams<'_>) -> [u8; HEADER_DATA_SIZE] {
         let mut data = [0u8; HEADER_DATA_SIZE];
 
-        data[0..2].copy_from_slice(&version.to_be_bytes());
+        data[0..2].copy_from_slice(&params.version.to_be_bytes());
 
-        data[2] = algorithm;
+        data[2] = params.algorithm;
 
-        data[3] = compression;
+        data[3] = params.compression;
 
-        data[4] = encoding;
+        data[4] = params.encoding;
 
-        data[5] = kdf;
+        data[5] = params.kdf;
 
-        data[6..10].copy_from_slice(&kdf_memory.to_be_bytes());
+        data[6..10].copy_from_slice(&params.kdf_memory.to_be_bytes());
 
-        data[10] = kdf_time;
+        data[10] = params.kdf_time;
 
-        data[11] = kdf_parallelism;
+        data[11] = params.kdf_parallelism;
 
         data
     }
