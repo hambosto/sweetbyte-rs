@@ -6,7 +6,7 @@ use crate::config::{CONTENT_HASH_SIZE, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE
 use crate::header::metadata::FileMetadata;
 use crate::header::section::{EncodedSection, SectionEncoder, SectionType, Sections, SectionsBuilder};
 
-pub struct ParsedHeaderData {
+pub struct HeaderData {
     version: u16,
 
     algorithm: u8,
@@ -24,7 +24,7 @@ pub struct ParsedHeaderData {
     sections: Sections,
 }
 
-impl ParsedHeaderData {
+impl HeaderData {
     #[inline]
     #[must_use]
     pub const fn version(&self) -> u16 {
@@ -84,7 +84,7 @@ impl<'a> Deserializer<'a> {
         Self { encoder }
     }
 
-    pub fn deserialize<R: Read>(&self, mut reader: R) -> Result<ParsedHeaderData> {
+    pub fn deserialize<R: Read>(&self, mut reader: R) -> Result<HeaderData> {
         let length_sizes = Self::read_lengths_header(&mut reader)?;
 
         let section_lengths = self.read_and_decode_lengths(&mut reader, &length_sizes)?;
@@ -103,7 +103,7 @@ impl<'a> Deserializer<'a> {
         let content_hash_bytes = sections.get_with_min_len(SectionType::ContentHash, CONTENT_HASH_SIZE)?;
         let content_hash: [u8; CONTENT_HASH_SIZE] = content_hash_bytes.try_into().context("content hash conversion")?;
 
-        Ok(ParsedHeaderData { version, algorithm, kdf_memory, kdf_time, kdf_parallelism, metadata, content_hash, sections })
+        Ok(HeaderData { version, algorithm, kdf_memory, kdf_time, kdf_parallelism, metadata, content_hash, sections })
     }
 
     fn read_lengths_header<R: Read>(reader: &mut R) -> Result<[u32; 6]> {

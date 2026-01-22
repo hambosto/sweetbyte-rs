@@ -7,7 +7,7 @@ use crate::config::{
     ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, ALGORITHM_DUAL_LAYER, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, CONTENT_HASH_SIZE, CURRENT_VERSION, DATA_SHARDS,
     HEADER_DATA_SIZE, MAC_SIZE, MAGIC_SIZE, PARITY_SHARDS,
 };
-use crate::header::deserializer::{Deserializer, ParsedHeaderData};
+use crate::header::deserializer::{Deserializer, HeaderData};
 use crate::header::metadata::FileMetadata;
 use crate::header::section::{SectionEncoder, SectionType, Sections};
 use crate::header::serializer::Serializer;
@@ -157,7 +157,7 @@ impl Header {
         Mac::new(key)?.verify(expected_mac, &[magic, salt, header_data, &metadata_bytes, content_hash])
     }
 
-    fn from_parsed_data(data: ParsedHeaderData, encoder: SectionEncoder) -> Result<Self> {
+    fn from_parsed_data(data: HeaderData, encoder: SectionEncoder) -> Result<Self> {
         let header = Self {
             encoder,
             version: data.version(),
