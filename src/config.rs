@@ -20,7 +20,7 @@ pub const BLOCK_SIZE: usize = 128;
 
 pub const CHUNK_SIZE: usize = 256 * 1024;
 
-pub const MAGIC_BYTES: u32 = 0xCAFE_BABE;
+pub const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
 
 pub const MAGIC_SIZE: usize = 4;
 

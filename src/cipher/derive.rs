@@ -4,7 +4,7 @@ use argon2::Version::V0x13;
 use argon2::{Argon2, Params};
 use rand::rand_core::{OsRng, TryRngCore};
 
-use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_THREADS, ARGON_TIME};
+use crate::config::ARGON_KEY_LEN;
 
 pub struct Derive {
     key: Vec<u8>,
@@ -16,13 +16,8 @@ impl Derive {
         Ok(Self { key: key.to_vec() })
     }
 
-    pub fn derive_with_salt(&self, salt: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
-        self.derive_with_params(salt, ARGON_MEMORY, ARGON_TIME, ARGON_THREADS)
-    }
-
-    pub fn derive_with_params(&self, salt: &[u8], memory: u32, time: u32, parallelism: u32) -> Result<[u8; ARGON_KEY_LEN]> {
+    pub fn derive_key(&self, salt: &[u8], memory: u32, time: u32, parallelism: u32) -> Result<[u8; ARGON_KEY_LEN]> {
         let params = Params::new(memory, time, parallelism, Some(ARGON_KEY_LEN)).map_err(|e| anyhow!("invalid argon2 parameter: {e}"))?;
-
         let argon2 = Argon2::new(Argon2id, V0x13, params);
 
         let mut key = [0u8; ARGON_KEY_LEN];

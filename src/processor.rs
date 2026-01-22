@@ -4,7 +4,7 @@ use anyhow::{Context, Result, ensure};
 use sha2::{Digest, Sha256};
 
 use crate::cipher::Derive;
-use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CONTENT_HASH_SIZE};
+use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, CONTENT_HASH_SIZE};
 use crate::file::File;
 use crate::header::Header;
 use crate::header::metadata::FileMetadata;
@@ -32,9 +32,9 @@ impl Encryptor {
 
         let salt: [u8; ARGON_SALT_LEN] = Derive::generate_salt()?;
 
-        let key = Derive::new(self.password.as_bytes())?.derive_with_salt(&salt)?;
+        let key = Derive::new(self.password.as_bytes())?.derive_key(&salt, ARGON_MEMORY, ARGON_TIME, ARGON_THREADS)?;
 
-        let header = build_header(metadata, content_hash, &salt, &key)?;
+        let header = write_header(metadata, content_hash, &salt, &key)?;
 
         let mut writer = dest.writer()?;
         writer.write_all(&header)?;
@@ -60,12 +60,10 @@ impl Decryptor {
         ensure!(src.exists(), "source file not found: {}", src.path().display());
 
         let mut reader = src.reader()?;
-        let header = read_and_verify_header(&mut reader, self.password.as_bytes())?;
+        let (header, key) = read_header(&mut reader, self.password.as_bytes())?;
 
         let size = header.file_size();
         ensure!(size != 0, "cannot decrypt a file with zero size");
-
-        let key = derive_key_with_header_params(&header, self.password.as_bytes())?;
 
         let reader = reader.into_inner();
         let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
@@ -94,22 +92,18 @@ fn compute_content_hash(file: &File) -> Result<[u8; CONTENT_HASH_SIZE]> {
     Ok(hash)
 }
 
-fn build_header(metadata: FileMetadata, content_hash: [u8; CONTENT_HASH_SIZE], salt: &[u8; ARGON_SALT_LEN], key: &[u8; ARGON_KEY_LEN]) -> Result<Vec<u8>> {
+fn write_header(metadata: FileMetadata, content_hash: [u8; CONTENT_HASH_SIZE], salt: &[u8; ARGON_SALT_LEN], key: &[u8; ARGON_KEY_LEN]) -> Result<Vec<u8>> {
     let header = Header::new(metadata, content_hash)?;
     header.serialize(salt, key)
 }
 
-fn read_and_verify_header(reader: &mut BufReader<std::fs::File>, password: &[u8]) -> Result<Header> {
+fn read_header(reader: &mut BufReader<std::fs::File>, password: &[u8]) -> Result<(Header, [u8; ARGON_KEY_LEN])> {
     let header = Header::deserialize(reader.get_mut())?;
 
-    let key = derive_key_with_header_params(&header, password)?;
+    let salt = header.salt()?;
+    let key = Derive::new(password)?.derive_key(salt, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
 
     header.verify(&key).context("incorrect password or corrupt file")?;
 
-    Ok(header)
-}
-
-fn derive_key_with_header_params(header: &Header, password: &[u8]) -> Result<[u8; ARGON_KEY_LEN]> {
-    let salt = header.salt()?;
-    Derive::new(password)?.derive_with_params(salt, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())
+    Ok((header, key))
 }
