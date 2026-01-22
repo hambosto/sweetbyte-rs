@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 
 use crate::config::{CONTENT_HASH_SIZE, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
 use crate::header::metadata::FileMetadata;
@@ -126,19 +126,18 @@ impl<'a> Deserializer<'a> {
     }
 
     fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, length_sizes: &[u32; 6]) -> Result<[u32; 6]> {
-        SectionType::ALL
-            .iter()
-            .zip(length_sizes)
-            .map(|(section_type, &size)| {
-                let mut encoded = vec![0u8; size as usize];
-                reader.read_exact(&mut encoded).with_context(|| format!("failed to read encoded length for {section_type}"))?;
+        let mut decoded_lengths = Vec::with_capacity(6);
 
-                let section = EncodedSection::new(encoded);
-                self.encoder.decode_length(&section)
-            })
-            .collect::<Result<Vec<u32>>>()?
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("section count mismatch"))
+        for (&section_type, &size) in SectionType::ALL.iter().zip(length_sizes) {
+            let mut encoded = vec![0u8; size as usize];
+            reader.read_exact(&mut encoded).with_context(|| format!("failed to read encoded length for {section_type}"))?;
+
+            let section = EncodedSection::new(encoded);
+            let decoded = self.encoder.decode_length(&section)?;
+            decoded_lengths.push(decoded);
+        }
+
+        decoded_lengths.try_into().map_err(|_| anyhow!("section count mismatch"))
     }
 
     fn read_and_decode_sections<R: Read>(&self, reader: &mut R, section_lengths: &[u32; 6]) -> Result<Sections> {
