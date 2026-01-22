@@ -68,12 +68,6 @@ impl ParsedHeaderData {
     }
 
     #[inline]
-    #[must_use]
-    pub fn file_size(&self) -> u64 {
-        self.metadata.size()
-    }
-
-    #[inline]
     pub fn into_sections(self) -> Sections {
         self.sections
     }
