@@ -3,11 +3,13 @@ use anyhow::{Context, Result};
 mod aes_gcm;
 mod chacha20poly1305;
 mod derive;
+mod hasher;
 mod mac;
 
 pub use aes_gcm::AesGcm;
 pub use chacha20poly1305::ChaCha20Poly1305;
 pub use derive::Derive;
+pub use hasher::ContentHash;
 pub use mac::Mac;
 
 use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};

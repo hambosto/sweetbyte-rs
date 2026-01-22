@@ -4,7 +4,7 @@ use clap_complete::Shell;
 
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
-use crate::processor::{Decryptor, Encryptor};
+use crate::processor::Processor;
 use crate::types::{Processing, ProcessorMode};
 use crate::ui::{self, prompt::Prompt};
 
@@ -133,10 +133,11 @@ fn run_interactive(prompt: &Prompt) -> Result<()> {
 }
 
 fn process_file(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
-    match processing {
-        Processing::Encryption => Encryptor::new(password).encrypt(input, output),
+    let processor = Processor::new(password);
 
-        Processing::Decryption => Decryptor::new(password).decrypt(input, output),
+    match processing {
+        Processing::Encryption => processor.encrypt(input, output),
+        Processing::Decryption => processor.decrypt(input, output),
     }
     .with_context(|| format!("{} failed: {}", processing, input.path().display()))
 }
