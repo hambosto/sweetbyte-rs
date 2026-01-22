@@ -68,13 +68,13 @@ impl Prompt {
     pub fn confirm_file_overwrite(&self, path: &Path) -> Result<bool> {
         let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
 
-        self.confirm(&format!("Output file {} already exists. Overwrite?", filename))
+        self.confirm(&format!("Output file {filename} already exists. Overwrite?"))
     }
 
     pub fn confirm_file_deletion(&self, path: &Path, file_type: &str) -> Result<bool> {
         let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
 
-        self.confirm(&format!("Delete {} file {}?", file_type, filename))
+        self.confirm(&format!("Delete {file_type} file {filename}?"))
     }
 
     fn prompt_password(&self, prompt: &str) -> Result<String> {

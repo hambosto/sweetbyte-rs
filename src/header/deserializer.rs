@@ -15,6 +15,8 @@ pub struct HeaderData {
 
     encoding: u8,
 
+    kdf: u8,
+
     kdf_memory: u32,
 
     kdf_time: u8,
@@ -51,6 +53,12 @@ impl HeaderData {
     #[must_use]
     pub const fn encoding(&self) -> u8 {
         self.encoding
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn kdf(&self) -> u8 {
+        self.kdf
     }
 
     #[inline]
@@ -111,7 +119,7 @@ impl<'a> Deserializer<'a> {
         ensure!(magic == MAGIC_BYTES.to_be_bytes(), "invalid magic bytes: expected {:?}, got {:?}", MAGIC_BYTES.to_be_bytes(), magic);
 
         let header_data = sections.get(SectionType::HeaderData).ok_or_else(|| anyhow::anyhow!("HeaderData section not found"))?;
-        let (version, algorithm, compression, encoding, kdf_memory, kdf_time, kdf_parallelism) = Self::parse_header_data(header_data)?;
+        let (version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism) = Self::parse_header_data(header_data)?;
 
         let metadata_bytes = sections.get(SectionType::Metadata).ok_or_else(|| anyhow::anyhow!("Metadata section not found"))?;
         let metadata = FileMetadata::deserialize(metadata_bytes)?;
@@ -119,7 +127,7 @@ impl<'a> Deserializer<'a> {
         let content_hash_bytes = sections.get_with_min_len(SectionType::ContentHash, CONTENT_HASH_SIZE)?;
         let content_hash: [u8; CONTENT_HASH_SIZE] = content_hash_bytes.try_into().context("content hash conversion")?;
 
-        Ok(HeaderData { version, algorithm, compression, encoding, kdf_memory, kdf_time, kdf_parallelism, metadata, content_hash, sections })
+        Ok(HeaderData { version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism, metadata, content_hash, sections })
     }
 
     fn read_lengths_header<R: Read>(reader: &mut R) -> Result<[u32; 6]> {
@@ -170,18 +178,19 @@ impl<'a> Deserializer<'a> {
         self.encoder.decode_section(&section)
     }
 
-    fn parse_header_data(data: &[u8]) -> Result<(u16, u8, u8, u8, u32, u8, u8)> {
+    fn parse_header_data(data: &[u8]) -> Result<(u16, u8, u8, u8, u8, u32, u8, u8)> {
         ensure!(data.len() >= HEADER_DATA_SIZE, "invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
 
         let version = u16::from_be_bytes(data[0..2].try_into().context("version conversion")?);
         let algorithm = data[2];
         let compression = data[3];
         let encoding = data[4];
-        let kdf_memory = u32::from_be_bytes(data[5..9].try_into().context("kdf memory conversion")?);
-        let kdf_time = data[9];
-        let kdf_parallelism = data[10];
+        let kdf = data[5];
+        let kdf_memory = u32::from_be_bytes(data[6..10].try_into().context("kdf memory conversion")?);
+        let kdf_time = data[10];
+        let kdf_parallelism = data[11];
 
-        Ok((version, algorithm, compression, encoding, kdf_memory, kdf_time, kdf_parallelism))
+        Ok((version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism))
     }
 
     fn read_exact<const N: usize, R: Read>(reader: &mut R) -> Result<[u8; N]> {

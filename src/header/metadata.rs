@@ -74,13 +74,13 @@ impl FileMetadata {
         let filename_len = u16::from_be_bytes(data[0..2].try_into().context("filename length conversion")?);
         let filename_len = filename_len as usize;
 
-        ensure!(filename_len <= MAX_FILENAME_LENGTH, "filename too long: {} bytes (max {})", filename_len, MAX_FILENAME_LENGTH);
+        ensure!(filename_len <= MAX_FILENAME_LENGTH, "filename too long: {filename_len} bytes (max {MAX_FILENAME_LENGTH})");
 
         let required_len = 2 + filename_len + 24;
         ensure!(data.len() >= required_len, "metadata too short: expected {}, got {}", required_len, data.len());
 
         let filename_end = 2 + filename_len;
-        let filename = std::str::from_utf8(&data[2..filename_end]).context("invalid UTF-8 in filename")?.to_string();
+        let filename = std::str::from_utf8(&data[2..filename_end]).context("invalid UTF-8 in filename")?.to_owned();
 
         let size = u64::from_be_bytes(data[filename_end..filename_end + 8].try_into().context("size conversion")?);
 

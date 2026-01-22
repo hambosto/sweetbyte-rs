@@ -16,7 +16,7 @@ impl Executor {
         Self { pipeline: Arc::new(pipeline) }
     }
 
-    pub fn process(&self, tasks: &Receiver<Task>, results: Sender<TaskResult>) {
+    pub fn process(&self, tasks: &Receiver<Task>, results: &Sender<TaskResult>) {
         tasks.iter().par_bridge().for_each(|task| {
             let result = self.pipeline.process(&task);
 

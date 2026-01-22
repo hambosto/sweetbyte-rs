@@ -19,7 +19,7 @@ pub enum CompressionLevel {
 
 impl CompressionLevel {
     #[inline]
-    pub fn is_valid(&self) -> bool {
+    pub fn is_valid(self) -> bool {
         let value = match self {
             Self::None => 0,
             Self::Fast => 1,

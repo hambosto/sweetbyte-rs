@@ -50,7 +50,7 @@ impl Worker {
 
         let executor = Executor::new(self.pipeline);
         let executor_handle = thread::spawn(move || {
-            executor.process(&task_receiver, result_sender);
+            executor.process(&task_receiver, &result_sender);
         });
 
         let write_result = writer.write_all(output, result_receiver, Some(&progress));

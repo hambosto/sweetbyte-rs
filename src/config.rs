@@ -26,7 +26,7 @@ pub const MAGIC_SIZE: usize = 4;
 
 pub const MAC_SIZE: usize = 32;
 
-pub const HEADER_DATA_SIZE: usize = 11;
+pub const HEADER_DATA_SIZE: usize = 12;
 
 pub const CURRENT_VERSION: u16 = 0x0002;
 
@@ -39,6 +39,8 @@ pub const CONTENT_HASH_SIZE: usize = 32;
 pub const COMPRESSION_ZLIB: u8 = 0x01;
 
 pub const ENCODING_REED_SOLOMON: u8 = 0x01;
+
+pub const KDF_ARGON2: u8 = 0x01;
 
 pub const MAX_FILENAME_LENGTH: usize = 256;
 

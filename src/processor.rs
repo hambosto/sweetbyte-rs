@@ -8,6 +8,7 @@ use crate::file::File;
 use crate::header::Header;
 use crate::header::metadata::FileMetadata;
 use crate::types::Processing;
+use crate::ui;
 use crate::worker::Worker;
 
 pub struct Processor {
@@ -50,6 +51,7 @@ impl Processor {
 
         let mut reader = src.reader()?;
         let header = Header::deserialize(reader.get_mut())?;
+        ui::show_header_info(&header)?;
         ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
         let salt = header.salt()?;
