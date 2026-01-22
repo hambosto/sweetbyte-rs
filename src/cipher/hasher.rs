@@ -10,7 +10,9 @@ pub struct ContentHash {
 impl ContentHash {
     #[must_use]
     pub fn new(data: &[u8]) -> Self {
-        let hash = *blake3::hash(data).as_bytes();
+        let mut hasher = blake3::Hasher::new();
+        hasher.update_rayon(data);
+        let hash = *hasher.finalize().as_bytes();
         Self { hash }
     }
 
