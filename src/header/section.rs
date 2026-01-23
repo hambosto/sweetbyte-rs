@@ -176,10 +176,10 @@ impl SectionDecoder {
         reader.read_exact(&mut header).context("failed to read lengths header")?;
 
         let mut result = [0u32; 5];
-        for i in 0..5 {
+        for (i, slot) in result.iter_mut().enumerate() {
             let offset = i * 4;
             let bytes: [u8; 4] = header[offset..offset + 4].try_into()?;
-            result[i] = u32::from_be_bytes(bytes);
+            *slot = u32::from_be_bytes(bytes);
         }
         Ok(result)
     }
