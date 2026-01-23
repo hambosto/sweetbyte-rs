@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use flume::{Receiver, Sender};
-use rayon::prelude::*;
+use rayon::iter::{ParallelBridge, ParallelIterator};
 
 use crate::types::{Task, TaskResult};
 use crate::worker::pipeline::Pipeline;

@@ -5,14 +5,12 @@ mod chacha20poly1305;
 mod derive;
 mod hash;
 mod mac;
-mod protected;
 
 pub use aes_gcm::AesGcm;
 pub use chacha20poly1305::ChaCha20Poly1305;
 pub use derive::Derive;
 pub use hash::Hash;
 pub use mac::Mac;
-pub use protected::Protected;
 
 use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
 

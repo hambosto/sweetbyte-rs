@@ -1070,7 +1070,6 @@ dependencies = [
  "sha2",
  "subtle",
  "walkdir",
- "zeroize",
 ]
 
 [[package]]
