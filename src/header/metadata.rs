@@ -1,8 +1,9 @@
 use anyhow::{Context, Result, ensure};
+use serde::Serialize;
 
 use crate::config::{HASH_SIZE, MAX_FILENAME_LENGTH};
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Serialize)]
 pub struct FileMetadata {
     name: String,
     size: u64,

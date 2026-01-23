@@ -56,7 +56,7 @@ impl Processor {
         let key = Derive::new(self.password.as_bytes())?.derive_key(salt, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
         header.verify(&key).context("incorrect password or corrupt file")?;
 
-        let expected_hash = header.file_hash().context("content hash not found in header")?;
+        let expected_hash = header.file_hash();
 
         let reader = reader.into_inner();
         let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
