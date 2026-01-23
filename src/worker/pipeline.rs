@@ -1,7 +1,6 @@
 use anyhow::Result;
 
-use crate::cipher::Cipher;
-use crate::cipher::{Aes256Gcm, XChaCha20Poly1305};
+use crate::cipher::{Aes256Gcm, Cipher, XChaCha20Poly1305};
 use crate::compression::{CompressionLevel, Compressor};
 use crate::config::{ARGON_KEY_LEN, BLOCK_SIZE, DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;

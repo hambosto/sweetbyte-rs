@@ -1,7 +1,6 @@
-use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::fmt::Result;
+use std::fmt::{Debug, Formatter, Result};
 use std::ops::Deref;
+
 use zeroize::Zeroize;
 
 #[derive(Clone)]

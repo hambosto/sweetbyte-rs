@@ -5,7 +5,8 @@ use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
 use crate::processor::Processor;
 use crate::types::{Processing, ProcessorMode};
-use crate::ui::{self, prompt::Prompt};
+use crate::ui::prompt::Prompt;
+use crate::ui::{self};
 
 #[derive(Subcommand)]
 pub enum Commands {
