@@ -3,7 +3,8 @@ use std::io::Read;
 use anyhow::{Context, Result, anyhow, ensure};
 use hashbrown::HashMap;
 
-use crate::{config::MAGIC_BYTES, encoding::Encoding};
+use crate::config::MAGIC_BYTES;
+use crate::encoding::Encoding;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SectionType {
