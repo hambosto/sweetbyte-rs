@@ -4,8 +4,8 @@ use anyhow::{Context, Result, ensure};
 
 use crate::cipher::Mac;
 use crate::config::{
-    ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, COMPRESSION_ZLIB, CONTENT_HASH_SIZE, CURRENT_VERSION, DATA_SHARDS,
-    ENCODING_REED_SOLOMON, HEADER_DATA_SIZE, KDF_ARGON2, MAC_SIZE, MAGIC_SIZE, PARITY_SHARDS,
+    ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, COMPRESSION_ZLIB, CURRENT_VERSION, DATA_SHARDS, ENCODING_REED_SOLOMON, HASH_SIZE,
+    HEADER_DATA_SIZE, KDF_ARGON2, MAC_SIZE, MAGIC_SIZE, PARITY_SHARDS,
 };
 use crate::header::deserializer::{Deserializer, HeaderData};
 use crate::header::metadata::FileMetadata;
@@ -38,13 +38,11 @@ pub struct Header {
 
     metadata: Option<FileMetadata>,
 
-    content_hash: Option<[u8; CONTENT_HASH_SIZE]>,
-
     sections: Option<Sections>,
 }
 
 impl Header {
-    pub fn new(metadata: FileMetadata, content_hash: [u8; CONTENT_HASH_SIZE]) -> Result<Self> {
+    pub fn new(metadata: FileMetadata) -> Result<Self> {
         let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
 
         Ok(Self {
@@ -58,7 +56,6 @@ impl Header {
             kdf_time: ARGON_TIME as u8,
             kdf_parallelism: ARGON_THREADS as u8,
             metadata: Some(metadata),
-            content_hash: Some(content_hash),
             sections: None,
         })
     }
@@ -72,44 +69,20 @@ impl Header {
 
     #[inline]
     #[must_use]
+    pub fn file_name(&self) -> &str {
+        self.metadata.as_ref().map(|m| m.name()).unwrap_or("")
+    }
+
+    #[inline]
+    #[must_use]
     pub fn file_size(&self) -> u64 {
         self.metadata.as_ref().map_or(0, |m| m.size())
     }
 
     #[inline]
     #[must_use]
-    pub fn metadata(&self) -> Option<&FileMetadata> {
-        self.metadata.as_ref()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn content_hash(&self) -> Option<&[u8; CONTENT_HASH_SIZE]> {
-        self.content_hash.as_ref()
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn algorithm(&self) -> u8 {
-        self.algorithm
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn compression(&self) -> u8 {
-        self.compression
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn encoding(&self) -> u8 {
-        self.encoding
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn kdf(&self) -> u8 {
-        self.kdf
+    pub fn file_hash(&self) -> Option<&[u8; HASH_SIZE]> {
+        self.metadata.as_ref().map(|m| m.hash())
     }
 
     #[inline]
@@ -154,7 +127,6 @@ impl Header {
         self.validate()?;
 
         let metadata = self.metadata.as_ref().context("metadata is required for serialization")?;
-        let content_hash = self.content_hash.as_ref().context("content hash is required for serialization")?;
 
         let serializer = Serializer::new(&self.encoder);
         let params = serializer::SerializeParams {
@@ -167,7 +139,6 @@ impl Header {
             kdf_time: self.kdf_time,
             kdf_parallelism: self.kdf_parallelism,
             metadata,
-            content_hash,
             salt,
             key,
         };
@@ -181,12 +152,11 @@ impl Header {
         let magic = self.get_section(SectionType::Magic, MAGIC_SIZE)?;
         let salt = self.get_section(SectionType::Salt, ARGON_SALT_LEN)?;
         let header_data = self.get_section(SectionType::HeaderData, HEADER_DATA_SIZE)?;
-        let content_hash = self.get_section(SectionType::ContentHash, CONTENT_HASH_SIZE)?;
 
         let metadata = self.metadata.as_ref().context("metadata not available for verification")?;
         let metadata_bytes = metadata.serialize();
 
-        Mac::new(key)?.verify(expected_mac, &[magic, salt, header_data, &metadata_bytes, content_hash])
+        Mac::new(key)?.verify(expected_mac, &[magic, salt, header_data, &metadata_bytes])
     }
 
     fn from_parsed_data(data: HeaderData, encoder: SectionEncoder) -> Result<Self> {
@@ -201,7 +171,6 @@ impl Header {
             kdf_time: data.kdf_time(),
             kdf_parallelism: data.kdf_parallelism(),
             metadata: Some(data.metadata().clone()),
-            content_hash: Some(*data.content_hash()),
             sections: Some(data.into_sections()),
         };
 

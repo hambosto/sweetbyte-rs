@@ -3,16 +3,18 @@ use anyhow::{Context, Result};
 mod aes_gcm;
 mod chacha20poly1305;
 mod derive;
-mod hasher;
+mod hash;
 mod mac;
+mod protected;
 
 pub use aes_gcm::AesGcm;
 pub use chacha20poly1305::ChaCha20Poly1305;
 pub use derive::Derive;
-pub use hasher::ContentHash;
+pub use hash::Hash;
 pub use mac::Mac;
+pub use protected::Protected;
 
-use crate::config::{AES_KEY_SIZE, ARGON_KEY_LEN, CHACHA_KEY_SIZE};
+use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
 
 pub mod algorithm {
     pub struct Aes256Gcm;
@@ -60,11 +62,11 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &[u8; ARGON_KEY_LEN]) -> Result<Self> {
-        let aes_key: [u8; AES_KEY_SIZE] = key[..AES_KEY_SIZE].try_into().context("invalid aes-gcm key")?;
+        let split_key = key.split_at(KEY_SIZE);
+        let aes_key: &[u8; KEY_SIZE] = split_key.0.try_into().context("invalid AES key length")?;
+        let chacha_key: &[u8; KEY_SIZE] = split_key.1.try_into().context("invalid ChaCha key length")?;
 
-        let chacha_key: [u8; CHACHA_KEY_SIZE] = key[AES_KEY_SIZE..AES_KEY_SIZE + CHACHA_KEY_SIZE].try_into().context("invalid chacha20poly1305 key")?;
-
-        Ok(Self { aes: AesGcm::new(&aes_key)?, chacha: ChaCha20Poly1305::new(&chacha_key)? })
+        Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
     }
 
     #[inline]

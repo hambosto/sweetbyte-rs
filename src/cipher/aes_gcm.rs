@@ -2,7 +2,7 @@ use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{AeadCore, Aes256Gcm, Nonce};
 use anyhow::{Result, anyhow, ensure};
 
-use crate::config::{AES_KEY_SIZE, AES_NONCE_SIZE};
+use crate::config::{AES_NONCE_SIZE, KEY_SIZE};
 
 pub struct AesGcm {
     inner: Aes256Gcm,
@@ -10,7 +10,7 @@ pub struct AesGcm {
 
 impl AesGcm {
     #[inline]
-    pub fn new(key: &[u8; AES_KEY_SIZE]) -> Result<Self> {
+    pub fn new(key: &[u8; KEY_SIZE]) -> Result<Self> {
         let inner = Aes256Gcm::new_from_slice(key)?;
         Ok(Self { inner })
     }

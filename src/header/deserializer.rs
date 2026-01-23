@@ -2,7 +2,7 @@ use std::io::Read;
 
 use anyhow::{Context, Result, anyhow, ensure};
 
-use crate::config::{CONTENT_HASH_SIZE, HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
+use crate::config::{HEADER_DATA_SIZE, MAGIC_BYTES, MAGIC_SIZE};
 use crate::header::metadata::FileMetadata;
 use crate::header::section::{EncodedSection, SectionEncoder, SectionType, Sections, SectionsBuilder};
 
@@ -35,8 +35,6 @@ pub struct HeaderData {
     kdf_parallelism: u8,
 
     metadata: FileMetadata,
-
-    content_hash: [u8; CONTENT_HASH_SIZE],
 
     sections: Sections,
 }
@@ -97,12 +95,6 @@ impl HeaderData {
     }
 
     #[inline]
-    #[must_use]
-    pub const fn content_hash(&self) -> &[u8; CONTENT_HASH_SIZE] {
-        &self.content_hash
-    }
-
-    #[inline]
     pub fn into_sections(self) -> Sections {
         self.sections
     }
@@ -137,27 +129,23 @@ impl<'a> Deserializer<'a> {
         let metadata_bytes = sections.get(SectionType::Metadata).ok_or_else(|| anyhow::anyhow!("Metadata section not found"))?;
         let metadata = FileMetadata::deserialize(metadata_bytes)?;
 
-        let content_hash_bytes = sections.get_with_min_len(SectionType::ContentHash, CONTENT_HASH_SIZE)?;
-        let content_hash: [u8; CONTENT_HASH_SIZE] = content_hash_bytes.try_into().context("content hash conversion")?;
-
-        Ok(HeaderData { version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism, metadata, content_hash, sections })
+        Ok(HeaderData { version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism, metadata, sections })
     }
 
-    fn read_lengths_header<R: Read>(reader: &mut R) -> Result<[u32; 6]> {
-        let header = Self::read_exact::<24, R>(reader).context("failed to read lengths header")?;
+    fn read_lengths_header<R: Read>(reader: &mut R) -> Result<[u32; 5]> {
+        let header = Self::read_exact::<20, R>(reader).context("failed to read lengths header")?;
 
         Ok([
             u32::from_be_bytes(header[0..4].try_into().context("magic length conversion")?),
             u32::from_be_bytes(header[4..8].try_into().context("salt length conversion")?),
             u32::from_be_bytes(header[8..12].try_into().context("header data length conversion")?),
             u32::from_be_bytes(header[12..16].try_into().context("metadata length conversion")?),
-            u32::from_be_bytes(header[16..20].try_into().context("content hash length conversion")?),
-            u32::from_be_bytes(header[20..24].try_into().context("mac length conversion")?),
+            u32::from_be_bytes(header[16..20].try_into().context("mac length conversion")?),
         ])
     }
 
-    fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, length_sizes: &[u32; 6]) -> Result<[u32; 6]> {
-        let mut decoded_lengths = Vec::with_capacity(6);
+    fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, length_sizes: &[u32; 5]) -> Result<[u32; 5]> {
+        let mut decoded_lengths = Vec::with_capacity(5);
 
         for (&section_type, &size) in SectionType::ALL.iter().zip(length_sizes) {
             let mut encoded = vec![0u8; size as usize];
@@ -171,7 +159,7 @@ impl<'a> Deserializer<'a> {
         decoded_lengths.try_into().map_err(|_| anyhow!("section count mismatch"))
     }
 
-    fn read_and_decode_sections<R: Read>(&self, reader: &mut R, section_lengths: &[u32; 6]) -> Result<Sections> {
+    fn read_and_decode_sections<R: Read>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<Sections> {
         let magic = self.read_section(reader, SectionType::Magic, section_lengths[0])?;
         let mut builder = SectionsBuilder::with_magic(magic);
 

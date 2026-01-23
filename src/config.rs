@@ -34,7 +34,7 @@ pub const ALGORITHM_AES_256_GCM: u8 = 0x01;
 
 pub const ALGORITHM_CHACHA20_POLY1305: u8 = 0x02;
 
-pub const CONTENT_HASH_SIZE: usize = 32;
+pub const HASH_SIZE: usize = 32;
 
 pub const COMPRESSION_ZLIB: u8 = 0x01;
 
@@ -44,11 +44,9 @@ pub const KDF_ARGON2: u8 = 0x01;
 
 pub const MAX_FILENAME_LENGTH: usize = 256;
 
-pub const AES_KEY_SIZE: usize = 32;
-
 pub const AES_NONCE_SIZE: usize = 12;
 
-pub const CHACHA_KEY_SIZE: usize = 32;
+pub const KEY_SIZE: usize = 32;
 
 pub const CHACHA_NONCE_SIZE: usize = 24;
 

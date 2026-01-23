@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 
 use crate::cipher::Mac;
-use crate::config::{ARGON_SALT_LEN, CONTENT_HASH_SIZE, HEADER_DATA_SIZE, MAGIC_BYTES};
+use crate::config::{ARGON_SALT_LEN, HEADER_DATA_SIZE, MAGIC_BYTES};
 use crate::header::metadata::FileMetadata;
 use crate::header::section::{EncodedSection, SectionEncoder, SectionType};
 
@@ -23,8 +23,6 @@ pub struct SerializeParams<'a> {
     pub kdf_parallelism: u8,
 
     pub metadata: &'a FileMetadata,
-
-    pub content_hash: &'a [u8; CONTENT_HASH_SIZE],
 
     pub salt: &'a [u8],
 
@@ -52,9 +50,9 @@ impl<'a> Serializer<'a> {
 
         let metadata_bytes = params.metadata.serialize();
 
-        let mac = Mac::new(params.key)?.compute(&[&magic, params.salt, &header_data, &metadata_bytes, params.content_hash])?;
+        let mac = Mac::new(params.key)?.compute(&[&magic, params.salt, &header_data, &metadata_bytes])?;
 
-        let raw_sections: [&[u8]; 6] = [&magic, params.salt, &header_data, &metadata_bytes, params.content_hash, &mac];
+        let raw_sections: [&[u8]; 5] = [&magic, params.salt, &header_data, &metadata_bytes, &mac];
 
         let sections = self.encode_all_sections(&raw_sections)?;
 
@@ -65,7 +63,7 @@ impl<'a> Serializer<'a> {
         Ok(Self::assemble(&lengths_header, &length_sections, &sections))
     }
 
-    fn encode_all_sections(&self, raw: &[&[u8]; 6]) -> Result<[EncodedSection; 6]> {
+    fn encode_all_sections(&self, raw: &[&[u8]; 5]) -> Result<[EncodedSection; 5]> {
         SectionType::ALL
             .iter()
             .map(|st| self.encoder.encode_section(raw[st.index()]))
@@ -74,7 +72,7 @@ impl<'a> Serializer<'a> {
             .map_err(|_| anyhow::anyhow!("section count mismatch"))
     }
 
-    fn encode_length_prefixes(&self, sections: &[EncodedSection; 6]) -> Result<[EncodedSection; 6]> {
+    fn encode_length_prefixes(&self, sections: &[EncodedSection; 5]) -> Result<[EncodedSection; 5]> {
         SectionType::ALL
             .iter()
             .map(|st| self.encoder.encode_length(sections[st.index()].length_u32()))
@@ -83,8 +81,8 @@ impl<'a> Serializer<'a> {
             .map_err(|_| anyhow::anyhow!("section count mismatch"))
     }
 
-    fn build_lengths_header(length_sections: &[EncodedSection; 6]) -> [u8; 24] {
-        let mut header = [0u8; 24];
+    fn build_lengths_header(length_sections: &[EncodedSection; 5]) -> [u8; 20] {
+        let mut header = [0u8; 20];
         for (i, section) in length_sections.iter().enumerate() {
             let offset = i * 4;
             header[offset..offset + 4].copy_from_slice(&section.length_u32().to_be_bytes());
@@ -92,7 +90,7 @@ impl<'a> Serializer<'a> {
         header
     }
 
-    fn assemble(lengths_header: &[u8], length_sections: &[EncodedSection; 6], data_sections: &[EncodedSection; 6]) -> Vec<u8> {
+    fn assemble(lengths_header: &[u8], length_sections: &[EncodedSection; 5], data_sections: &[EncodedSection; 5]) -> Vec<u8> {
         let total_size = lengths_header.len() + length_sections.iter().map(|s| s.len()).sum::<usize>() + data_sections.iter().map(|s| s.len()).sum::<usize>();
 
         let mut result = Vec::with_capacity(total_size);

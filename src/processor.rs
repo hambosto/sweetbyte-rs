@@ -2,13 +2,12 @@ use std::io::{Read, Write};
 
 use anyhow::{Context, Result, ensure};
 
-use crate::cipher::{ContentHash, Derive};
+use crate::cipher::{Derive, Hash};
 use crate::config::{ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME};
 use crate::file::File;
 use crate::header::Header;
 use crate::header::metadata::FileMetadata;
 use crate::types::Processing;
-use crate::ui;
 use crate::worker::Worker;
 
 pub struct Processor {
@@ -23,17 +22,17 @@ impl Processor {
     pub fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
         ensure!(src.size()? != 0, "cannot encrypt a file with zero size");
 
-        let (filename, file_size, created_at, modified_at) = src.file_metadata()?;
-        let metadata = FileMetadata::new(filename, file_size, created_at, modified_at);
-
+        let (filename, file_size) = src.file_metadata()?;
         let mut file_content = Vec::new();
         src.reader()?.read_to_end(&mut file_content).context("failed to read file for hashing")?;
-        let content_hash = *ContentHash::new(&file_content).as_bytes();
+        let content_hash = *Hash::new(&file_content).as_bytes();
+
+        let metadata = FileMetadata::new(filename, file_size, content_hash);
 
         let salt: [u8; ARGON_SALT_LEN] = Derive::generate_salt()?;
         let key = Derive::new(self.password.as_bytes())?.derive_key(&salt, ARGON_MEMORY, ARGON_TIME, ARGON_THREADS)?;
 
-        let header = Header::new(metadata, content_hash)?;
+        let header = Header::new(metadata)?;
         let header_bytes = header.serialize(&salt, &key)?;
 
         let mut writer = dest.writer()?;
@@ -51,14 +50,13 @@ impl Processor {
 
         let mut reader = src.reader()?;
         let header = Header::deserialize(reader.get_mut())?;
-        ui::show_header_info(&header)?;
         ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
         let salt = header.salt()?;
         let key = Derive::new(self.password.as_bytes())?.derive_key(salt, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
         header.verify(&key).context("incorrect password or corrupt file")?;
 
-        let expected_hash = header.content_hash().context("content hash not found in header")?;
+        let expected_hash = header.file_hash().context("content hash not found in header")?;
 
         let reader = reader.into_inner();
         let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
@@ -66,7 +64,11 @@ impl Processor {
 
         let mut decrypted_content = Vec::new();
         dest.reader()?.read_to_end(&mut decrypted_content).context("failed to read decrypted file for verification")?;
-        ContentHash::new(&decrypted_content).verify(expected_hash).context("decrypted content integrity check failed")?;
+        Hash::new(&decrypted_content).verify(expected_hash).context("decrypted content integrity check failed")?;
+
+        dbg!(header.file_name());
+        dbg!(header.file_size());
+        dbg!(header.file_hash());
 
         Ok(())
     }

@@ -43,18 +43,14 @@ impl File {
         Ok(meta.len())
     }
 
-    pub fn file_metadata(&self) -> Result<(String, u64, u64, u64)> {
+    pub fn file_metadata(&self) -> Result<(String, u64)> {
         let meta = fs::metadata(&self.path).with_context(|| format!("failed to get metadata: {}", self.path.display()))?;
 
         let filename = self.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "unknown".to_owned());
 
         let size = meta.len();
 
-        let created_at = meta.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
-
-        let modified_at = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
-
-        Ok((filename, size, created_at, modified_at))
+        Ok((filename, size))
     }
 
     #[inline]

@@ -1,33 +1,33 @@
 use anyhow::{Context, Result, ensure};
 
-use crate::config::MAX_FILENAME_LENGTH;
+use crate::config::{HASH_SIZE, MAX_FILENAME_LENGTH};
 
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
-    filename: String,
-
+    name: String,
     size: u64,
-
-    created_at: u64,
-
-    modified_at: u64,
+    hash: [u8; HASH_SIZE],
 }
 
 impl FileMetadata {
-    pub fn new(filename: impl Into<String>, size: u64, created_at: u64, modified_at: u64) -> Self {
+    const FILENAME_LEN_SIZE: usize = 2;
+    const SIZE_FIELD_SIZE: usize = 8;
+    const MIN_SERIALIZED_SIZE: usize = Self::FILENAME_LEN_SIZE + Self::SIZE_FIELD_SIZE + HASH_SIZE;
+
+    pub fn new(filename: impl Into<String>, size: u64, content_hash: [u8; HASH_SIZE]) -> Self {
         let mut filename = filename.into();
 
         if filename.len() > MAX_FILENAME_LENGTH {
             filename.truncate(MAX_FILENAME_LENGTH);
         }
 
-        Self { filename, size, created_at, modified_at }
+        Self { name: filename, size, hash: content_hash }
     }
 
     #[inline]
     #[must_use]
-    pub fn filename(&self) -> &str {
-        &self.filename
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     #[inline]
@@ -38,56 +38,69 @@ impl FileMetadata {
 
     #[inline]
     #[must_use]
-    pub const fn created_at(&self) -> u64 {
-        self.created_at
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn modified_at(&self) -> u64 {
-        self.modified_at
+    pub const fn hash(&self) -> &[u8; HASH_SIZE] {
+        &self.hash
     }
 
     pub fn serialize(&self) -> Vec<u8> {
-        let filename_bytes = self.filename.as_bytes();
+        let filename_bytes = self.name.as_bytes();
         let filename_len = filename_bytes.len() as u16;
 
-        let total_size = 2 + filename_bytes.len() + 24;
+        let total_size = Self::FILENAME_LEN_SIZE + filename_bytes.len() + Self::SIZE_FIELD_SIZE + HASH_SIZE;
         let mut data = Vec::with_capacity(total_size);
 
         data.extend_from_slice(&filename_len.to_be_bytes());
-
         data.extend_from_slice(filename_bytes);
-
         data.extend_from_slice(&self.size.to_be_bytes());
-
-        data.extend_from_slice(&self.created_at.to_be_bytes());
-
-        data.extend_from_slice(&self.modified_at.to_be_bytes());
+        data.extend_from_slice(&self.hash);
 
         data
     }
 
     pub fn deserialize(data: &[u8]) -> Result<Self> {
-        ensure!(data.len() >= 26, "metadata too short: expected at least 26 bytes, got {}", data.len());
+        ensure!(data.len() >= Self::MIN_SERIALIZED_SIZE, "metadata too short: expected at least {} bytes, got {}", Self::MIN_SERIALIZED_SIZE, data.len());
 
-        let filename_len = u16::from_be_bytes(data[0..2].try_into().context("filename length conversion")?);
-        let filename_len = filename_len as usize;
-
+        let filename_len = Self::read_filename_length(data)?;
         ensure!(filename_len <= MAX_FILENAME_LENGTH, "filename too long: {filename_len} bytes (max {MAX_FILENAME_LENGTH})");
 
-        let required_len = 2 + filename_len + 24;
+        let required_len = Self::calculate_required_length(filename_len);
         ensure!(data.len() >= required_len, "metadata too short: expected {}, got {}", required_len, data.len());
 
-        let filename_end = 2 + filename_len;
-        let filename = std::str::from_utf8(&data[2..filename_end]).context("invalid UTF-8 in filename")?.to_owned();
+        let filename = Self::read_filename(data, filename_len)?;
+        let size = Self::read_size(data, filename_len)?;
+        let content_hash = Self::read_content_hash(data, filename_len)?;
 
-        let size = u64::from_be_bytes(data[filename_end..filename_end + 8].try_into().context("size conversion")?);
+        Ok(Self { name: filename, size, hash: content_hash })
+    }
 
-        let created_at = u64::from_be_bytes(data[filename_end + 8..filename_end + 16].try_into().context("created_at conversion")?);
+    fn read_filename_length(data: &[u8]) -> Result<usize> {
+        let bytes = data[0..Self::FILENAME_LEN_SIZE].try_into().context("filename length conversion")?;
+        Ok(u16::from_be_bytes(bytes) as usize)
+    }
 
-        let modified_at = u64::from_be_bytes(data[filename_end + 16..filename_end + 24].try_into().context("modified_at conversion")?);
+    fn calculate_required_length(filename_len: usize) -> usize {
+        Self::FILENAME_LEN_SIZE + filename_len + Self::SIZE_FIELD_SIZE + HASH_SIZE
+    }
 
-        Ok(Self { filename, size, created_at, modified_at })
+    fn read_filename(data: &[u8], filename_len: usize) -> Result<String> {
+        let start = Self::FILENAME_LEN_SIZE;
+        let end = start + filename_len;
+
+        std::str::from_utf8(&data[start..end]).context("invalid UTF-8 in filename").map(|s| s.to_owned())
+    }
+
+    fn read_size(data: &[u8], filename_len: usize) -> Result<u64> {
+        let start = Self::FILENAME_LEN_SIZE + filename_len;
+        let end = start + Self::SIZE_FIELD_SIZE;
+
+        let bytes = data[start..end].try_into().context("size conversion")?;
+        Ok(u64::from_be_bytes(bytes))
+    }
+
+    fn read_content_hash(data: &[u8], filename_len: usize) -> Result<[u8; HASH_SIZE]> {
+        let start = Self::FILENAME_LEN_SIZE + filename_len + Self::SIZE_FIELD_SIZE;
+        let end = start + HASH_SIZE;
+
+        data[start..end].try_into().context("content hash conversion")
     }
 }

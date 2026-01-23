@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow, ensure};
 use chacha20poly1305::aead::{Aead, KeyInit, OsRng};
 use chacha20poly1305::{AeadCore, XChaCha20Poly1305, XNonce};
 
-use crate::config::{CHACHA_KEY_SIZE, CHACHA_NONCE_SIZE};
+use crate::config::{CHACHA_NONCE_SIZE, KEY_SIZE};
 
 pub struct ChaCha20Poly1305 {
     inner: XChaCha20Poly1305,
@@ -10,7 +10,7 @@ pub struct ChaCha20Poly1305 {
 
 impl ChaCha20Poly1305 {
     #[inline]
-    pub fn new(key: &[u8; CHACHA_KEY_SIZE]) -> Result<Self> {
+    pub fn new(key: &[u8; KEY_SIZE]) -> Result<Self> {
         let inner = XChaCha20Poly1305::new_from_slice(key)?;
         Ok(Self { inner })
     }

@@ -12,13 +12,11 @@ pub enum SectionType {
 
     Metadata = 3,
 
-    ContentHash = 4,
-
-    Mac = 5,
+    Mac = 4,
 }
 
 impl SectionType {
-    pub const ALL: [Self; 6] = [Self::Magic, Self::Salt, Self::HeaderData, Self::Metadata, Self::ContentHash, Self::Mac];
+    pub const ALL: [Self; 5] = [Self::Magic, Self::Salt, Self::HeaderData, Self::Metadata, Self::Mac];
 
     #[inline]
     #[must_use]
@@ -33,7 +31,6 @@ impl SectionType {
             Self::Salt => "Salt",
             Self::HeaderData => "HeaderData",
             Self::Metadata => "Metadata",
-            Self::ContentHash => "ContentHash",
             Self::Mac => "Mac",
         }
     }
@@ -83,7 +80,7 @@ impl EncodedSection {
 }
 
 pub struct Sections {
-    sections: [Vec<u8>; 6],
+    sections: [Vec<u8>; 5],
 }
 
 impl Sections {
@@ -104,14 +101,14 @@ impl Sections {
 }
 
 pub struct SectionsBuilder {
-    sections: [Option<Vec<u8>>; 6],
+    sections: [Option<Vec<u8>>; 5],
 }
 
 impl SectionsBuilder {
     #[inline]
     #[must_use]
     pub fn with_magic(magic: Vec<u8>) -> Self {
-        Self { sections: [Some(magic), None, None, None, None, None] }
+        Self { sections: [Some(magic), None, None, None, None] }
     }
 
     #[inline]
@@ -128,14 +125,14 @@ impl SectionsBuilder {
             .zip(SectionType::ALL)
             .map(|(opt, ty)| {
                 let data = opt.ok_or_else(|| anyhow!("{ty} section is missing"))?;
-
                 ensure!(!data.is_empty(), "{ty} section is empty");
-
                 Ok(data)
             })
-            .collect::<Result<Vec<Vec<u8>>>>()?;
+            .collect::<Result<Vec<Vec<u8>>>>()?
+            .try_into()
+            .map_err(|_| anyhow!("unexpected section count"))?;
 
-        Ok(Sections { sections: sections.try_into().map_err(|_| anyhow!("unexpected section count"))? })
+        Ok(Sections { sections })
     }
 }
 
