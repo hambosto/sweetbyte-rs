@@ -6,7 +6,6 @@ use crate::file::File;
 use crate::processor::Processor;
 use crate::types::{Processing, ProcessorMode};
 use crate::ui::prompt::Prompt;
-use crate::ui::{self};
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -63,14 +62,14 @@ impl Cli {
         let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
 
         Self::process(processing, &mut input, &output, &password)?;
-        ui::show_success(processing.mode(), output.path());
+        crate::ui::show_success(processing.mode(), output.path());
 
         Ok(())
     }
 
     fn run_interactive(prompt: &Prompt) -> Result<()> {
-        ui::clear_screen()?;
-        ui::print_banner()?;
+        crate::ui::clear_screen()?;
+        crate::ui::print_banner()?;
 
         let mode = prompt.select_processing_mode()?;
         let processing = match mode {
@@ -81,7 +80,7 @@ impl Cli {
         let mut files = File::discover(mode);
         ensure!(!files.is_empty(), "no eligible files found");
 
-        ui::show_file_info(&mut files)?;
+        crate::ui::show_file_info(&mut files)?;
 
         let path = prompt.select_file(&files)?;
         let mut input = File::new(path.to_string_lossy().into_owned());
@@ -97,7 +96,7 @@ impl Cli {
 
         Self::process(processing, &mut input, &output, &password)?;
 
-        ui::show_success(mode, output.path());
+        crate::ui::show_success(mode, output.path());
 
         let label = match mode {
             ProcessorMode::Encrypt => "original",
@@ -105,7 +104,7 @@ impl Cli {
         };
         if prompt.confirm_file_deletion(input.path(), label)? {
             input.delete()?;
-            ui::show_source_deleted(input.path());
+            crate::ui::show_source_deleted(input.path());
         }
 
         Ok(())

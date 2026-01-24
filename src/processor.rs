@@ -42,6 +42,8 @@ impl Processor {
         let writer = writer.into_inner().context("failed to get inner writer")?;
         Worker::new(&key, Processing::Encryption)?.process(reader, writer, file_size)?;
 
+        crate::ui::show_header_info(header.file_name(), header.file_size(), header.file_hash());
+
         Ok(())
     }
 
@@ -66,9 +68,7 @@ impl Processor {
         dest.reader()?.read_to_end(&mut decrypted_content).context("failed to read decrypted file for verification")?;
         Hash::new(&decrypted_content).verify(expected_hash).context("decrypted content integrity check failed")?;
 
-        dbg!(header.file_name());
-        dbg!(header.file_size());
-        dbg!(header.file_hash());
+        crate::ui::show_header_info(header.file_name(), header.file_size(), header.file_hash());
 
         Ok(())
     }

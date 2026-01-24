@@ -3,11 +3,11 @@ use anyhow::{Result, ensure};
 use crate::cipher::Mac;
 use crate::config::{ARGON_SALT_LEN, MAGIC_BYTES};
 use crate::header::metadata::FileMetadata;
-use crate::header::parameter::HeaderParameter;
+use crate::header::parameter::Params;
 use crate::header::section::SectionEncoder;
 
 pub struct SerializeParameter<'a> {
-    pub params: HeaderParameter,
+    pub params: Params,
 
     pub metadata: &'a FileMetadata,
 

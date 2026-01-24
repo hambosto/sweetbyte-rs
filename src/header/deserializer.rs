@@ -2,23 +2,23 @@ use std::io::Read;
 
 use anyhow::{Result, anyhow};
 
-use crate::header::HeaderParameter;
+use crate::header::Params;
 use crate::header::metadata::FileMetadata;
 use crate::header::section::{SectionDecoder, SectionType, Sections};
 
-pub struct HeaderData {
-    parameter: HeaderParameter,
+pub struct ParsedData {
+    params: Params,
 
     metadata: FileMetadata,
 
     sections: Sections,
 }
 
-impl HeaderData {
+impl ParsedData {
     #[inline]
     #[must_use]
-    pub const fn parameters(&self) -> &HeaderParameter {
-        &self.parameter
+    pub const fn params(&self) -> &Params {
+        &self.params
     }
 
     #[inline]
@@ -44,17 +44,17 @@ impl<'a> Deserializer<'a> {
         Self { decoder }
     }
 
-    pub fn deserialize<R: Read>(&self, mut reader: R) -> Result<HeaderData> {
+    pub fn deserialize<R: Read>(&self, mut reader: R) -> Result<ParsedData> {
         let length_sizes = self.decoder.read_lengths_header(&mut reader)?;
         let section_lengths = self.decoder.read_and_decode_lengths(&mut reader, &length_sizes)?;
         let sections = self.decoder.read_and_decode_sections(&mut reader, &section_lengths)?;
 
         let header_data = sections.get(SectionType::HeaderData).ok_or_else(|| anyhow!("HeaderData section not found"))?;
-        let parameter = HeaderParameter::deserialize(header_data)?;
+        let params = Params::deserialize(header_data)?;
 
         let metadata_bytes = sections.get(SectionType::Metadata).ok_or_else(|| anyhow!("Metadata section not found"))?;
         let metadata = FileMetadata::deserialize(metadata_bytes)?;
 
-        Ok(HeaderData { parameter, metadata, sections })
+        Ok(ParsedData { params, metadata, sections })
     }
 }

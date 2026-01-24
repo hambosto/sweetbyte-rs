@@ -71,6 +71,21 @@ pub fn clear_screen() -> Result<()> {
     Ok(())
 }
 
+pub fn show_header_info(filename: &str, size: u64, hash: &[u8]) {
+    println!();
+    println!("{} {}", console::style("✔").green().bright(), console::style("Header Information:").bold());
+
+    let hash_hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
+
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
+    table.add_row(vec![Cell::new("Original Filename").fg(Color::Green), Cell::new(filename).fg(Color::White)]);
+    table.add_row(vec![Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
+    table.add_row(vec![Cell::new("Original Hash").fg(Color::Green), Cell::new(hash_hex).fg(Color::White)]);
+
+    print!("{table}");
+}
+
 pub fn print_banner() -> Result<()> {
     let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow!("failed to load font: {e}"))?;
 

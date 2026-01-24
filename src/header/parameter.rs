@@ -4,18 +4,25 @@ use serde::{Deserialize, Serialize};
 use crate::config::HEADER_DATA_SIZE;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct HeaderParameter {
+pub struct Params {
     pub version: u16,
+
     pub algorithm: u8,
+
     pub compression: u8,
+
     pub encoding: u8,
+
     pub kdf: u8,
+
     pub kdf_memory: u32,
+
     pub kdf_time: u8,
+
     pub kdf_parallelism: u8,
 }
 
-impl HeaderParameter {
+impl Params {
     pub fn serialize(&self) -> [u8; HEADER_DATA_SIZE] {
         let mut data = [0u8; HEADER_DATA_SIZE];
 
