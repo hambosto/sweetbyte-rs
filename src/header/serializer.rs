@@ -215,7 +215,7 @@ mod tests {
         let section_encoder = SectionEncoder::new(4, 2).unwrap();
         let serializer = Serializer::new(&section_encoder);
 
-        let serialize_params = SerializeParameter { params: params, metadata: &metadata, salt: &salt, key: key };
+        let serialize_params = SerializeParameter { params, metadata: &metadata, salt: &salt, key };
 
         let serialized_header = serializer.serialize(&serialize_params).unwrap();
 

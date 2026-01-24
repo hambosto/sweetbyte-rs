@@ -391,8 +391,9 @@ mod tests {
         let data = b"Hello, World!";
         let mut encoded = encoding.encode(data).unwrap();
 
-        for i in 0..12 {
-            encoded[i] = 0xFF;
+        // Option 1: Use iter_mut() directly to modify elements
+        for i in encoded.iter_mut().take(12) {
+            *i = 0xFF;
         }
 
         let result = encoding.decode(&encoded);
