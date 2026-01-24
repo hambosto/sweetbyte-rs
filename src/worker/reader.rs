@@ -5,7 +5,6 @@
 //! appropriately, and producing tasks for the executor thread.
 //!
 //! ## Reading Strategies
-//!
 // The reader implements two different strategies based on processing mode:
 //
 // ### Encryption Mode (Fixed Chunking)
@@ -21,14 +20,12 @@
 // - Ensures complete data recovery
 //!
 //! ## Performance Optimization
-//!
 // - **Buffered I/O**: Uses BufReader for efficient disk access
 // - **Minimal Allocation**: Reuses buffer for fixed-size chunks
 // - **Zero-Copy**: Moves data directly to tasks without copying
 // - **Backpressure**: Channel operations provide natural flow control
 //!
 //! ## Concurrency Design
-//!
 // The reader operates in a dedicated thread and communicates exclusively
 // through bounded channels. This design provides:
 // - Non-blocking I/O operations

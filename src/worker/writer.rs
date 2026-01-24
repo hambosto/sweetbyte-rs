@@ -6,8 +6,8 @@
 //!
 //! ## Key Responsibilities
 //!
-//! 1. **Result Reordering**: Ensures output maintains original input order despite
-//!    concurrent processing completing tasks out of sequence
+//! 1. **Result Reordering**: Ensures output maintains original input order despite concurrent
+//!    processing completing tasks out of sequence
 //! 2. **Error Handling**: Detects and propagates processing failures immediately
 //! 3. **Format Compliance**: Writes data in the correct format for each mode
 //! 4. **Progress Tracking**: Updates progress bar based on actual data processed
@@ -24,7 +24,6 @@
 /// ```
 /// [original plaintext data] [continue...]
 /// ```
-///
 // ## Performance Characteristics
 //
 // - **Throughput**: Buffered I/O minimizes system call overhead

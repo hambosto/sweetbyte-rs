@@ -20,7 +20,6 @@
 //! - **Output Length**: 64 bytes (512 bits) for dual encryption keys
 //!
 //! ## Threat Model
-//!
 /// Protects against: GPU/ASIC cracking, rainbow table attacks, side-channel attacks
 use anyhow::{Result, anyhow, ensure};
 use argon2::Algorithm::Argon2id;

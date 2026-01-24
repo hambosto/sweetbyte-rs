@@ -18,7 +18,6 @@
 //! - Compatible with ChaCha20-Poly1305 (can decrypt with proper nonce handling)
 //!
 //! ## Format
-//!
 /// Ciphertext format: [nonce(24 bytes) || ciphertext || authentication_tag(16 bytes)]
 use anyhow::{Result, anyhow, ensure};
 use chacha20poly1305::aead::{Aead, KeyInit, OsRng};

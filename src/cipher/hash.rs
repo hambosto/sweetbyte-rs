@@ -12,7 +12,6 @@
 //! - **Performance**: Fastest modern hash function on most hardware
 //!
 //! ## Features
-//!
 /// - **Rayon Integration**: Uses Rayon for parallel processing of large data
 /// - **Constant-Time Verification**: Prevents timing attacks during hash comparison
 /// - **Memory Efficiency**: Streaming hash computation for large files

@@ -40,10 +40,10 @@ use flate2::write::ZlibEncoder;
 ///
 /// ## Level Selection Guidelines
 ///
-/// - **None**: Use for already compressed data (JPEG, MP4, etc.) or when
-///   processing speed is the absolute priority
-/// - **Fast**: Good for most files, provides quick compression with
-///   moderate size reduction (recommended default)
+/// - **None**: Use for already compressed data (JPEG, MP4, etc.) or when processing speed is the
+///   absolute priority
+/// - **Fast**: Good for most files, provides quick compression with moderate size reduction
+///   (recommended default)
 /// - **Default**: Better compression ratio with longer processing time
 /// - **Best**: Maximum compression for storage-critical applications
 ///

@@ -178,8 +178,10 @@ impl Pipeline {
     ///
     /// # Performance Characteristics
     ///
-    /// - **Encryption Pipeline**: 5 sequential operations (compress → pad → encrypt → encrypt → encode)
-    /// - **Decryption Pipeline**: 5 sequential operations (decode → decrypt → decrypt → unpad → decompress)
+    /// - **Encryption Pipeline**: 5 sequential operations (compress → pad → encrypt → encrypt →
+    ///   encode)
+    /// - **Decryption Pipeline**: 5 sequential operations (decode → decrypt → decrypt → unpad →
+    ///   decompress)
     /// - **Error Handling**: Early termination on first failure to minimize wasted processing
     /// - **Memory**: Operations work on existing data buffers when possible
     ///

@@ -7,12 +7,12 @@
 //!
 //! The UI module is organized into three main components:
 //!
-//! - **Display Functions** (`mod.rs`): Core presentation logic for file information,
-//!   success messages, banners, and formatted output tables
-//! - **Progress Tracking** (`progress.rs`): Real-time progress bars with performance
-//!   metrics and terminal-safe rendering
-//! - **User Input** (`prompt.rs`): Interactive prompts for passwords, file selection,
-//!   and user confirmations with security considerations
+//! - **Display Functions** (`mod.rs`): Core presentation logic for file information, success
+//!   messages, banners, and formatted output tables
+//! - **Progress Tracking** (`progress.rs`): Real-time progress bars with performance metrics and
+//!   terminal-safe rendering
+//! - **User Input** (`prompt.rs`): Interactive prompts for passwords, file selection, and user
+//!   confirmations with security considerations
 //!
 //! ## Design Principles
 //!
@@ -53,8 +53,8 @@ pub mod prompt;
 ///
 /// # Arguments
 ///
-/// * `files` - Mutable slice of File objects to display. Mutable because
-///   we need to check encryption status which may trigger lazy loading
+/// * `files` - Mutable slice of File objects to display. Mutable because we need to check
+///   encryption status which may trigger lazy loading
 ///
 /// # Returns
 ///

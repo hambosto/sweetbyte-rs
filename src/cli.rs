@@ -44,8 +44,8 @@ pub enum Commands {
     ///
     /// ## Security Notes
     ///
-    /// - Providing passwords via command line is **not recommended** as they may
-    ///   be visible in process lists and shell history
+    /// - Providing passwords via command line is **not recommended** as they may be visible in
+    ///   process lists and shell history
     /// - The tool will generate a unique salt for each encryption operation
     /// - Output files include integrity verification through authenticated encryption
     Encrypt {

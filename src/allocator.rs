@@ -25,10 +25,10 @@ use mimalloc::MiMalloc;
 /// performance and security characteristics. mimalloc is particularly well-suited
 /// for cryptographic applications due to:
 ///
-/// 1. **Performance**: Faster allocation/deallocation patterns for the many
-///    small buffers used in cryptographic operations
-/// 2. **Security**: Randomized allocation patterns reduce vulnerability to
-///    heap exploitation techniques
+/// 1. **Performance**: Faster allocation/deallocation patterns for the many small buffers used in
+///    cryptographic operations
+/// 2. **Security**: Randomized allocation patterns reduce vulnerability to heap exploitation
+///    techniques
 /// 3. **Memory Efficiency**: Better cache utilization and reduced fragmentation
 ///
 /// The allocator is configured with secure defaults that prioritize safety

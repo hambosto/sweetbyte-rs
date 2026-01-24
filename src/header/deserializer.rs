@@ -19,15 +19,15 @@
 //!
 //! ## Security Notes
 //!
-//! - All sections are protected by Reed-Solomon encoding, providing both error correction
-//!   and tamper resistance
+//! - All sections are protected by Reed-Solomon encoding, providing both error correction and
+//!   tamper resistance
 //! - The deserializer validates the magic bytes to ensure file format compatibility
 //! - Section validation ensures all required sections are present and non-empty
 //!
 //! ## Performance Characteristics
 //!
-//! - Reed-Solomon decoding is computationally intensive but provides significant
-//!   error recovery capabilities (up to 50% data corruption tolerance)
+//! - Reed-Solomon decoding is computationally intensive but provides significant error recovery
+//!   capabilities (up to 50% data corruption tolerance)
 //! - Memory usage scales with the size of the header sections (typically < 1KB total)
 
 use std::io::Read;
@@ -111,8 +111,8 @@ impl<'a> Deserializer<'a> {
     ///
     /// # Arguments
     ///
-    /// * `decoder` - Reference to a SectionDecoder configured with appropriate
-    ///   data and parity shard counts for the expected header protection level
+    /// * `decoder` - Reference to a SectionDecoder configured with appropriate data and parity
+    ///   shard counts for the expected header protection level
     ///
     /// # Returns
     ///

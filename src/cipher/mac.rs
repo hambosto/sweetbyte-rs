@@ -19,7 +19,6 @@
 //! - Providing cryptographic guarantees beyond mere hashing
 //!
 //! ## Threat Model
-//!
 // Protects against: data tampering, forgery attempts, replay attacks (with sequence numbers)
 
 use anyhow::{Result, anyhow, ensure};

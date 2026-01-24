@@ -1,20 +1,23 @@
 //! # Cryptographic Operations Module
 //!
-//! This module provides the core cryptographic functionality for the SweetByte file encryption system.
-//! It implements authenticated encryption using industry-standard algorithms and secure key derivation.
+//! This module provides the core cryptographic functionality for the SweetByte file encryption
+//! system. It implements authenticated encryption using industry-standard algorithms and secure key
+//! derivation.
 //!
 //! ## Architecture
 //!
 //! The cipher module follows a layered architecture:
 //! - **Algorithm Layer**: Provides type-level algorithm selection (AES-256-GCM, XChaCha20-Poly1305)
 //! - **Implementation Layer**: Concrete implementations of each cipher
-//! - **Abstraction Layer**: Unified interface through the `Cipher` struct and `CipherAlgorithm` trait
+//! - **Abstraction Layer**: Unified interface through the `Cipher` struct and `CipherAlgorithm`
+//!   trait
 //! - **Support Layer**: Key derivation, hashing, and MAC computation utilities
 //!
 //! ## Key Concepts
 //!
 //! - **Authenticated Encryption**: All ciphers provide both confidentiality and authenticity
-//! - **Nonce Management**: Each encryption operation generates a cryptographically secure random nonce
+//! - **Nonce Management**: Each encryption operation generates a cryptographically secure random
+//!   nonce
 //! - **Key Splitting**: The master key is split between AES and ChaCha20 for dual encryption
 //! - **Constant-Time Operations**: Security-sensitive comparisons use constant-time algorithms
 //!

@@ -329,7 +329,7 @@ impl File {
     ///
     /// For **Decryption**:
     /// - File must not be hidden
-    /// - File must not match exclusion patterns  
+    /// - File must not match exclusion patterns
     /// - File must be encrypted (has .swx extension)
     ///
     /// # User Experience
@@ -380,8 +380,8 @@ impl File {
     /// # Edge Cases
     ///
     /// - Files without .swx extension during decryption fall back to original path
-    /// - Files that already have .swx extension during encryption get .swx.swx
-    ///   (this is handled by validation to prevent overwrites)
+    /// - Files that already have .swx extension during encryption get .swx.swx (this is handled by
+    ///   validation to prevent overwrites)
     ///
     /// # Safety Considerations
     ///

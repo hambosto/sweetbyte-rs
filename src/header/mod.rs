@@ -20,7 +20,6 @@
 //! - **Magic Bytes**: File format identification and corruption detection
 //!
 //! ## Header Structure
-//!
 /// Each header consists of 5 sections, all Reed-Solomon encoded:
 /// 1. Magic Bytes (4 bytes) - File format identifier
 /// 2. Salt (16 bytes) - Argon2id key derivation salt

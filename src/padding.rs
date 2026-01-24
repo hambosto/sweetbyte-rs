@@ -5,7 +5,6 @@
 //! block cipher operations while being unambiguously reversible.
 //!
 //! ## Why PKCS#7?
-//!
 // PKCS#7 (RFC 5652) is chosen for several reasons:
 //! 1. **Standardized**: Well-defined and widely implemented
 //! 2. **Unambiguous**: Each padding value is unique and verifiable
@@ -13,14 +12,12 @@
 //! 4. **Efficient**: Simple to implement and verify
 //!
 //! ## Padding Process
-//!
 // For block size N:
 // - If data length is already multiple of N, add N bytes of value N
 // - Otherwise, add (N - remainder) bytes of value (N - remainder)
 // - Example for block size 8: "HELLO" → "HELLO\x03\x03\x03"
 //!
 //! ## Security Considerations//!
-//!
 // - Prevents padding oracle attacks through proper validation
 // - Ensures constant-time operations to avoid timing attacks
 // - Validates padding bytes completely before accepting data

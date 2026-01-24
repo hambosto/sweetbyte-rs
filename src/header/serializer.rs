@@ -7,7 +7,6 @@
 //! ## Serialization Process
 //!
 //! The serializer orchestrates the complete header creation process:
-//!
 // 1. **Parameter Preparation** - Collect encryption parameters, metadata, salt, and key
 // 2. **HMAC Calculation** - Compute MAC over all header components for integrity
 // 3. **Section Encoding** - Apply Reed-Solomon encoding to all 5 sections
@@ -97,8 +96,8 @@ impl<'a> Serializer<'a> {
     ///
     /// # Arguments
     ///
-    /// * `encoder` - Reference to a SectionEncoder configured with appropriate
-    ///   Reed-Solomon parameters for the desired level of error protection
+    /// * `encoder` - Reference to a SectionEncoder configured with appropriate Reed-Solomon
+    ///   parameters for the desired level of error protection
     ///
     /// # Returns
     ///
@@ -155,8 +154,8 @@ impl<'a> Serializer<'a> {
     /// # Performance Notes
     ///
     /// - HMAC computation is fast and provides cryptographic guarantees
-    /// - Reed-Solomon encoding is the most expensive operation but provides
-    ///   significant error recovery (up to 50% data corruption tolerance)
+    /// - Reed-Solomon encoding is the most expensive operation but provides significant error
+    ///   recovery (up to 50% data corruption tolerance)
     /// - Memory allocation is minimized by using iterators and pre-calculated sizes
     /// - All validation happens before expensive operations to fail fast
     pub fn serialize(&self, params: &SerializeParameter<'_>) -> Result<Vec<u8>> {

@@ -20,7 +20,6 @@
 // the system can recover from up to 10 corrupted shards out of 14 total.
 //!
 //! ## Security Considerations
-//!
 // - Error correction does not affect cryptographic security
 // - Corrupted shards are detected during reconstruction attempts
 // - The system cannot recover from malicious modifications without integrity checks

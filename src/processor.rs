@@ -7,7 +7,6 @@
 //! ## Architecture
 //!
 //! The Processor follows a pipeline architecture:
-//!
 // Encryption Pipeline:
 //! 1. File validation and metadata extraction
 //! 2. Content hashing for integrity verification
@@ -23,7 +22,6 @@
 // 5. Content integrity verification
 //!
 //! ## Security Features
-//!
 // - **Strong Key Derivation**: Argon2 with validated parameters
 // - **Integrity Protection**: Multiple layers of verification
 // - **Secure Memory**: Proper handling of sensitive data

@@ -18,7 +18,6 @@
 //! ## Reed-Solomon Protection
 //!
 //! Each section is Reed-Solomon encoded with configurable data and parity shards:
-//!
 // - **Data Shards**: Original section data split across multiple shards
 // - **Parity Shards**: Redundant information for error recovery
 // - **Recovery Capability**: Can reconstruct data from up to 50% corruption
