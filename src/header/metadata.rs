@@ -49,10 +49,8 @@ use crate::config::{HASH_SIZE, MAX_FILENAME_LENGTH};
 pub struct FileMetadata {
     /// Original filename (may be truncated to MAX_FILENAME_LENGTH)
     name: String,
-
     /// Original file size in bytes (uncompressed)
     size: u64,
-
     /// SHA-256 hash of the original file content for integrity verification
     hash: [u8; HASH_SIZE],
 }

@@ -148,10 +148,8 @@ impl Padding {
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         // Validate input
         ensure!(!data.is_empty(), "data cannot be empty");
-
         // Calculate required padding length
         let padding_len = self.block_size - (data.len() % self.block_size);
-
         // Create padded data: original + padding bytes
         let padded = data.iter().copied().chain(std::iter::repeat_n(padding_len as u8, padding_len)).collect();
 
@@ -211,18 +209,13 @@ impl Padding {
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         // Get padding length from last byte
         let padding_len = data.last().copied().ok_or_else(|| anyhow!("cannot unpad empty data"))?;
-
         // Validate padding length range
         ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {padding_len}");
-
         let padding_len = padding_len as usize;
-
         // Validate data has enough bytes for padding
         ensure!(data.len() >= padding_len, "data too short for padding length");
-
         // Split data and padding
         let (content, padding_bytes) = data.split_at(data.len() - padding_len);
-
         // Validate all padding bytes have correct value
         ensure!(padding_bytes.iter().all(|&b| b == padding_len as u8), "invalid PKCS#7 padding bytes");
 
