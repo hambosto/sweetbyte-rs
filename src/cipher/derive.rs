@@ -111,9 +111,11 @@ impl Derive {
         // Validate and create Argon2id parameters
         // The function ensures parameters are within acceptable ranges
         let params = Params::new(memory, time, parallelism, Some(ARGON_KEY_LEN)).map_err(|e| anyhow!("invalid argon2 parameter: {e}"))?;
+
         // Create Argon2id instance with v1.3 parameters
         // Argon2id provides optimal security against both GPU and side-channel attacks
         let argon2 = Argon2::new(Argon2id, V0x13, params);
+
         // Derive key into pre-allocated output buffer
         // The output buffer is zero-initialized and overwritten with the derived key
         let mut key = [0u8; ARGON_KEY_LEN];
@@ -154,10 +156,71 @@ impl Derive {
     pub fn generate_salt<const N: usize>() -> Result<[u8; N]> {
         // Initialize buffer with zeros (not strictly necessary but good practice)
         let mut bytes = [0u8; N];
+
         // Fill buffer with cryptographically secure random bytes
         // OsRng provides platform-specific secure randomness (e.g., /dev/urandom, CryptGenRandom)
         OsRng.try_fill_bytes(&mut bytes).map_err(|e| anyhow!("rng failed: {e}"))?;
 
         Ok(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_derive_new_valid() {
+        let key = b"password";
+        let derive = Derive::new(key);
+        assert!(derive.is_ok());
+    }
+
+    #[test]
+    fn test_derive_new_empty() {
+        assert!(Derive::new(&[]).is_err());
+    }
+
+    #[test]
+    fn test_generate_salt() {
+        let salt = Derive::generate_salt::<16>();
+        assert!(salt.is_ok());
+        let salt = salt.unwrap();
+        assert_eq!(salt.len(), 16);
+
+        let salt2 = Derive::generate_salt::<16>().unwrap();
+        assert_ne!(salt, salt2);
+    }
+
+    #[test]
+    fn test_derive_key_deterministic() {
+        let password = b"password123";
+        let derive = Derive::new(password).unwrap();
+        let salt = [1u8; 16];
+        let memory = 1024;
+        let time = 1;
+        let parallelism = 1;
+
+        let key1 = derive.derive_key(&salt, memory, time, parallelism).unwrap();
+        let key2 = derive.derive_key(&salt, memory, time, parallelism).unwrap();
+
+        assert_eq!(key1, key2);
+        assert_eq!(key1.len(), ARGON_KEY_LEN);
+    }
+
+    #[test]
+    fn test_derive_key_different_salt() {
+        let password = b"password123";
+        let derive = Derive::new(password).unwrap();
+        let salt1 = [1u8; 16];
+        let salt2 = [2u8; 16];
+        let memory = 1024;
+        let time = 1;
+        let parallelism = 1;
+
+        let key1 = derive.derive_key(&salt1, memory, time, parallelism).unwrap();
+        let key2 = derive.derive_key(&salt2, memory, time, parallelism).unwrap();
+
+        assert_ne!(key1, key2);
     }
 }

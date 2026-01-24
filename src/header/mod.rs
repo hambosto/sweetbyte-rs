@@ -73,19 +73,17 @@ pub mod serializer;
 ///
 /// Each encoded section can be recovered even if partially corrupted,
 /// providing robustness against storage or transmission errors.
+#[derive(Debug)]
 pub struct Header {
     /// Reed-Solomon encoder for protecting header sections
     /// Used when serializing new headers for storage
     encoder: SectionEncoder,
-
     /// Encryption and processing parameters
     /// Includes algorithm selection, compression, encoding, and KDF settings
     params: Params,
-
     /// File metadata information
     /// Contains original filename, file size, and BLAKE3 content hash
     metadata: FileMetadata,
-
     /// Parsed sections from deserialized headers
     /// None for newly created headers, Some for parsed headers
     sections: Option<Sections>,
@@ -191,9 +189,11 @@ impl Header {
         // Initialize both encoder and decoder with same Reed-Solomon parameters
         let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
         let decoder = SectionDecoder::new(DATA_SHARDS, PARITY_SHARDS)?;
+
         // Create deserializer and parse the header data
         let deserializer = Deserializer::new(&decoder);
         let parsed = deserializer.deserialize(reader)?;
+
         // Reconstruct Header instance from parsed data
         Self::from_parsed_data(parsed, encoder)
     }
@@ -326,8 +326,10 @@ impl Header {
     pub fn serialize(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
         // Create serializer with the encoder
         let serializer = Serializer::new(&self.encoder);
+
         // Prepare parameters for serialization
         let serialize_params = SerializeParameter { params: self.params, metadata: &self.metadata, salt, key };
+
         // Perform serialization with Reed-Solomon encoding and HMAC authentication
         serializer.serialize(&serialize_params)
     }
@@ -358,8 +360,10 @@ impl Header {
     pub fn verify(&self, key: &[u8]) -> Result<()> {
         // Validate HMAC key
         ensure!(!key.is_empty(), "key cannot be empty");
+
         // Get sections (must be deserialized first)
         let sections = self.sections.as_ref().context("header not deserialized yet")?;
+
         // Extract all sections needed for HMAC verification
         let expected_mac = sections.get_with_min_len(SectionType::Mac, MAC_SIZE)?;
         let magic = sections.get_with_min_len(SectionType::Magic, MAGIC_SIZE)?;
@@ -389,8 +393,10 @@ impl Header {
     fn from_parsed_data(data: ParsedData, encoder: SectionEncoder) -> Result<Self> {
         // Copy parameters from parsed data
         let params = *data.params();
+
         // Validate the parsed parameters
         Self::validate(&params)?;
+
         // Ensure file size is reasonable
         ensure!(data.metadata().size() != 0, "file size cannot be zero");
 
@@ -418,15 +424,123 @@ impl Header {
     fn validate(params: &Params) -> Result<()> {
         // Validate version compatibility
         ensure!(params.version == CURRENT_VERSION, "unsupported version: {} (expected {})", params.version, CURRENT_VERSION);
+
         // Validate algorithm selection (must include both ciphers)
         ensure!(params.algorithm == (ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305), "invalid algorithm identifier: {:#04x}", params.algorithm);
+
         // Validate compression method
         ensure!(params.compression == COMPRESSION_ZLIB, "invalid compression identifier: {:#04x}", params.compression);
+
         // Validate error correction method
         ensure!(params.encoding == ENCODING_REED_SOLOMON, "invalid encoding identifier: {:#04x}", params.encoding);
+
         // Validate key derivation function
         ensure!(params.kdf == KDF_ARGON2, "invalid kdf identifier: {:#04x}", params.kdf);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, HASH_SIZE, KEY_SIZE};
+    use crate::header::metadata::FileMetadata;
+
+    fn valid_metadata() -> FileMetadata {
+        FileMetadata::new("test.txt", 1024, [0u8; HASH_SIZE])
+    }
+
+    #[test]
+    fn test_header_new_valid() {
+        let metadata = valid_metadata();
+        let header = Header::new(metadata);
+        assert!(header.is_ok());
+    }
+
+    #[test]
+    fn test_header_new_empty_file() {
+        let metadata = FileMetadata::new("empty.txt", 0, [0u8; HASH_SIZE]);
+        let header = Header::new(metadata);
+        assert!(header.is_err());
+        assert_eq!(header.unwrap_err().to_string(), "file size cannot be zero");
+    }
+
+    #[test]
+    fn test_header_accessors() {
+        let metadata = valid_metadata();
+        let header = Header::new(metadata).unwrap();
+
+        assert_eq!(header.file_name(), "test.txt");
+        assert_eq!(header.file_size(), 1024);
+        assert_eq!(header.file_hash(), &[0u8; HASH_SIZE]);
+        assert_eq!(header.kdf_memory(), ARGON_MEMORY);
+        assert_eq!(header.kdf_time(), ARGON_TIME as u8);
+        assert_eq!(header.kdf_parallelism(), ARGON_THREADS as u8);
+    }
+
+    #[test]
+    fn test_header_salt_access_before_deserialize() {
+        let metadata = valid_metadata();
+        let header = Header::new(metadata).unwrap();
+        // Should fail because it's a new header, not deserialized
+        assert!(header.salt().is_err());
+    }
+
+    #[test]
+    fn test_header_roundtrip_serialize_deserialize() {
+        let metadata = valid_metadata();
+        let header = Header::new(metadata).unwrap();
+
+        let salt = [1u8; ARGON_SALT_LEN];
+        let key = [2u8; KEY_SIZE];
+
+        let serialized = header.serialize(&salt, &key).unwrap();
+
+        let deserialized_header = Header::deserialize(&serialized[..]).unwrap();
+
+        assert_eq!(deserialized_header.file_name(), "test.txt");
+        assert_eq!(deserialized_header.file_size(), 1024);
+
+        assert!(deserialized_header.verify(&key).is_ok());
+
+        assert_eq!(deserialized_header.salt().unwrap(), &salt);
+    }
+
+    #[test]
+    fn test_header_verify_invalid_key() {
+        let metadata = valid_metadata();
+        let header = Header::new(metadata).unwrap();
+        let salt = [1u8; ARGON_SALT_LEN];
+        let key = [2u8; KEY_SIZE];
+
+        let serialized = header.serialize(&salt, &key).unwrap();
+        let deserialized_header = Header::deserialize(&serialized[..]).unwrap();
+
+        let wrong_key = [3u8; KEY_SIZE];
+        assert!(deserialized_header.verify(&wrong_key).is_err());
+    }
+
+    #[test]
+    fn test_validate_params() {
+        let mut params = Params {
+            version: CURRENT_VERSION,
+            algorithm: ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305,
+            compression: COMPRESSION_ZLIB,
+            encoding: ENCODING_REED_SOLOMON,
+            kdf: KDF_ARGON2,
+            kdf_memory: ARGON_MEMORY,
+            kdf_time: ARGON_TIME as u8,
+            kdf_parallelism: ARGON_THREADS as u8,
+        };
+
+        assert!(Header::validate(&params).is_ok());
+
+        params.version = 0;
+        assert!(Header::validate(&params).is_err());
+        params.version = CURRENT_VERSION;
+
+        params.algorithm = 0;
+        assert!(Header::validate(&params).is_err());
     }
 }

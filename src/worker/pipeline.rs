@@ -81,22 +81,18 @@ pub struct Pipeline {
     /// Supports both AES-256-GCM and XChaCha20-Poly1305 algorithms
     /// Provides authenticated encryption with associated data (AEAD)
     cipher: Cipher,
-
     /// Reed-Solomon encoder for erasure coding
     /// 4 data shards + 2 parity shards configuration
     /// Enables recovery from up to 2 shard failures
     encoder: Encoding,
-
     /// Fast compression engine using LZ4 algorithm
     /// Configurable compression levels (set to Fast)
     /// Reduces data size for faster I/O and smaller storage
     compressor: Compressor,
-
     /// Block padding for cipher alignment
     /// Ensures data meets block cipher size requirements
     /// Uses PKCS#7-style padding for compatibility
     padding: Padding,
-
     /// Processing mode determining pipeline direction
     /// Affects the order and selection of operations
     mode: Processing,
@@ -385,5 +381,29 @@ impl Pipeline {
 
         // Return successful result with restored original data
         TaskResult::ok(task.index, decompressed_data, output_size)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pipeline_roundtrip() {
+        let key = [0u8; ARGON_KEY_LEN];
+        let pipeline_enc = Pipeline::new(&key, Processing::Encryption).unwrap();
+        let pipeline_dec = Pipeline::new(&key, Processing::Decryption).unwrap();
+
+        let data = b"Hello, secure world!";
+        let task = Task { data: data.to_vec(), index: 0 };
+
+        let encrypted = pipeline_enc.process(&task);
+        assert!(encrypted.error.is_none());
+        assert_ne!(encrypted.data, data);
+
+        let task_dec = Task { data: encrypted.data, index: 0 };
+        let decrypted = pipeline_dec.process(&task_dec);
+        assert!(decrypted.error.is_none());
+        assert_eq!(decrypted.data, data);
     }
 }

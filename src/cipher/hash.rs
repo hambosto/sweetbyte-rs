@@ -144,3 +144,45 @@ impl Hash {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_new() {
+        let data = b"test data";
+        let hash = Hash::new(data);
+        assert_eq!(hash.as_bytes().len(), HASH_SIZE);
+    }
+
+    #[test]
+    fn test_hash_deterministic() {
+        let data = b"same data";
+        let hash1 = Hash::new(data);
+        let hash2 = Hash::new(data);
+        assert_eq!(hash1.as_bytes(), hash2.as_bytes());
+    }
+
+    #[test]
+    fn test_hash_verify_valid() {
+        let data = b"verify me";
+        let hash = Hash::new(data);
+        assert!(hash.verify(hash.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_hash_verify_invalid() {
+        let data = b"verify me";
+        let hash = Hash::new(data);
+        let mut corrupted = *hash.as_bytes();
+        corrupted[0] ^= 0x01; // Flip first byte
+        assert!(hash.verify(&corrupted).is_err());
+    }
+
+    #[test]
+    fn test_hash_empty() {
+        let hash = Hash::new(&[]);
+        assert!(hash.verify(hash.as_bytes()).is_ok());
+    }
+}

@@ -136,3 +136,38 @@ impl Executor {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ARGON_KEY_LEN, CHUNK_SIZE};
+    use crate::types::{Processing, Task};
+    use flume::unbounded;
+
+    #[test]
+    fn test_executor_process() {
+        let key = [0u8; ARGON_KEY_LEN];
+
+        let pipeline = Pipeline::new(&key, Processing::Encryption).unwrap();
+        let executor = Executor::new(pipeline);
+
+        let (task_tx, task_rx) = unbounded();
+        let (res_tx, res_rx) = unbounded();
+
+        let data = vec![0u8; CHUNK_SIZE];
+        task_tx.send(Task { data: data.clone(), index: 0 }).unwrap();
+        task_tx.send(Task { data: data.clone(), index: 1 }).unwrap();
+        drop(task_tx);
+
+        executor.process(&task_rx, &res_tx);
+        drop(res_tx);
+
+        let mut count = 0;
+        for result in res_rx {
+            assert!(result.error.is_none());
+            assert_eq!(result.size, CHUNK_SIZE);
+            count += 1;
+        }
+        assert_eq!(count, 2);
+    }
+}

@@ -50,20 +50,16 @@ use crate::encoding::Encoding;
 /// Each section in the encrypted header has a specific type and purpose.
 /// The numeric values are used for section ordering and identification
 /// in the binary format.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub enum SectionType {
     /// File format magic bytes (identifies this as a SweetByte file)
     Magic = 0,
-
     /// Cryptographic salt for key derivation
     Salt = 1,
-
     /// Header data containing encryption parameters
     HeaderData = 2,
-
     /// File metadata (name, size, content hash)
     Metadata = 3,
-
     /// Message authentication code for integrity verification
     Mac = 4,
 }
@@ -177,6 +173,7 @@ impl EncodedSection {
 /// The sections are stored in a HashMap for O(1) lookup by section type.
 /// Empty sections are filtered out during access to prevent returning
 /// invalid data.
+#[derive(Debug)]
 pub struct Sections {
     /// HashMap mapping section types to their decoded data
     sections: HashMap<SectionType, Vec<u8>>,
@@ -318,6 +315,7 @@ impl SectionsBuilder {
 ///
 /// The encoder uses configurable data and parity shard counts to balance
 /// between storage overhead and error recovery capability.
+#[derive(Debug)]
 pub struct SectionEncoder {
     /// Underlying Reed-Solomon encoder implementation
     encoder: Encoding,
@@ -720,5 +718,50 @@ impl SectionDecoder {
         let mut buffer = vec![0u8; size];
         reader.read_exact(&mut buffer).with_context(context_fn)?;
         Ok(buffer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_section_encoder_new() {
+        assert!(SectionEncoder::new(4, 2).is_ok());
+        assert!(SectionEncoder::new(0, 0).is_err());
+    }
+
+    #[test]
+    fn test_encode_decode_section() {
+        let encoder = SectionEncoder::new(4, 2).unwrap();
+        let decoder = SectionDecoder::new(4, 2).unwrap();
+        let data = b"test data for section";
+
+        let encoded = encoder.encode_section(data).unwrap();
+        assert!(!encoded.is_empty());
+
+        let decoded = decoder.decode_section(&encoded).unwrap();
+        assert_eq!(decoded[..data.len()], data[..]);
+    }
+
+    #[test]
+    fn test_sections_builder() {
+        let magic = vec![1, 2, 3, 4];
+        let mut builder = SectionsBuilder::with_magic(magic.clone());
+
+        builder.set(SectionType::Salt, vec![1]);
+        builder.set(SectionType::HeaderData, vec![2]);
+        builder.set(SectionType::Metadata, vec![3]);
+        builder.set(SectionType::Mac, vec![4]);
+
+        let sections = builder.build().unwrap();
+        assert_eq!(sections.get(SectionType::Magic), Some(magic.as_slice()));
+    }
+
+    #[test]
+    fn test_sections_builder_missing() {
+        let magic = vec![1, 2, 3, 4];
+        let builder = SectionsBuilder::with_magic(magic);
+        assert!(builder.build().is_err());
     }
 }

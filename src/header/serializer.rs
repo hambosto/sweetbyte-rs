@@ -198,3 +198,49 @@ impl<'a> Serializer<'a> {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::header::deserializer::Deserializer;
+    use crate::header::section::SectionDecoder;
+
+    #[test]
+    fn test_header_roundtrip() {
+        let params = Params { version: 1, algorithm: 1, compression: 1, encoding: 1, kdf: 1, kdf_memory: 1024, kdf_time: 1, kdf_parallelism: 1 };
+        let metadata = FileMetadata::new("test.txt", 100, [0u8; 32]);
+        let salt = [0u8; ARGON_SALT_LEN];
+        let key = b"secure key";
+
+        let section_encoder = SectionEncoder::new(4, 2).unwrap();
+        let serializer = Serializer::new(&section_encoder);
+
+        let serialize_params = SerializeParameter { params: params, metadata: &metadata, salt: &salt, key: key };
+
+        let serialized_header = serializer.serialize(&serialize_params).unwrap();
+
+        let section_decoder = SectionDecoder::new(4, 2).unwrap();
+        let deserializer = Deserializer::new(&section_decoder);
+
+        let mut cursor = std::io::Cursor::new(serialized_header);
+        let parsed = deserializer.deserialize(&mut cursor).unwrap();
+
+        assert_eq!(parsed.params().version, params.version);
+        assert_eq!(parsed.metadata().name(), "test.txt");
+    }
+
+    #[test]
+    fn test_serialize_invalid_salt() {
+        let params = Params { version: 1, algorithm: 1, compression: 1, encoding: 1, kdf: 1, kdf_memory: 1024, kdf_time: 1, kdf_parallelism: 1 };
+        let metadata = FileMetadata::new("test.txt", 100, [0u8; 32]);
+        let salt = [0u8; 10]; // Invalid length
+        let key = b"secure key";
+
+        let section_encoder = SectionEncoder::new(4, 2).unwrap();
+        let serializer = Serializer::new(&section_encoder);
+
+        let serialize_params = SerializeParameter { params, metadata: &metadata, salt: &salt, key };
+
+        assert!(serializer.serialize(&serialize_params).is_err());
+    }
+}

@@ -286,7 +286,9 @@ impl Processor {
         let expected_hash = header.file_hash();
 
         // Process encrypted content with parallel decryption
-        let reader = reader.into_inner();
+        // Pass the BufReader directly to preserve buffered data that hasn't been logically read yet
+        // The Worker will wrap it in another BufReader, which is slightly inefficient but correct
+        // Using into_inner() here would lose buffered data and cause decryption failure
         let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
         Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size())?;
 
@@ -300,5 +302,44 @@ impl Processor {
         crate::ui::show_header_info(header.file_name(), header.file_size(), header.file_hash());
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_processor_integration() {
+        let dir = tempdir().unwrap();
+        let base_path = dir.path();
+
+        let filename = base_path.join("test_processor_integration.txt");
+        let content = b"Integration test content for processor.";
+
+        let enc_filename = base_path.join("test_processor_integration.txt.swx");
+        let dec_filename = base_path.join("test_processor_integration_dec.txt");
+
+        fs::write(&filename, content).unwrap();
+
+        let mut src = File::new(&filename);
+        let dest_enc = File::new(&enc_filename);
+        let dest_dec = File::new(&dec_filename);
+
+        let password = "strong_password";
+        let processor = Processor::new(password);
+
+        src.validate(true).unwrap();
+        processor.encrypt(&mut src, &dest_enc).unwrap();
+
+        assert!(dest_enc.exists());
+
+        processor.decrypt(&dest_enc, &dest_dec).unwrap();
+
+        assert!(dest_dec.exists());
+        let decrypted_content = fs::read(&dec_filename).unwrap();
+        assert_eq!(decrypted_content, content);
     }
 }

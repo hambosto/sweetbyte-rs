@@ -75,13 +75,11 @@ pub struct File {
     /// This is stored as a PathBuf to enable efficient path manipulation
     /// and to maintain platform-specific path characteristics.
     path: PathBuf,
-
     /// Cached file size for performance optimization
     ///
     /// This is `Option<u64>` to enable lazy evaluation - the size is only
     /// computed when requested, and then cached to avoid repeated syscalls.
     size: Option<u64>,
-
     /// Selection state for UI operations
     ///
     /// This flag is used by the interactive mode to track which files
@@ -296,7 +294,6 @@ impl File {
         EXCLUSION_MATCHERS.iter().any(|pattern| {
             // First try matching the full path
             let full_match = glob_match(pattern, path_str);
-
             if full_match {
                 return true;
             }
@@ -395,7 +392,6 @@ impl File {
                 name.push(FILE_EXTENSION);
                 PathBuf::from(name)
             }
-
             ProcessorMode::Decrypt => {
                 // For decryption, remove the SweetByte extension if present
                 self.path.to_string_lossy().strip_suffix(FILE_EXTENSION).map_or_else(|| self.path.clone(), PathBuf::from)
@@ -666,5 +662,73 @@ impl File {
             .map(|entry| Self::new(entry.into_path()))
             .filter(|file| file.is_eligible(mode)) // Apply business logic filtering
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_file_new() {
+        let f = File::new("test.txt");
+        assert_eq!(f.path(), Path::new("test.txt"));
+    }
+
+    #[test]
+    fn test_is_encrypted() {
+        let f = File::new("test.txt");
+        assert!(!f.is_encrypted());
+
+        let f_enc = File::new("test.txt.swx");
+        assert!(f_enc.is_encrypted());
+    }
+
+    #[test]
+    fn test_is_hidden() {
+        let f = File::new(".hidden");
+        assert!(f.is_hidden());
+
+        let f_visible = File::new("visible");
+        assert!(!f_visible.is_hidden());
+    }
+
+    #[test]
+    fn test_output_path_encrypt() {
+        let f = File::new("test.txt");
+        let out = f.output_path(ProcessorMode::Encrypt);
+        assert_eq!(out, PathBuf::from("test.txt.swx"));
+    }
+
+    #[test]
+    fn test_output_path_decrypt() {
+        let f = File::new("test.txt.swx");
+        let out = f.output_path(ProcessorMode::Decrypt);
+        assert_eq!(out, PathBuf::from("test.txt"));
+
+        let f2 = File::new("test.txt");
+        let out2 = f2.output_path(ProcessorMode::Decrypt);
+        assert_eq!(out2, PathBuf::from("test.txt"));
+    }
+
+    #[test]
+    fn test_is_eligible_encrypt() {
+        let f = File::new("test.txt");
+        assert!(f.is_eligible(ProcessorMode::Encrypt));
+
+        let f_hidden = File::new(".test");
+        assert!(!f_hidden.is_eligible(ProcessorMode::Encrypt));
+
+        let f_enc = File::new("test.txt.swx");
+        assert!(!f_enc.is_eligible(ProcessorMode::Encrypt));
+    }
+
+    #[test]
+    fn test_is_eligible_decrypt() {
+        let f = File::new("test.txt.swx");
+        assert!(f.is_eligible(ProcessorMode::Decrypt));
+
+        let f_plain = File::new("test.txt");
+        assert!(!f_plain.is_eligible(ProcessorMode::Decrypt));
     }
 }

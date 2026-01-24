@@ -45,7 +45,7 @@ use crate::config::{HASH_SIZE, MAX_FILENAME_LENGTH};
 ///
 /// The filename is automatically truncated if it exceeds the configured maximum
 /// length to ensure consistent header sizes and prevent potential DoS attacks.
-#[derive(Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FileMetadata {
     /// Original filename (may be truncated to MAX_FILENAME_LENGTH)
     name: String,
@@ -312,5 +312,54 @@ impl FileMetadata {
         let end = start + HASH_SIZE;
 
         data[start..end].try_into().context("content hash conversion")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_metadata_new_truncation() {
+        let long_name = "a".repeat(MAX_FILENAME_LENGTH + 10);
+        let hash = [0u8; HASH_SIZE];
+        let metadata = FileMetadata::new(long_name, 100, hash);
+
+        assert_eq!(metadata.name.len(), MAX_FILENAME_LENGTH);
+    }
+
+    #[test]
+    fn test_metadata_roundtrip() {
+        let name = "test.txt";
+        let size = 12345;
+        let hash = [1u8; HASH_SIZE];
+        let metadata = FileMetadata::new(name, size, hash);
+
+        let serialized = metadata.serialize();
+        let deserialized = FileMetadata::deserialize(&serialized).unwrap();
+
+        assert_eq!(deserialized.name, name);
+        assert_eq!(deserialized.size, size);
+        assert_eq!(deserialized.hash, hash);
+    }
+
+    #[test]
+    fn test_metadata_deserialize_too_short() {
+        let data = vec![0u8; 10];
+        assert!(FileMetadata::deserialize(&data).is_err());
+    }
+
+    #[test]
+    fn test_metadata_deserialize_invalid_utf8() {
+        let name = "test";
+        let size = 100;
+        let hash = [0u8; HASH_SIZE];
+        let mut serialized = FileMetadata::new(name, size, hash).serialize();
+
+        let name_start = 2;
+        serialized[name_start] = 0xFF;
+        serialized[name_start + 1] = 0xFF;
+
+        assert!(FileMetadata::deserialize(&serialized).is_err());
     }
 }

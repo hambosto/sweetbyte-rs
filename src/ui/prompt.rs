@@ -117,8 +117,10 @@ impl Prompt {
     pub fn prompt_encryption_password(&self) -> Result<String> {
         // First password entry
         let password = self.prompt_password("Enter encryption password")?;
+
         // Second password entry for confirmation
         let confirmation = self.prompt_password("Confirm password")?;
+
         // Verify both passwords match to prevent typos
         ensure!(password == confirmation, "password do not match");
 
@@ -365,6 +367,7 @@ impl Prompt {
             .validate_with(|input: &String| -> Result<()> {
                 // Prevent empty passwords which provide no security
                 ensure!(!input.trim().is_empty(), "password cannot be empty or whitespace only");
+
                 // Enforce minimum length for reasonable security
                 ensure!(input.len() >= self.password_min_length, "password must be at least {} characters long", self.password_min_length);
                 Ok(())

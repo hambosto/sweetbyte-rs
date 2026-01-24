@@ -50,48 +50,19 @@
 //! All operations use comprehensive error handling with the `anyhow` crate
 //! to provide clear error messages with context for debugging and user feedback.
 
-// === Core Modules ===
-
-// Custom memory allocator for improved performance and security
 mod allocator;
-
-// Cryptographic algorithms and implementations
 mod cipher;
-
-// Command-line interface and argument processing
 mod cli;
-
-// Data compression functionality
 mod compression;
-
-// Global configuration constants
 mod config;
-
-// Error correction coding
 mod encoding;
-
-// File system operations and management
 mod file;
-
-// File format header handling
 mod header;
-
-// Padding schemes for block alignment
 mod padding;
-
-// Main processing orchestration
 mod processor;
-
-// Core type definitions and error types
 mod types;
-
-// User interface components
 mod ui;
-
-// Parallel processing workers
 mod worker;
-
-// === External Dependencies ===
 
 use anyhow::Result;
 use cli::Cli;

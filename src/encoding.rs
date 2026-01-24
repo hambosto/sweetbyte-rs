@@ -49,13 +49,12 @@ use reed_solomon_erasure::galois_8::ReedSolomon;
 ///
 /// Can recover from any `parity_shards` number of corrupted or missing shards.
 /// The remaining data must be at least `data_shards` shards for successful reconstruction.
+#[derive(Debug)]
 pub struct Encoding {
     /// The underlying Reed-Solomon encoder instance from the crate
     encoder: ReedSolomon,
-
     /// Number of data shards containing the original data
     data_shards: usize,
-
     /// Number of parity shards providing error correction capability
     parity_shards: usize,
 }
@@ -338,5 +337,75 @@ impl Encoding {
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encoding_new_valid() {
+        let encoding = Encoding::new(4, 2);
+        assert!(encoding.is_ok());
+    }
+
+    #[test]
+    fn test_encoding_new_invalid() {
+        let encoding = Encoding::new(0, 2);
+        assert!(encoding.is_err());
+
+        let encoding = Encoding::new(200, 200);
+        assert!(encoding.is_err());
+    }
+
+    #[test]
+    fn test_encode_decode_roundtrip() {
+        let encoding = Encoding::new(4, 2).unwrap();
+        let data = b"Hello, world! This is a test.";
+
+        let encoded = encoding.encode(data).unwrap();
+        assert_ne!(data, &encoded[..]);
+        assert_eq!(encoded.len(), 48);
+
+        let decoded = encoding.decode(&encoded).unwrap();
+        assert_eq!(data, &decoded[..data.len()]);
+
+        assert!(decoded.starts_with(data));
+
+        for &b in &decoded[data.len()..] {
+            assert_eq!(b, 0);
+        }
+    }
+
+    #[test]
+    fn test_invalid_length_for_decode() {
+        let encoding = Encoding::new(4, 2).unwrap();
+        let data = vec![0; 7];
+        assert!(encoding.decode(&data).is_err());
+    }
+
+    #[test]
+    fn test_too_many_errors() {
+        let encoding = Encoding::new(4, 2).unwrap();
+        let data = b"Hello, World!";
+        let mut encoded = encoding.encode(data).unwrap();
+
+        for i in 0..12 {
+            encoded[i] = 0xFF;
+        }
+
+        let result = encoding.decode(&encoded);
+
+        if let Ok(decoded) = result {
+            assert_ne!(decoded[..data.len()], data[..]);
+        }
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let encoding = Encoding::new(4, 2).unwrap();
+        assert!(encoding.encode(&[]).is_err());
+        assert!(encoding.decode(&[]).is_err());
     }
 }

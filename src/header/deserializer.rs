@@ -43,13 +43,12 @@ use crate::header::section::{SectionDecoder, SectionType, Sections};
 /// This structure holds the parsed components of an encrypted file header,
 /// providing convenient access to the encryption parameters, file metadata,
 /// and the original encoded sections for further processing if needed.
+#[derive(Debug)]
 pub struct ParsedData {
     /// Encryption and compression parameters
     params: Params,
-
     /// File metadata including name, size, and content hash
     metadata: FileMetadata,
-
     /// Raw Reed-Solomon encoded sections (for validation or re-processing)
     sections: Sections,
 }
@@ -160,19 +159,71 @@ impl<'a> Deserializer<'a> {
         // Step 1: Read the fixed-size lengths header (20 bytes)
         // This contains the sizes of each encoded length section
         let length_sizes = self.decoder.read_lengths_header(&mut reader)?;
+
         // Step 2: Read and decode the actual section lengths
         // Each length is Reed-Solomon encoded to provide error correction
         let section_lengths = self.decoder.read_and_decode_lengths(&mut reader, &length_sizes)?;
+
         // Step 3: Read and decode all section data
         // This includes the Reed-Solomon encoded magic bytes and all 5 header sections
         let sections = self.decoder.read_and_decode_sections(&mut reader, &section_lengths)?;
+
         // Step 4: Extract and parse the HeaderData section (encryption parameters)
         let header_data = sections.get(SectionType::HeaderData).ok_or_else(|| anyhow!("HeaderData section not found"))?;
         let params = Params::deserialize(header_data)?;
+
         // Step 5: Extract and parse the Metadata section (file information)
         let metadata_bytes = sections.get(SectionType::Metadata).ok_or_else(|| anyhow!("Metadata section not found"))?;
         let metadata = FileMetadata::deserialize(metadata_bytes)?;
+
         // Step 6: Return the complete parsed structure
         Ok(ParsedData { params, metadata, sections })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::header::section::SectionEncoder;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_deserializer_invalid_magic() {
+        let encoder = SectionEncoder::new(4, 2).unwrap();
+
+        let invalid_magic = vec![0, 0, 0, 0];
+        let magic_section = encoder.encode_section(&invalid_magic).unwrap();
+
+        let dummy = vec![1];
+        let dummy_section = encoder.encode_section(&dummy).unwrap();
+
+        let length_sections = vec![
+            encoder.encode_length(magic_section.len()).unwrap(),
+            encoder.encode_length(dummy_section.len()).unwrap(),
+            encoder.encode_length(dummy_section.len()).unwrap(),
+            encoder.encode_length(dummy_section.len()).unwrap(),
+            encoder.encode_length(dummy_section.len()).unwrap(),
+        ];
+
+        let header = SectionEncoder::build_lengths_header(&length_sections);
+
+        let mut full_data = Vec::new();
+        full_data.extend_from_slice(&header);
+        for s in &length_sections {
+            full_data.extend_from_slice(s.data());
+        }
+        full_data.extend_from_slice(magic_section.data());
+        for _ in 0..4 {
+            full_data.extend_from_slice(dummy_section.data());
+        }
+
+        let decoder = SectionDecoder::new(4, 2).unwrap();
+        let deserializer = Deserializer::new(&decoder);
+
+        let mut cursor = Cursor::new(full_data);
+        let result = deserializer.deserialize(&mut cursor);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid magic bytes"));
     }
 }

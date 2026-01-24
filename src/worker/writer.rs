@@ -68,7 +68,6 @@ pub struct Writer {
     /// Processing mode determining output format
     /// Affects whether length prefixes are written
     mode: Processing,
-
     /// Reordering buffer for maintaining output sequence
     /// Handles out-of-order results from concurrent processing
     buffer: Buffer,
@@ -248,5 +247,57 @@ impl Writer {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flume::unbounded;
+
+    #[test]
+    fn test_write_decryption_mode() {
+        let mut writer = Writer::new(Processing::Decryption);
+        let mut output = Vec::new();
+        let (tx, rx) = unbounded();
+
+        tx.send(TaskResult::ok(0, b"hello".to_vec(), 5)).unwrap();
+        tx.send(TaskResult::ok(1, b"world".to_vec(), 5)).unwrap();
+        drop(tx);
+
+        writer.write_all(&mut output, rx, None).unwrap();
+
+        assert_eq!(output, b"helloworld");
+    }
+
+    #[test]
+    fn test_write_encryption_mode() {
+        let mut writer = Writer::new(Processing::Encryption);
+        let mut output = Vec::new();
+        let (tx, rx) = unbounded();
+
+        tx.send(TaskResult::ok(0, b"data".to_vec(), 4)).unwrap();
+        drop(tx);
+
+        writer.write_all(&mut output, rx, None).unwrap();
+
+        assert_eq!(output.len(), 4 + 4);
+        assert_eq!(&output[0..4], &4u32.to_be_bytes());
+        assert_eq!(&output[4..], b"data");
+    }
+
+    #[test]
+    fn test_write_reordering() {
+        let mut writer = Writer::new(Processing::Decryption);
+        let mut output = Vec::new();
+        let (tx, rx) = unbounded();
+
+        tx.send(TaskResult::ok(1, b"world".to_vec(), 5)).unwrap();
+        tx.send(TaskResult::ok(0, b"hello".to_vec(), 5)).unwrap();
+        drop(tx);
+
+        writer.write_all(&mut output, rx, None).unwrap();
+
+        assert_eq!(output, b"helloworld");
     }
 }

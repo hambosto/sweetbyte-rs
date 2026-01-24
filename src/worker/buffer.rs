@@ -55,7 +55,6 @@ pub struct Buffer {
     /// Key: Task index, Value: Completed TaskResult
     /// HashMap provides O(1) lookup for checking if specific results are ready
     buffer: HashMap<u64, TaskResult>,
-
     /// Next expected sequential output index
     /// This tracks which index should be output next to maintain order
     /// Incremented as results are successfully output
@@ -204,5 +203,63 @@ impl Buffer {
         // Extract just the TaskResults, discarding the indices
         // The order is now correct after sorting
         results.into_iter().map(|(_, result)| result).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_buffer_sequential() {
+        let mut buffer = Buffer::new(0);
+
+        let res1 = TaskResult::ok(0, vec![], 0);
+        let out1 = buffer.add(res1);
+        assert_eq!(out1.len(), 1);
+        assert_eq!(out1[0].index, 0);
+
+        let res2 = TaskResult::ok(1, vec![], 0);
+        let out2 = buffer.add(res2);
+        assert_eq!(out2.len(), 1);
+        assert_eq!(out2[0].index, 1);
+    }
+
+    #[test]
+    fn test_buffer_out_of_order() {
+        let mut buffer = Buffer::new(0);
+
+        let res2 = TaskResult::ok(2, vec![], 0);
+        let out2 = buffer.add(res2);
+        assert!(out2.is_empty());
+
+        let res0 = TaskResult::ok(0, vec![], 0);
+        let out0 = buffer.add(res0);
+        assert_eq!(out0.len(), 1);
+        assert_eq!(out0[0].index, 0);
+
+        let res1 = TaskResult::ok(1, vec![], 0);
+        let out1 = buffer.add(res1);
+
+        assert_eq!(out1.len(), 2);
+        assert_eq!(out1[0].index, 1);
+        assert_eq!(out1[1].index, 2);
+    }
+
+    #[test]
+    fn test_buffer_flush() {
+        let mut buffer = Buffer::new(0);
+
+        let res2 = TaskResult::ok(2, vec![], 0);
+        let _ = buffer.add(res2);
+
+        let flushed = buffer.flush();
+        assert_eq!(flushed.len(), 1);
+        assert_eq!(flushed[0].index, 2);
+
+        let res0 = TaskResult::ok(0, vec![], 0);
+        let out0 = buffer.add(res0);
+        assert_eq!(out0.len(), 1);
+        assert_eq!(out0[0].index, 0);
     }
 }

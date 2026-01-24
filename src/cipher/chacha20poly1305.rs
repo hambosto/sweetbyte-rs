@@ -101,12 +101,14 @@ impl ChaCha20Poly1305 {
         // Generate a cryptographically secure random 192-bit extended nonce
         // XChaCha20 uses 24-byte nonces vs 12-byte for standard ChaCha20
         let nonce_bytes = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+
         // Perform XChaCha20-Poly1305 encryption with the generated nonce
         // The result includes the ciphertext and 128-bit Poly1305 authentication tag
         let mut result = self
             .inner
             .encrypt(XNonce::from_slice(&nonce_bytes), plaintext)
             .map_err(|e| anyhow!("chacha20poly1305 encryption failed: {e}"))?;
+
         // Prepend the extended nonce to the ciphertext for storage/transmission
         // Format: [nonce(24 bytes) || ciphertext || auth_tag(16 bytes)]
         result.splice(0..0, nonce_bytes.iter().copied());
@@ -148,12 +150,71 @@ impl ChaCha20Poly1305 {
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         // Validate minimum ciphertext length (at least extended nonce + minimal encrypted data + auth tag)
         ensure!(ciphertext.len() >= CHACHA_NONCE_SIZE, "ciphertext too short: need at least {} bytes, got {}", CHACHA_NONCE_SIZE, ciphertext.len());
+
         // Split ciphertext into extended nonce and encrypted data portions
         // First 24 bytes: extended nonce, remainder: encrypted data + authentication tag
         let (nonce_bytes, data) = ciphertext.split_at(CHACHA_NONCE_SIZE);
+
         // Perform authenticated decryption
         // The chacha20poly1305 crate automatically verifies the Poly1305 authentication tag
         // and returns error if verification fails (detects tampering)
         self.inner.decrypt(XNonce::from_slice(nonce_bytes), data).map_err(|_| anyhow!("chacha20poly1305 authentication failed"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chacha_new() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = ChaCha20Poly1305::new(&key);
+        assert!(cipher.is_ok());
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = ChaCha20Poly1305::new(&key).unwrap();
+        let plaintext = b"Hello, XChaCha20!";
+
+        let ciphertext = cipher.encrypt(plaintext).unwrap();
+        assert_ne!(plaintext, &ciphertext[..]);
+
+        assert_eq!(ciphertext.len(), CHACHA_NONCE_SIZE + plaintext.len() + 16);
+
+        let decrypted = cipher.decrypt(&ciphertext).unwrap();
+        assert_eq!(plaintext, &decrypted[..]);
+    }
+
+    #[test]
+    fn test_encrypt_empty_plaintext() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = ChaCha20Poly1305::new(&key).unwrap();
+        assert!(cipher.encrypt(&[]).is_err());
+    }
+
+    #[test]
+    fn test_decrypt_too_short() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = ChaCha20Poly1305::new(&key).unwrap();
+        let ciphertext = vec![0u8; CHACHA_NONCE_SIZE - 1];
+        assert!(cipher.decrypt(&ciphertext).is_err());
+    }
+
+    #[test]
+    fn test_decrypt_tampered_ciphertext() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = ChaCha20Poly1305::new(&key).unwrap();
+        let plaintext = b"Secret Message";
+        let mut ciphertext = cipher.encrypt(plaintext).unwrap();
+
+        let payload_idx = CHACHA_NONCE_SIZE;
+        ciphertext[payload_idx] ^= 0x01;
+
+        let result = cipher.decrypt(&ciphertext);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "chacha20poly1305 authentication failed");
     }
 }

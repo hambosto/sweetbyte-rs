@@ -95,10 +95,13 @@ pub fn show_file_info(files: &mut [File]) -> Result<()> {
     for (i, file) in files.iter_mut().enumerate() {
         // Extract filename safely, fallback to "unknown" if parsing fails
         let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+
         // Truncate long filenames to maintain table layout (25 char limit)
         let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_owned() };
+
         // Determine encryption status with color coding for quick visual identification
         let (status_text, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
+
         // Get file size and format for human-readable display
         let size = file.size()?;
 
@@ -114,6 +117,7 @@ pub fn show_file_info(files: &mut [File]) -> Result<()> {
     // Display the formatted table
     println!("{table}");
     println!();
+
     Ok(())
 }
 

@@ -183,8 +183,10 @@ impl Cipher {
         // Split the 64-byte master key into two 32-byte sub-keys
         // This provides defense-in-depth: compromise of one algorithm doesn't compromise data
         let split_key = key.split_at(KEY_SIZE);
+
         // Convert the first half to AES-256 key (32 bytes)
         let aes_key: &[u8; KEY_SIZE] = split_key.0.try_into().context("invalid AES key length")?;
+
         // Convert the second half to ChaCha20 key (32 bytes)
         let chacha_key: &[u8; KEY_SIZE] = split_key.1.try_into().context("invalid ChaCha key length")?;
 
@@ -247,5 +249,68 @@ impl Cipher {
     #[inline]
     pub fn decrypt<A: CipherAlgorithm>(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         A::decrypt(self, ciphertext)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cipher_new_valid_key() {
+        let key = [0u8; ARGON_KEY_LEN];
+        let cipher = Cipher::new(&key);
+        assert!(cipher.is_ok());
+    }
+
+    #[test]
+    fn test_aes_gcm_roundtrip() {
+        let key = [1u8; ARGON_KEY_LEN];
+        let cipher = Cipher::new(&key).unwrap();
+        let plaintext = b"Hello AES GCM";
+
+        let ciphertext = cipher.encrypt::<algorithm::Aes256Gcm>(plaintext).unwrap();
+        assert_ne!(plaintext, &ciphertext[..]);
+
+        let decrypted = cipher.decrypt::<algorithm::Aes256Gcm>(&ciphertext).unwrap();
+        assert_eq!(plaintext, &decrypted[..]);
+    }
+
+    #[test]
+    fn test_chacha_roundtrip() {
+        let key = [2u8; ARGON_KEY_LEN];
+        let cipher = Cipher::new(&key).unwrap();
+        let plaintext = b"Hello ChaCha20";
+
+        let ciphertext = cipher.encrypt::<algorithm::XChaCha20Poly1305>(plaintext).unwrap();
+        assert_ne!(plaintext, &ciphertext[..]);
+
+        let decrypted = cipher.decrypt::<algorithm::XChaCha20Poly1305>(&ciphertext).unwrap();
+        assert_eq!(plaintext, &decrypted[..]);
+    }
+
+    #[test]
+    fn test_cross_algorithm_isolation() {
+        let key = [3u8; ARGON_KEY_LEN];
+        let cipher = Cipher::new(&key).unwrap();
+        let plaintext = b"Sensitive Data";
+
+        let aes_ciphertext = cipher.encrypt::<algorithm::Aes256Gcm>(plaintext).unwrap();
+
+        let result = cipher.decrypt::<algorithm::XChaCha20Poly1305>(&aes_ciphertext);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_empty_plaintext() {
+        let key = [4u8; ARGON_KEY_LEN];
+        let cipher = Cipher::new(&key).unwrap();
+
+        // Check if underlying implementations enforce empty checks as documented
+        let result_aes = cipher.encrypt::<algorithm::Aes256Gcm>(&[]);
+        assert!(result_aes.is_err());
+
+        let result_chacha = cipher.encrypt::<algorithm::XChaCha20Poly1305>(&[]);
+        assert!(result_chacha.is_err());
     }
 }

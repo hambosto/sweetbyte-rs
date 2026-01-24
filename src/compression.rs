@@ -60,7 +60,6 @@ pub enum CompressionLevel {
     /// - When processing speed is critical
     /// - Small files where compression overhead outweighs benefits
     None,
-
     /// Fast compression with good performance characteristics (default)
     ///
     /// This is the recommended default for most use cases as it provides
@@ -68,14 +67,12 @@ pub enum CompressionLevel {
     /// CPU resources while still achieving meaningful size reduction.
     #[default]
     Fast,
-
     /// Default ZLIB compression level
     ///
     /// Provides better compression ratio than Fast mode with increased
     /// processing time. Suitable when storage space is more important than
     /// processing speed.
     Default,
-
     /// Maximum compression level
     ///
     /// Provides the best possible compression ratio at the cost of
@@ -271,5 +268,62 @@ impl Compressor {
         decoder.read_to_end(&mut decompressed).context("failed to decompress data")?;
 
         Ok(decompressed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compression_level_validity() {
+        assert!(CompressionLevel::None.is_valid());
+        assert!(CompressionLevel::Fast.is_valid());
+        assert!(CompressionLevel::Default.is_valid());
+        assert!(CompressionLevel::Best.is_valid());
+    }
+
+    #[test]
+    fn test_compression_level_into() {
+        let level: Compression = CompressionLevel::Fast.into();
+        let _ = level;
+    }
+
+    #[test]
+    fn test_compressor_new() {
+        let compressor = Compressor::new(CompressionLevel::Fast);
+        assert!(compressor.is_ok());
+    }
+
+    #[test]
+    fn test_compress_decompress_roundtrip() {
+        let data = b"Hello, world! This is a test string for compression.";
+        let compressor = Compressor::new(CompressionLevel::Default).unwrap();
+
+        let compressed = compressor.compress(data).unwrap();
+        assert_ne!(data, &compressed[..]);
+
+        let decompressed = Compressor::decompress(&compressed).unwrap();
+        assert_eq!(data, &decompressed[..]);
+    }
+
+    #[test]
+    fn test_compress_empty() {
+        let compressor = Compressor::new(CompressionLevel::Default).unwrap();
+        let result = compressor.compress(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decompress_empty() {
+        let result = Compressor::decompress(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decompress_invalid_data() {
+        let invalid_data = b"This is not zlib data";
+        let result = Compressor::decompress(invalid_data);
+        assert!(result.is_err());
     }
 }

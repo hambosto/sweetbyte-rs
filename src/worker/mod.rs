@@ -67,7 +67,6 @@ pub struct Worker {
     /// The processing pipeline containing cryptographic and compression components
     /// Shared across threads via Arc wrapping in the executor
     pipeline: Pipeline,
-
     /// Processing mode determining whether to encrypt or decrypt
     /// Affects the entire processing pipeline behavior
     mode: Processing,
@@ -140,7 +139,7 @@ impl Worker {
     pub fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
     where
         R: Read + Send + 'static,
-        W: Write + Send + 'static,
+        W: Write,
     {
         // Initialize progress tracking with total file size
         let progress = ProgressBar::new(total_size, self.mode.label())?;
@@ -192,5 +191,39 @@ impl Worker {
         write_result.context("writing failed")?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_worker_lifecycle() {
+        let key = [0u8; ARGON_KEY_LEN];
+        let worker = Worker::new(&key, Processing::Encryption);
+        assert!(worker.is_ok());
+    }
+
+    #[test]
+    fn test_worker_roundtrip() {
+        let key = [0u8; ARGON_KEY_LEN];
+
+        let enc_worker = Worker::new(&key, Processing::Encryption).unwrap();
+        let data = vec![0x42u8; 5000];
+        let input_len = data.len() as u64;
+        let mut encrypted = Vec::new();
+
+        enc_worker.process(Cursor::new(data.clone()), &mut encrypted, input_len).unwrap();
+        assert!(!encrypted.is_empty());
+        assert_ne!(encrypted, data);
+
+        let dec_worker = Worker::new(&key, Processing::Decryption).unwrap();
+        let mut decrypted = Vec::new();
+
+        dec_worker.process(Cursor::new(encrypted), &mut decrypted, input_len).unwrap();
+
+        assert_eq!(decrypted, data);
     }
 }

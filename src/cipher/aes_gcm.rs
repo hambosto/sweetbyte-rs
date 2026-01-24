@@ -103,9 +103,11 @@ impl AesGcm {
         // Generate a cryptographically secure random 96-bit nonce
         // OsRng provides platform-specific secure randomness
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+
         // Perform AES-256-GCM encryption with the generated nonce
         // The result includes the ciphertext and authentication tag
         let mut result = self.inner.encrypt(&nonce, plaintext).map_err(|e| anyhow!("aes-gcm encryption failed: {e}"))?;
+
         // Prepend the nonce to the ciphertext for storage/transmission
         // Format: [nonce(12 bytes) || ciphertext || auth_tag(16 bytes)]
         result.splice(0..0, nonce.iter().copied());
@@ -150,9 +152,82 @@ impl AesGcm {
         // Split ciphertext into nonce and encrypted data portions
         // First 12 bytes: nonce, remainder: encrypted data + authentication tag
         let (nonce, data) = ciphertext.split_at(AES_NONCE_SIZE);
+
         // Perform authenticated decryption
         // The aes_gcm crate automatically verifies the authentication tag
         // and returns error if verification fails (detects tampering)
         self.inner.decrypt(Nonce::from_slice(nonce), data).map_err(|_| anyhow!("aes-gcm authentication failed"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_aes_gcm_new() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = AesGcm::new(&key);
+        assert!(cipher.is_ok());
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = AesGcm::new(&key).unwrap();
+        let plaintext = b"Hello, World!";
+
+        let ciphertext = cipher.encrypt(plaintext).unwrap();
+        assert_ne!(plaintext, &ciphertext[..]);
+
+        assert_eq!(ciphertext.len(), AES_NONCE_SIZE + plaintext.len() + 16);
+
+        let decrypted = cipher.decrypt(&ciphertext).unwrap();
+        assert_eq!(plaintext, &decrypted[..]);
+    }
+
+    #[test]
+    fn test_encrypt_empty_plaintext() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = AesGcm::new(&key).unwrap();
+        assert!(cipher.encrypt(&[]).is_err());
+    }
+
+    #[test]
+    fn test_decrypt_too_short() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = AesGcm::new(&key).unwrap();
+        let ciphertext = vec![0u8; AES_NONCE_SIZE - 1];
+        assert!(cipher.decrypt(&ciphertext).is_err());
+    }
+
+    #[test]
+    fn test_decrypt_tampered_ciphertext() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = AesGcm::new(&key).unwrap();
+        let plaintext = b"Secret Message";
+        let mut ciphertext = cipher.encrypt(plaintext).unwrap();
+
+        let payload_idx = AES_NONCE_SIZE;
+        ciphertext[payload_idx] ^= 0x01;
+
+        let result = cipher.decrypt(&ciphertext);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "aes-gcm authentication failed");
+    }
+
+    #[test]
+    fn test_decrypt_tampered_tag() {
+        let key = [0u8; KEY_SIZE];
+        let cipher = AesGcm::new(&key).unwrap();
+        let plaintext = b"Secret Message";
+        let mut ciphertext = cipher.encrypt(plaintext).unwrap();
+
+        let len = ciphertext.len();
+        ciphertext[len - 1] ^= 0x01;
+
+        let result = cipher.decrypt(&ciphertext);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "aes-gcm authentication failed");
     }
 }

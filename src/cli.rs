@@ -61,7 +61,6 @@ pub enum Commands {
         #[arg(short, long)]
         password: Option<String>,
     },
-
     /// Decrypt a previously encrypted file
     ///
     /// ## Arguments
@@ -88,7 +87,6 @@ pub enum Commands {
         #[arg(short, long)]
         password: Option<String>,
     },
-
     /// Launch interactive mode for guided file operations
     ///
     /// Interactive mode provides a user-friendly interface with:

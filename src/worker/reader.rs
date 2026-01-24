@@ -69,7 +69,6 @@ pub struct Reader {
     /// Processing mode determining the reading strategy
     /// Affects chunking behavior and data boundaries
     mode: Processing,
-
     /// Fixed chunk size for encryption mode
     /// Ignored for decryption mode which uses length-prefixed chunks
     /// Must be at least MIN_CHUNK_SIZE to ensure performance
@@ -319,5 +318,64 @@ impl Reader {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flume::unbounded;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_read_fixed_chunks() {
+        let chunk_size = MIN_CHUNK_SIZE;
+        let reader = Reader::new(Processing::Encryption, chunk_size).unwrap();
+
+        let data = vec![1u8; chunk_size + 100];
+        let input = Cursor::new(&data);
+        let (tx, rx) = unbounded();
+
+        reader.read_all(input, &tx).unwrap();
+        drop(tx);
+
+        let task1 = rx.recv().unwrap();
+        assert_eq!(task1.index, 0);
+        assert_eq!(task1.data.len(), chunk_size);
+
+        let task2 = rx.recv().unwrap();
+        assert_eq!(task2.index, 1);
+        assert_eq!(task2.data.len(), 100);
+
+        assert!(rx.recv().is_err());
+    }
+
+    #[test]
+    fn test_read_length_prefixed() {
+        let reader = Reader::new(Processing::Decryption, MIN_CHUNK_SIZE).unwrap();
+
+        let mut data = Vec::new();
+
+        data.extend_from_slice(&5u32.to_be_bytes());
+        data.extend_from_slice(b"hello");
+
+        data.extend_from_slice(&5u32.to_be_bytes());
+        data.extend_from_slice(b"world");
+
+        let input = Cursor::new(&data);
+        let (tx, rx) = unbounded();
+
+        reader.read_all(input, &tx).unwrap();
+        drop(tx);
+
+        let task1 = rx.recv().unwrap();
+        assert_eq!(task1.index, 0);
+        assert_eq!(task1.data, b"hello");
+
+        let task2 = rx.recv().unwrap();
+        assert_eq!(task2.index, 1);
+        assert_eq!(task2.data, b"world");
+
+        assert!(rx.recv().is_err());
     }
 }

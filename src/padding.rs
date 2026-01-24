@@ -145,8 +145,10 @@ impl Padding {
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         // Validate input
         ensure!(!data.is_empty(), "data cannot be empty");
+
         // Calculate required padding length
         let padding_len = self.block_size - (data.len() % self.block_size);
+
         // Create padded data: original + padding bytes
         let padded = data.iter().copied().chain(std::iter::repeat_n(padding_len as u8, padding_len)).collect();
 
@@ -206,17 +208,83 @@ impl Padding {
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         // Get padding length from last byte
         let padding_len = data.last().copied().ok_or_else(|| anyhow!("cannot unpad empty data"))?;
+
         // Validate padding length range
         ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {padding_len}");
         let padding_len = padding_len as usize;
+
         // Validate data has enough bytes for padding
         ensure!(data.len() >= padding_len, "data too short for padding length");
+
         // Split data and padding
         let (content, padding_bytes) = data.split_at(data.len() - padding_len);
+
         // Validate all padding bytes have correct value
         ensure!(padding_bytes.iter().all(|&b| b == padding_len as u8), "invalid PKCS#7 padding bytes");
 
         // Return content without padding
         Ok(content.to_vec())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_padding_new() {
+        assert!(Padding::new(16).is_ok());
+        assert!(Padding::new(0).is_err());
+        assert!(Padding::new(255).is_ok());
+        assert!(Padding::new(256).is_err());
+    }
+
+    #[test]
+    fn test_pad_exact_block_size() {
+        let padding = Padding::new(8).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let padded = padding.pad(&data).unwrap();
+
+        assert_eq!(padded.len(), 16);
+        assert_eq!(&padded[8..], &[8, 8, 8, 8, 8, 8, 8, 8]);
+    }
+
+    #[test]
+    fn test_pad_partial_block() {
+        let padding = Padding::new(8).unwrap();
+        let data = vec![1, 2, 3, 4, 5];
+        let padded = padding.pad(&data).unwrap();
+
+        assert_eq!(padded.len(), 8);
+        assert_eq!(&padded[5..], &[3, 3, 3]);
+    }
+
+    #[test]
+    fn test_unpad_valid() {
+        let padding = Padding::new(8).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 3, 3, 3];
+        let unpadded = padding.unpad(&data).unwrap();
+        assert_eq!(unpadded, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_unpad_invalid_padding_value() {
+        let padding = Padding::new(8).unwrap();
+        let data = vec![1, 2, 3, 4, 5, 3, 3, 2];
+        assert!(padding.unpad(&data).is_err());
+    }
+
+    #[test]
+    fn test_unpad_invalid_length() {
+        let padding = Padding::new(8).unwrap();
+        let data = vec![1, 2, 3, 9];
+        assert!(padding.unpad(&data).is_err());
+    }
+
+    #[test]
+    fn test_unpad_short_data() {
+        let padding = Padding::new(8).unwrap();
+        let data = vec![5];
+        assert!(padding.unpad(&data).is_err());
     }
 }

@@ -167,3 +167,33 @@ impl Params {
         Ok(Self { version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_params_roundtrip() {
+        let params = Params { version: 1, algorithm: 2, compression: 3, encoding: 4, kdf: 5, kdf_memory: 1024, kdf_time: 2, kdf_parallelism: 4 };
+
+        let serialized = params.serialize();
+        assert_eq!(serialized.len(), HEADER_DATA_SIZE);
+
+        let deserialized = Params::deserialize(&serialized).unwrap();
+
+        assert_eq!(deserialized.version, params.version);
+        assert_eq!(deserialized.algorithm, params.algorithm);
+        assert_eq!(deserialized.compression, params.compression);
+        assert_eq!(deserialized.encoding, params.encoding);
+        assert_eq!(deserialized.kdf, params.kdf);
+        assert_eq!(deserialized.kdf_memory, params.kdf_memory);
+        assert_eq!(deserialized.kdf_time, params.kdf_time);
+        assert_eq!(deserialized.kdf_parallelism, params.kdf_parallelism);
+    }
+
+    #[test]
+    fn test_params_deserialize_short() {
+        let data = [0u8; HEADER_DATA_SIZE - 1];
+        assert!(Params::deserialize(&data).is_err());
+    }
+}

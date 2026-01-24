@@ -167,6 +167,7 @@ impl Mac {
 
         // Compute HMAC of the provided data parts
         let computed = self.compute(parts)?;
+
         // Convert expected MAC to fixed-size array for comparison
         // This also validates that the expected MAC has correct length
         let expected_array: [u8; MAC_SIZE] = expected.try_into().map_err(|_| anyhow!("failed to convert expected mac to array"))?;
@@ -176,5 +177,70 @@ impl Mac {
         ensure!(bool::from(expected_array.ct_eq(&computed)), "mac verification failed");
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mac_new_valid() {
+        let key = b"secret key";
+        let mac = Mac::new(key);
+        assert!(mac.is_ok());
+    }
+
+    #[test]
+    fn test_mac_new_empty() {
+        assert!(Mac::new(&[]).is_err());
+    }
+
+    #[test]
+    fn test_compute_verify_roundtrip() {
+        let key = b"secret key";
+        let mac = Mac::new(key).unwrap();
+        let part1 = b"header";
+        let part2 = b"data";
+
+        let tag = mac.compute(&[part1, part2]).unwrap();
+        assert_eq!(tag.len(), MAC_SIZE);
+
+        assert!(mac.verify(&tag, &[part1, part2]).is_ok());
+    }
+
+    #[test]
+    fn test_verify_invalid_tag() {
+        let key = b"secret key";
+        let mac = Mac::new(key).unwrap();
+        let part1 = b"data";
+
+        let tag = mac.compute(&[part1]).unwrap();
+        let mut invalid_tag = tag;
+        invalid_tag[0] ^= 0x01;
+
+        assert!(mac.verify(&invalid_tag, &[part1]).is_err());
+    }
+
+    #[test]
+    fn test_verify_different_data() {
+        let key = b"secret key";
+        let mac = Mac::new(key).unwrap();
+        let part1 = b"data";
+
+        let tag = mac.compute(&[part1]).unwrap();
+
+        // Try verifying against different data
+        assert!(mac.verify(&tag, &[b"different data"]).is_err());
+    }
+
+    #[test]
+    fn test_compute_empty_parts() {
+        let key = b"secret key";
+        let mac = Mac::new(key).unwrap();
+        // Should ignore empty parts
+        let tag1 = mac.compute(&[b"data"]).unwrap();
+        let tag2 = mac.compute(&[b"data", b""]).unwrap();
+        assert_eq!(tag1, tag2);
     }
 }

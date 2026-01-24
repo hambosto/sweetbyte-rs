@@ -38,7 +38,7 @@ use std::fmt::{Display, Formatter, Result};
 /// The mode determines which files are shown to users, preventing
 /// accidental encryption of already-encrypted files or decryption
 /// of unencrypted files that could waste time or cause confusion.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum ProcessorMode {
     /// Encrypt unencrypted files
     ///
@@ -46,7 +46,6 @@ pub enum ProcessorMode {
     /// File discovery will show only files that don't have the .swx
     /// extension and aren't excluded by other rules.
     Encrypt,
-
     /// Decrypt encrypted files
     ///
     /// This mode is used when users want to decrypt SweetByte files.
@@ -126,7 +125,7 @@ impl Display for ProcessorMode {
 ///
 /// This separation allows for clearer code intent and prevents
 /// confusion between user intent and system state.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Processing {
     /// Currently encrypting data
     ///
@@ -134,7 +133,6 @@ pub enum Processing {
     /// file content. It configures algorithms for encryption mode
     /// and displays appropriate progress messages to users.
     Encryption,
-
     /// Currently decrypting data
     ///
     /// This state indicates that the system is actively decrypting
@@ -240,7 +238,6 @@ pub struct Task {
     /// encrypted or decrypted by a worker thread. The size of each
     /// chunk is determined by the CHUNK_SIZE configuration constant.
     pub data: Vec<u8>,
-
     /// Position index of this chunk in the overall sequence
     ///
     /// This zero-based index represents where this chunk belongs
@@ -278,21 +275,18 @@ pub struct TaskResult {
     /// the task data. If processing failed, this will be empty
     /// to avoid returning partially processed data.
     pub data: Vec<u8>,
-
     /// Error message if processing failed (None if successful)
     ///
     /// Contains a description of what went wrong during processing.
     /// Using `Box<str>` provides memory efficiency while maintaining
     /// ownership of the error message.
     pub error: Option<Box<str>>,
-
     /// Original index of the task (preserved for ordering)
     ///
     /// This matches the index from the original Task and is used
     /// to ensure results are combined in the correct order even
     /// when parallel processing completes out of order.
     pub index: u64,
-
     /// Size of the original data (0 if error occurred)
     ///
     /// Represents the size of the input data that was processed.
@@ -356,5 +350,50 @@ impl TaskResult {
     #[inline]
     pub fn err(index: u64, error: &anyhow::Error) -> Self {
         Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::anyhow;
+
+    #[test]
+    fn test_processor_mode_label() {
+        assert_eq!(ProcessorMode::Encrypt.label(), "Encrypt");
+        assert_eq!(ProcessorMode::Decrypt.label(), "Decrypt");
+    }
+
+    #[test]
+    fn test_processing_label() {
+        assert_eq!(Processing::Encryption.label(), "Encrypting...");
+        assert_eq!(Processing::Decryption.label(), "Decrypting...");
+    }
+
+    #[test]
+    fn test_processing_mode_conversion() {
+        assert_eq!(Processing::Encryption.mode(), ProcessorMode::Encrypt);
+        assert_eq!(Processing::Decryption.mode(), ProcessorMode::Decrypt);
+    }
+
+    #[test]
+    fn test_task_result_ok() {
+        let data = vec![1, 2, 3];
+        let result = TaskResult::ok(1, data.clone(), 3);
+        assert_eq!(result.index, 1);
+        assert_eq!(result.data, data);
+        assert_eq!(result.size, 3);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_task_result_err() {
+        let err = anyhow!("test error");
+        let result = TaskResult::err(2, &err);
+        assert_eq!(result.index, 2);
+        assert!(result.data.is_empty());
+        assert_eq!(result.size, 0);
+        assert!(result.error.is_some());
+        assert_eq!(result.error.as_deref(), Some("test error"));
     }
 }
