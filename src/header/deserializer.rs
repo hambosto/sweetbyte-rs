@@ -183,9 +183,10 @@ impl<'a> Deserializer<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use super::*;
     use crate::header::section::SectionEncoder;
-    use std::io::Cursor;
 
     #[test]
     fn test_deserializer_invalid_magic() {

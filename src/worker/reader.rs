@@ -323,9 +323,11 @@ impl Reader {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use flume::unbounded;
     use std::io::Cursor;
+
+    use flume::unbounded;
+
+    use super::*;
 
     #[test]
     fn test_read_fixed_chunks() {

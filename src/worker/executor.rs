@@ -139,10 +139,11 @@ impl Executor {
 
 #[cfg(test)]
 mod tests {
+    use flume::unbounded;
+
     use super::*;
     use crate::config::{ARGON_KEY_LEN, CHUNK_SIZE};
     use crate::types::{Processing, Task};
-    use flume::unbounded;
 
     #[test]
     fn test_executor_process() {

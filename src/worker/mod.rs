@@ -196,8 +196,9 @@ impl Worker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::Cursor;
+
+    use super::*;
 
     #[test]
     fn test_worker_lifecycle() {

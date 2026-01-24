@@ -252,8 +252,9 @@ impl Writer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use flume::unbounded;
+
+    use super::*;
 
     #[test]
     fn test_write_decryption_mode() {

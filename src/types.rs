@@ -355,8 +355,9 @@ impl TaskResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use anyhow::anyhow;
+
+    use super::*;
 
     #[test]
     fn test_processor_mode_label() {
