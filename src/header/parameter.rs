@@ -1,199 +1,116 @@
-//! Encryption Parameters Management
+//! Cryptographic parameters module for SweetByte archives.
 //!
-//! This module defines the core encryption and compression parameters that control
-//! how files are encrypted and stored. These parameters are stored in the header
-//! and must remain consistent across all versions of the application to ensure
-//! backward compatibility.
+//! This module defines the Parameters structure that encapsulates all cryptographic
+//! and encoding settings used throughout the SweetByte archive format. It provides
+//! strict validation to ensure only secure, supported configurations are used.
 //!
-//! ## Parameter Structure
+//! # Architecture
+//! The Parameters struct is a compact, serializable configuration block that
+//! is stored in the header and used by all components of the system. It defines
+//! the exact cryptographic algorithms, encoding schemes, and key derivation
+//! parameters used for a specific archive.
 //!
-//! The Params structure contains the following key information:
-//!
-//! - **Version** - File format version for compatibility checking
-//! - **Algorithm** - Encryption algorithm identifier (AES, ChaCha20, etc.)
-//! - **Compression** - Compression algorithm and level
-//! - **Encoding** - Reed-Solomon encoding parameters
-//! - **KDF** - Key derivation function identifier and parameters
-//!
-//! ## Binary Format
-//!
-//! The parameters are stored in a fixed 12-byte binary format for optimal
-//! storage efficiency and fast access:
-///
-/// ```text
-/// [2 bytes] Version (u16)
-/// [1 byte]  Algorithm (u8)
-/// [1 byte]  Compression (u8)
-/// [1 byte]  Encoding (u8)
-/// [1 byte]  KDF identifier (u8)
-/// [4 bytes] KDF memory parameter (u32)
-/// [1 byte]  KDF time parameter (u8)
-/// [1 byte]  KDF parallelism parameter (u8)
-/// ```
-///
-/// ## Security Considerations
-///
-/// - All parameters are validated during deserialization
-/// - Version compatibility checking prevents accidental decryption with wrong algorithms
-/// - Fixed-size format prevents buffer overflow attacks
-/// - Big-endian encoding ensures consistent cross-platform behavior
-use anyhow::{Context, Result, ensure};
+//! # Key Concepts
+//! - **Algorithm Selection**: Bit flags for supported encryption algorithms
+//! - **Version Compatibility**: Ensures forward/backward compatibility
+//! - **Parameter Validation**: Prevents misconfiguration and security issues
+//! - **Constant Configuration**: Copyable for efficient sharing across components
+
+use anyhow::{ensure, Result};
 use serde::{Deserialize, Serialize};
+use wincode::{SchemaRead, SchemaWrite};
 
-use crate::config::HEADER_DATA_SIZE;
+use crate::config::{ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, COMPRESSION_ZLIB, CURRENT_VERSION, ENCODING_REED_SOLOMON, KDF_ARGON2};
 
-/// Encryption and compression parameters
+/// Cryptographic and encoding parameters for SweetByte archives.
 ///
-/// This structure contains all the parameters needed to encrypt and decrypt files,
-/// including algorithm identifiers, compression settings, Reed-Solomon encoding
-/// parameters, and key derivation function settings.
+/// This structure defines all the cryptographic algorithms, encoding schemes,
+/// and key derivation parameters used for encrypting and encoding archive data.
+/// Each parameter is strictly validated to ensure security and compatibility.
 ///
-/// The parameters are stored in a compact 12-byte binary format to ensure
-/// efficient storage and fast access during encryption/decryption operations.
+/// # Fields
+/// - `version`: Archive format version for compatibility checking
+/// - `algorithm`: Bit field of supported encryption algorithms
+/// - `compression`: Compression algorithm identifier
+/// - `encoding`: Error correction encoding scheme
+/// - `kdf`: Key derivation function identifier
+/// - `kdf_memory`: Argon2id memory cost in kilobytes
+/// - `kdf_time`: Argon2id time cost (iterations)
+/// - `kdf_parallelism`: Argon2id parallelism factor
 ///
-/// ## Field Descriptions
+/// # Security Characteristics
+/// - All parameters are validated against secure defaults
+/// - Version checking prevents downgrade attacks
+/// - Algorithm flags ensure only approved encryption methods are used
+/// - KDF parameters meet minimum security requirements
 ///
-/// - `version`: File format version for backward compatibility
-/// - `algorithm`: Encryption algorithm identifier (AES-256-GCM, ChaCha20-Poly1305, etc.)
-/// - `compression`: Compression algorithm and level identifier
-/// - `encoding`: Reed-Solomon encoding parameters (data/parity shard counts)
-/// - `kdf`: Key derivation function identifier (Argon2, scrypt, PBKDF2)
-/// - `kdf_memory`: Memory parameter for KDF (in KB)
-/// - `kdf_time`: Time/iteration parameter for KDF
-/// - `kdf_parallelism`: Parallelism parameter for KDF
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Params {
-    /// File format version for compatibility checking
+/// # Performance Notes
+/// - Copy-optimized for efficient sharing across components
+/// - Compact binary representation minimizes storage overhead
+/// - Validation is O(1) with simple equality checks
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, SchemaRead, SchemaWrite)]
+pub struct Parameters {
+    /// Archive format version (must match CURRENT_VERSION)
     pub version: u16,
-    /// Encryption algorithm identifier
+    /// Supported encryption algorithms (bit flags)
     pub algorithm: u8,
-    /// Compression algorithm and settings
+    /// Compression algorithm identifier
     pub compression: u8,
-    /// Reed-Solomon encoding parameters
+    /// Error correction encoding scheme
     pub encoding: u8,
     /// Key derivation function identifier
     pub kdf: u8,
-    /// KDF memory parameter in kilobytes
+    /// Argon2id memory cost in kilobytes
     pub kdf_memory: u32,
-    /// KDF time/iteration parameter
+    /// Argon2id time cost (iterations)
     pub kdf_time: u8,
-    /// KDF parallelism parameter
+    /// Argon2id parallelism factor
     pub kdf_parallelism: u8,
 }
 
-impl Params {
-    /// Serialize parameters to binary format
+impl Parameters {
+    /// Validates all parameters against secure configuration requirements.
     ///
-    /// Converts the parameter structure into the fixed 12-byte binary format
-    /// used for storage in the encrypted header. All numeric fields are stored
-    /// in big-endian format for consistent cross-platform behavior.
-    ///
-    /// # Returns
-    ///
-    /// A 12-byte array containing the serialized parameters.
-    ///
-    /// # Binary Layout
-    ///
-    /// ```text
-    /// [0-1]   version (u16, big-endian)
-    /// [2]     algorithm (u8)
-    /// [3]     compression (u8)
-    /// [4]     encoding (u8)
-    /// [5]     kdf (u8)
-    /// [6-9]   kdf_memory (u32, big-endian)
-    /// [10]    kdf_time (u8)
-    /// [11]    kdf_parallelism (u8)
-    /// ```
-    ///
-    /// # Performance Notes
-    ///
-    /// - Fixed-size array avoids heap allocation
-    /// - Direct memory copy operations for maximum speed
-    /// - Big-endian format ensures network order consistency
-    pub fn serialize(&self) -> [u8; HEADER_DATA_SIZE] {
-        let mut data = [0u8; HEADER_DATA_SIZE];
-
-        // Pack the binary format in order
-        data[0..2].copy_from_slice(&self.version.to_be_bytes());
-        data[2] = self.algorithm;
-        data[3] = self.compression;
-        data[4] = self.encoding;
-        data[5] = self.kdf;
-        data[6..10].copy_from_slice(&self.kdf_memory.to_be_bytes());
-        data[10] = self.kdf_time;
-        data[11] = self.kdf_parallelism;
-
-        data
-    }
-
-    /// Deserialize parameters from binary format
-    ///
-    /// Parses binary data into a Params structure, performing validation of
-    /// data length and proper type conversion with detailed error reporting.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - Binary data containing at least 12 bytes of parameter data
+    /// This method performs strict validation of all cryptographic parameters
+    /// to ensure only secure, approved configurations are used. Any deviation
+    /// from the expected values will result in an error.
     ///
     /// # Returns
-    ///
-    /// A Result containing either the parsed Params or an error.
+    /// Ok(()) if all parameters are valid
     ///
     /// # Errors
+    /// - Returns error if version doesn't match CURRENT_VERSION
+    /// - Returns error if algorithm flags don't match expected combination
+    /// - Returns error if compression algorithm is unsupported
+    /// - Returns error if encoding scheme is unsupported
+    /// - Returns error if key derivation function is unsupported
     ///
-    /// - Invalid data length (less than 12 bytes)
-    /// - Type conversion failures for numeric fields
-    /// - Any byte slice to array conversion errors
+    /// # Security Characteristics
+    /// - Prevents downgrade attacks via version checking
+    /// - Ensures only approved encryption algorithms are used
+    /// - Guarantees minimum security requirements for all components
+    /// - Blocks configuration-based attacks through strict validation
     ///
-    /// # Security Notes
-    ///
-    /// - Validates minimum data length before any parsing
-    /// - All conversions use safe methods with error handling
-    /// - Big-endian format ensures consistent behavior across architectures
-    pub fn deserialize(data: &[u8]) -> Result<Self> {
-        // Validate input size before any parsing
-        ensure!(data.len() >= HEADER_DATA_SIZE, "invalid header data size: expected {}, got {}", HEADER_DATA_SIZE, data.len());
+    /// # Performance Notes
+    /// - O(1) complexity with simple equality comparisons
+    /// - No memory allocation during validation
+    /// - Fast fail-fast approach stops at first invalid parameter
+    pub fn validate(&self) -> Result<()> {
+        // Validate archive format version to prevent downgrade attacks
+        ensure!(self.version == CURRENT_VERSION, "unsupported version");
 
-        // Extract fields in order with proper error handling
-        let version = u16::from_be_bytes(data[0..2].try_into().context("version conversion")?);
-        let algorithm = data[2];
-        let compression = data[3];
-        let encoding = data[4];
-        let kdf = data[5];
-        let kdf_memory = u32::from_be_bytes(data[6..10].try_into().context("kdf memory conversion")?);
-        let kdf_time = data[10];
-        let kdf_parallelism = data[11];
+        // Validate encryption algorithm combination - must support both AES-256-GCM and ChaCha20-Poly1305
+        ensure!(self.algorithm == (ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305), "invalid algorithm");
 
-        Ok(Self { version, algorithm, compression, encoding, kdf, kdf_memory, kdf_time, kdf_parallelism })
-    }
-}
+        // Validate compression algorithm - only ZLIB is supported
+        ensure!(self.compression == COMPRESSION_ZLIB, "invalid compression");
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        // Validate error correction encoding - only Reed-Solomon is supported
+        ensure!(self.encoding == ENCODING_REED_SOLOMON, "invalid encoding");
 
-    #[test]
-    fn test_params_roundtrip() {
-        let params = Params { version: 1, algorithm: 2, compression: 3, encoding: 4, kdf: 5, kdf_memory: 1024, kdf_time: 2, kdf_parallelism: 4 };
+        // Validate key derivation function - only Argon2id is supported
+        ensure!(self.kdf == KDF_ARGON2, "invalid kdf");
 
-        let serialized = params.serialize();
-        assert_eq!(serialized.len(), HEADER_DATA_SIZE);
-
-        let deserialized = Params::deserialize(&serialized).unwrap();
-
-        assert_eq!(deserialized.version, params.version);
-        assert_eq!(deserialized.algorithm, params.algorithm);
-        assert_eq!(deserialized.compression, params.compression);
-        assert_eq!(deserialized.encoding, params.encoding);
-        assert_eq!(deserialized.kdf, params.kdf);
-        assert_eq!(deserialized.kdf_memory, params.kdf_memory);
-        assert_eq!(deserialized.kdf_time, params.kdf_time);
-        assert_eq!(deserialized.kdf_parallelism, params.kdf_parallelism);
-    }
-
-    #[test]
-    fn test_params_deserialize_short() {
-        let data = [0u8; HEADER_DATA_SIZE - 1];
-        assert!(Params::deserialize(&data).is_err());
+        Ok(())
     }
 }

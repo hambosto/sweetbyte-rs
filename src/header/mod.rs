@@ -1,31 +1,23 @@
-//! # File Header Management Module
+//! Header module for the SweetByte encrypted archive format.
 //!
-//! This module provides comprehensive header management for encrypted files.
-//! Headers contain all metadata required to decrypt and verify file contents,
-//! including encryption parameters, file metadata, and integrity protection.
+//! This module implements the binary header format that precedes encrypted payload data in SweetByte archives.
+//! The header contains metadata about the encrypted file, cryptographic parameters, and integrity verification data.
 //!
-//! ## Architecture
+//! # Architecture
+//! The header is divided into several logical components:
+//! - **Metadata**: File information (name, size, content hash)
+//! - **Parameters**: Cryptographic and encoding configuration
+//! - **Sections**: Binary layout and Reed-Solomon encoding/decoding
 //!
-//! The header system follows a modular design:
-//! - **Serialization**: Converts structured data to binary format with Reed-Solomon encoding
-//! - **Deserialization**: Reconstructs structured data from binary format with error correction
-//! - **Validation**: Ensures header integrity and authenticity using HMAC
-//! - **Metadata**: Stores file information like name, size, and content hash
+//! The header follows a specific binary layout with Reed-Solomon error correction for resilience against corruption.
+//! All sections are encoded separately and then combined with length prefixes for proper parsing.
 //!
-//! ## Security Features
-//!
-//! - **Reed-Solomon Encoding**: Provides error correction for corrupted headers
-//! - **HMAC Authentication**: Prevents tampering with header contents
-//! - **Parameter Validation**: Ensures only supported algorithms are used
-//! - **Magic Bytes**: File format identification and corruption detection
-//!
-//! ## Header Structure
-/// Each header consists of 5 sections, all Reed-Solomon encoded:
-/// 1. Magic Bytes (4 bytes) - File format identifier
-/// 2. Salt (16 bytes) - Argon2id key derivation salt
-/// 3. Header Data (12 bytes) - Encryption and compression parameters
-/// 4. Metadata (variable) - File name, size, and content hash
-/// 5. MAC (32 bytes) - HMAC-SHA256 authentication tag
+//! # Key Concepts
+//! - **Reed-Solomon Encoding**: Forward error correction allows recovery from corrupted header data
+//! - **MAC Verification**: Message Authentication Code ensures header integrity and authenticity
+//! - **Parameter Validation**: Strict validation prevents configuration mismatches between encode/decode operations
+//! - **Magic Bytes**: Fixed identifier to validate file format compatibility
+
 use std::io::Read;
 
 use anyhow::{Context, Result, ensure};
@@ -33,88 +25,59 @@ use anyhow::{Context, Result, ensure};
 use crate::cipher::Mac;
 use crate::config::{
     ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, COMPRESSION_ZLIB, CURRENT_VERSION, DATA_SHARDS, ENCODING_REED_SOLOMON, HASH_SIZE,
-    HEADER_DATA_SIZE, KDF_ARGON2, MAC_SIZE, MAGIC_SIZE, PARITY_SHARDS,
+    KDF_ARGON2, MAGIC_BYTES, MAX_FILENAME_LENGTH, PARITY_SHARDS,
 };
-use crate::header::deserializer::{Deserializer, ParsedData};
-use crate::header::metadata::FileMetadata;
-use crate::header::parameter::Params;
-use crate::header::section::{SectionDecoder, SectionEncoder, SectionType, Sections};
-use crate::header::serializer::{SerializeParameter, Serializer};
+use crate::header::metadata::Metadata;
+use crate::header::parameter::Parameters;
+use crate::header::section::{DecodedSections, SectionDecoder, SectionEncoder};
 
-pub mod deserializer;
 pub mod metadata;
 pub mod parameter;
 pub mod section;
-pub mod serializer;
 
-/// # File Header Management
+/// Main header structure for SweetByte encrypted archives.
 ///
-/// Main struct for managing encrypted file headers. Provides both creation
-/// of new headers for encryption and parsing of existing headers for decryption.
+/// This structure encapsulates all information needed to decrypt and verify a SweetByte archive.
+/// It combines file metadata, cryptographic parameters, and the necessary encoding/decoding
+/// infrastructure for header serialization and deserialization.
 ///
-/// Headers contain all the information needed to decrypt and verify file contents,
-/// protected by Reed-Solomon encoding for error correction and HMAC for authenticity.
-///
-/// ## Security Considerations
-///
-/// - Headers are authenticated with HMAC to prevent tampering
-/// - Reed-Solomon encoding provides resilience against corruption
-/// - All parameters are validated against supported values
-/// - File metadata integrity is verified using BLAKE3 hashes
-///
-/// ## Memory Layout
-///
-/// Serialized headers follow this structure:
-/// ```
-/// [Lengths Header (20 bytes)]                    // Length of each encoded section
-/// [Encoded Section Lengths (variable)]          // Reed-Solomon encoded length data
-/// [Encoded Sections (variable)]                  // Reed-Solomon encoded section data
-/// ```
-///
-/// Each encoded section can be recovered even if partially corrupted,
-/// providing robustness against storage or transmission errors.
+/// The header maintains an optional `DecodedSections` field that is populated only after
+/// deserialization, containing the raw binary data needed for MAC verification operations.
 #[derive(Debug)]
 pub struct Header {
-    /// Reed-Solomon encoder for protecting header sections
-    /// Used when serializing new headers for storage
+    /// Reed-Solomon encoder for header data during serialization
     encoder: SectionEncoder,
-    /// Encryption and processing parameters
-    /// Includes algorithm selection, compression, encoding, and KDF settings
-    params: Params,
-    /// File metadata information
-    /// Contains original filename, file size, and BLAKE3 content hash
-    metadata: FileMetadata,
-    /// Parsed sections from deserialized headers
-    /// None for newly created headers, Some for parsed headers
-    sections: Option<Sections>,
+    /// Cryptographic and encoding parameters
+    parameters: Parameters,
+    /// File metadata (name, size, content hash)
+    metadata: Metadata,
+    /// Raw decoded sections (populated only after deserialization)
+    sections: Option<DecodedSections>,
 }
 
 impl Header {
-    /// Creates a new header with default parameters
-    ///
-    /// Creates a header for encryption using system-configured default parameters.
-    /// This is the recommended constructor for most use cases.
+    /// Creates a new header with default cryptographic parameters.
     ///
     /// # Arguments
     /// * `metadata` - File metadata including name, size, and content hash
     ///
     /// # Returns
-    /// Configured Header instance ready for serialization
+    /// A new Header instance with default parameters
     ///
     /// # Errors
     /// Returns error if Reed-Solomon encoder initialization fails
     ///
-    /// # Default Parameters
-    /// - Dual encryption: AES-256-GCM + XChaCha20-Poly1305
-    /// - Compression: ZLIB (for space efficiency)
-    /// - Encoding: Reed-Solomon (for error correction)
-    /// - KDF: Argon2id with system defaults
-    pub fn new(metadata: FileMetadata) -> Result<Self> {
-        // Initialize Reed-Solomon encoder with configured shard counts
+    /// # Security Notes
+    /// Uses default cryptographic parameters which are considered secure:
+    /// - Argon2id with configured memory and time cost
+    /// - AES-256-GCM and ChaCha20-Poly1305 support
+    /// - Reed-Solomon error correction with default shard configuration
+    pub fn new(metadata: Metadata) -> Result<Self> {
+        // Initialize Reed-Solomon encoder with data and parity shard configuration
         let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
 
-        // Create default parameters using system configuration
-        let parameter = Params {
+        // Create default parameter set with current version and cryptographic settings
+        let parameters = Parameters {
             version: CURRENT_VERSION,
             algorithm: ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305,
             compression: COMPRESSION_ZLIB,
@@ -125,330 +88,287 @@ impl Header {
             kdf_parallelism: ARGON_THREADS as u8,
         };
 
-        Self::new_with_parameter(encoder, parameter, metadata)
+        // Delegate to parameter-specific constructor
+        Self::new_with_parameter(encoder, parameters, metadata)
     }
 
-    /// Creates a new header with custom parameters
-    ///
-    /// Creates a header for encryption using explicitly provided parameters.
-    /// Useful for testing or custom configuration scenarios.
+    /// Creates a new header with custom parameters and encoder.
     ///
     /// # Arguments
-    /// * `encoder` - Reed-Solomon encoder for error correction
-    /// * `params` - Custom encryption and processing parameters
-    /// * `metadata` - File metadata including name, size, and content hash
+    /// * `encoder` - Pre-configured Reed-Solomon encoder
+    /// * `parameters` - Custom cryptographic and encoding parameters
+    /// * `metadata` - File metadata
     ///
     /// # Returns
-    /// Configured Header instance with custom parameters
+    /// A new Header instance with the provided components
     ///
     /// # Errors
-    /// Returns error if:
-    /// - Parameters validation fails (unsupported algorithms)
-    /// - File size is zero (invalid for encryption)
-    pub fn new_with_parameter(encoder: SectionEncoder, params: Params, metadata: FileMetadata) -> Result<Self> {
-        // Validate parameters to ensure compatibility
-        Self::validate(&params)?;
-        // Ensure we're not encrypting empty files
+    /// - Returns error if parameter validation fails
+    /// - Returns error if metadata size is zero (empty files not supported)
+    ///
+    /// # Security Considerations
+    /// The parameter validation ensures only supported cryptographic algorithms
+    /// and configurations are used, preventing configuration-based attacks.
+    pub fn new_with_parameter(encoder: SectionEncoder, parameters: Parameters, metadata: Metadata) -> Result<Self> {
+        // Validate cryptographic parameters to prevent misconfiguration
+        parameters.validate()?;
+
+        // Reject zero-size files as they don't make sense in the context of encrypted archives
         ensure!(metadata.size() != 0, "file size cannot be zero");
 
+        // Construct header with validated components
         Ok(Self {
             encoder,
-            params,
+            parameters,
             metadata,
-            sections: None, // No sections for newly created headers
+            sections: None, // No decoded sections available for new headers
         })
     }
 
-    /// Deserializes a header from binary data
+    /// Deserializes a header from binary data.
     ///
-    /// Parses a previously serialized header from a readable source.
-    /// Automatically performs Reed-Solomon decoding and parameter validation.
-    ///
-    /// # Type Parameters
-    /// * `R` - Any type implementing Read (file, network stream, memory buffer)
+    /// This method reads the complete header structure from the provided reader,
+    /// applies Reed-Solomon error correction, validates all parameters, and reconstructs
+    /// the Header instance with all decoded sections for later verification.
     ///
     /// # Arguments
-    /// * `reader` - Source containing serialized header data
+    /// * `reader` - Readable source containing the serialized header data
     ///
     /// # Returns
-    /// Parsed Header instance with all sections reconstructed
+    /// A fully reconstructed Header with decoded sections
     ///
     /// # Errors
-    /// Returns error if:
-    /// - Reed-Solomon decoding fails (severe corruption)
-    /// - Required sections are missing
-    /// - Parameter validation fails
-    /// - File metadata is invalid
+    /// - Returns error if Reed-Solomon decoder initialization fails
+    /// - Returns error if header unpacking (decoding) fails
+    /// - Returns error if parameter deserialization or validation fails
+    /// - Returns error if metadata deserialization fails
+    /// - Returns error if metadata validation (size, filename length) fails
+    ///
+    /// # Performance Characteristics
+    /// - Reed-Solomon decoding: O(n) where n is header size
+    /// - Binary deserialization: O(n) for both parameters and metadata
+    /// - Memory allocation: O(n) for decoded sections storage
     ///
     /// # Security Notes
-    /// - All sections are authenticated during deserialization
-    /// - Reed-Solomon provides error correction for minor corruption
-    /// - Parameters are validated against supported algorithms
-    /// - Magic bytes verify correct file format
-    pub fn deserialize<R: Read>(reader: R) -> Result<Self> {
-        // Initialize both encoder and decoder with same Reed-Solomon parameters
+    /// Validates magic bytes and all cryptographic parameters to prevent
+    /// malicious or corrupted headers from being processed.
+    pub fn deserialize<R: Read>(mut reader: R) -> Result<Self> {
+        // Initialize Reed-Solomon encoder for future serialization operations
         let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
+
+        // Initialize Reed-Solomon decoder for error correction during deserialization
         let decoder = SectionDecoder::new(DATA_SHARDS, PARITY_SHARDS)?;
 
-        // Create deserializer and parse the header data
-        let deserializer = Deserializer::new(&decoder);
-        let parsed = deserializer.deserialize(reader)?;
+        // Unpack and decode all header sections with error correction
+        let sections = decoder.unpack(&mut reader)?;
 
-        // Reconstruct Header instance from parsed data
-        Self::from_parsed_data(parsed, encoder)
+        // Deserialize cryptographic parameters from header section
+        let params: Parameters = wincode::deserialize(&sections.header_data)?;
+
+        // Deserialize file metadata from metadata section
+        let metadata: Metadata = wincode::deserialize(&sections.metadata)?;
+
+        // Validate parameters to ensure cryptographic correctness
+        params.validate()?;
+
+        // Validate metadata constraints
+        ensure!(metadata.size() != 0, "file size cannot be zero");
+        ensure!(metadata.name().len() <= MAX_FILENAME_LENGTH, "filename too long");
+
+        // Return reconstructed header with all decoded sections for verification
+        Ok(Self {
+            encoder,
+            parameters: params,
+            metadata,
+            sections: Some(sections), // Store decoded sections for MAC verification
+        })
     }
 
-    /// Returns the original filename
+    /// Returns the filename from the metadata.
     ///
     /// # Returns
-    /// Reference to the filename string from metadata
-    ///
-    /// # Security Notes
-    /// - Filenames are not encrypted and may contain sensitive information
-    /// - Consider filename encryption for privacy-sensitive applications
+    /// A string slice containing the filename (may be truncated if original exceeded MAX_FILENAME_LENGTH)
     #[inline]
     #[must_use]
     pub fn file_name(&self) -> &str {
         self.metadata.name()
     }
 
-    /// Returns the original file size in bytes
+    /// Returns the original file size in bytes.
     ///
     /// # Returns
-    /// File size as a 64-bit unsigned integer
-    ///
-    /// # Notes
-    /// - Used for memory allocation and progress tracking
-    /// - Helps detect truncated or padded files during decryption
+    /// The uncompressed file size
     #[inline]
     #[must_use]
     pub fn file_size(&self) -> u64 {
         self.metadata.size()
     }
 
-    /// Returns the BLAKE3 hash of the original file content
+    /// Returns the BLAKE3 hash of the original file content.
     ///
     /// # Returns
-    /// Reference to the 32-byte BLAKE3 hash digest
-    ///
-    /// # Security Guarantees
-    /// - Used to verify file integrity after decryption
-    /// - Detects any corruption or tampering with encrypted content
-    /// - Constant-time comparison prevents timing attacks during verification
+    /// A 32-byte array containing the content hash for integrity verification
     #[inline]
     #[must_use]
     pub fn file_hash(&self) -> &[u8; HASH_SIZE] {
         self.metadata.hash()
     }
 
-    /// Returns the Argon2id memory cost parameter
+    /// Returns the Argon2id memory cost parameter.
     ///
     /// # Returns
-    /// Memory cost in KiB (e.g., 65536 = 64MB)
-    ///
-    /// # Notes
-    /// - Higher values increase resistance to GPU/ASIC attacks
-    /// - Should be tuned based on available system memory
+    /// Memory cost in kilobytes for key derivation
     #[inline]
     #[must_use]
     pub const fn kdf_memory(&self) -> u32 {
-        self.params.kdf_memory
+        self.parameters.kdf_memory
     }
 
-    /// Returns the Argon2id time cost parameter
+    /// Returns the Argon2id time cost parameter.
     ///
     /// # Returns
     /// Number of iterations for key derivation
-    ///
-    /// # Notes
-    /// - Higher values increase computation time for attackers
-    /// - Should be balanced against user experience requirements
     #[inline]
     #[must_use]
     pub const fn kdf_time(&self) -> u8 {
-        self.params.kdf_time
+        self.parameters.kdf_time
     }
 
-    /// Returns the Argon2id parallelism parameter
+    /// Returns the Argon2id parallelism parameter.
     ///
     /// # Returns
-    /// Number of threads to use for key derivation
-    ///
-    /// # Notes
-    /// - Should typically match the number of CPU cores
-    /// - Higher values may improve performance on multi-core systems
+    /// Number of parallel threads for key derivation
     #[inline]
     #[must_use]
     pub const fn kdf_parallelism(&self) -> u8 {
-        self.params.kdf_parallelism
+        self.parameters.kdf_parallelism
     }
 
-    /// Returns the Argon2id salt from deserialized header
+    /// Returns the salt used for key derivation.
     ///
     /// # Returns
-    /// Reference to the salt byte array
+    /// A byte slice containing the Argon2id salt
     ///
     /// # Errors
-    /// Returns error if header was created (not deserialized)
+    /// Returns error if called on a header that hasn't been deserialized yet
     ///
     /// # Security Notes
-    /// - Salt is not secret and can be stored alongside encrypted data
-    /// - Each file should use a unique random salt
-    /// - Salt length is validated to be exactly 16 bytes
+    /// The salt must be exactly ARGON_SALT_LEN bytes and should be randomly generated
+    /// for each encryption operation to prevent rainbow table attacks.
     pub fn salt(&self) -> Result<&[u8]> {
-        self.sections.as_ref().context("header not deserialized yet")?.get_with_min_len(SectionType::Salt, ARGON_SALT_LEN)
+        Ok(&self.sections.as_ref().context("header not deserialized yet")?.salt)
     }
 
-    /// Serializes the header to binary format
+    /// Serializes the header with Reed-Solomon encoding and MAC authentication.
     ///
-    /// Creates a binary representation of the header with all sections
-    /// Reed-Solomon encoded and authenticated with HMAC.
+    /// This method creates the complete binary header that precedes the encrypted payload.
+    /// It combines magic bytes, salt, parameters, metadata, and a MAC, then applies
+    /// Reed-Solomon error correction for resilience against data corruption.
     ///
     /// # Arguments
-    /// * `salt` - 16-byte Argon2id salt for key derivation
-    /// * `key` - HMAC key for header authentication (derived from user password)
+    /// * `salt` - Argon2id salt (must be exactly ARGON_SALT_LEN bytes)
+    /// * `key` - Derivation key for MAC computation
     ///
     /// # Returns
-    /// Serialized header data suitable for storage or transmission
+    /// Serialized header bytes ready to be written to file
     ///
     /// # Errors
-    /// Returns error if:
-    /// - Salt length is invalid (not 16 bytes)
-    /// - HMAC key is empty
-    /// - Reed-Solomon encoding fails
-    /// - MAC computation fails
+    /// - Returns error if salt size is incorrect
+    /// - Returns error if key is empty
+    /// - Returns error if MAC computation fails
+    /// - Returns error if parameter serialization fails
+    /// - Returns error if metadata serialization fails
+    /// - Returns error if Reed-Solomon encoding fails
     ///
-    /// # Security Guarantees
-    /// - All sections are authenticated with HMAC-SHA256
-    /// - Reed-Solomon encoding provides error correction
-    /// - Magic bytes identify the file format
-    /// - Parameters are included to prevent tampering
+    /// # Security Characteristics
+    /// - MAC authenticates all header components (magic, salt, params, metadata)
+    /// - Uses constant-time comparison in MAC verification (via Mac implementation)
+    /// - Reed-Solomon provides forward error correction without compromising security
+    ///
+    /// # Performance Notes
+    /// - Reed-Solomon encoding: O(n) complexity with data+parity shards
+    /// - MAC computation: O(n) over header components
+    /// - Memory allocation: O(n) for final serialized output
     pub fn serialize(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-        // Create serializer with the encoder
-        let serializer = Serializer::new(&self.encoder);
+        // Validate salt size matches Argon2id requirements
+        ensure!(salt.len() == ARGON_SALT_LEN, "invalid salt size");
 
-        // Prepare parameters for serialization
-        let serialize_params = SerializeParameter { params: self.params, metadata: &self.metadata, salt, key };
-
-        // Perform serialization with Reed-Solomon encoding and HMAC authentication
-        serializer.serialize(&serialize_params)
-    }
-
-    /// Verifies the header integrity and authenticity
-    ///
-    /// Validates that the header has not been tampered with by recomputing
-    /// the HMAC and comparing it with the stored value.
-    ///
-    /// # Arguments
-    /// * `key` - HMAC key for verification (same key used during serialization)
-    ///
-    /// # Returns
-    /// Ok(()) if verification succeeds
-    ///
-    /// # Errors
-    /// Returns error if:
-    /// - Header was not deserialized (no sections to verify)
-    /// - HMAC key is empty
-    /// - Required sections are missing or too short
-    /// - HMAC verification fails (indicates tampering)
-    ///
-    /// # Security Guarantees
-    /// - Constant-time HMAC comparison prevents timing attacks
-    /// - Any modification to header sections will be detected
-    /// - Verification failure provides no information about the correct HMAC
-    /// - Protects against malicious header modification attacks
-    pub fn verify(&self, key: &[u8]) -> Result<()> {
-        // Validate HMAC key
+        // Ensure key is not empty for MAC computation
         ensure!(!key.is_empty(), "key cannot be empty");
 
-        // Get sections (must be deserialized first)
+        // Convert magic bytes to network byte order for consistent serialization
+        let magic = MAGIC_BYTES.to_be_bytes();
+
+        // Serialize cryptographic parameters with binary format
+        let header_data = wincode::serialize(&self.parameters)?;
+
+        // Serialize file metadata with binary format
+        let metadata_bytes = wincode::serialize(&self.metadata)?;
+
+        // Compute MAC over all header components for authentication
+        // MAC covers magic bytes, salt, serialized parameters, and serialized metadata
+        let mac = Mac::new(key)?.compute(&[&magic, salt, &header_data, &metadata_bytes])?;
+
+        // Apply Reed-Solomon encoding to all sections and pack into final format
+        self.encoder.pack(&magic, salt, &header_data, &metadata_bytes, &mac)
+    }
+
+    /// Verifies the MAC authentication of a deserialized header.
+    ///
+    /// This method recomputes the MAC over the header components and compares
+    /// it with the stored MAC from the deserialized sections. This ensures
+    /// the header hasn't been tampered with or corrupted.
+    ///
+    /// # Arguments
+    /// * `key` - Derivation key used for MAC computation (must match the key used during serialization)
+    ///
+    /// # Returns
+    /// Ok(()) if MAC verification succeeds
+    ///
+    /// # Errors
+    /// - Returns error if key is empty
+    /// - Returns error if header hasn't been deserialized yet
+    /// - Returns error if MAC verification fails (tampering or corruption detected)
+    /// - Returns error if parameter serialization fails during recomputation
+    /// - Returns error if metadata serialization fails during recomputation
+    ///
+    /// # Security Characteristics
+    /// - Uses constant-time comparison to prevent timing attacks
+    /// - Verifies integrity of all header components
+    /// - Prevents acceptance of tampered or malicious headers
+    ///
+    /// # Performance Notes
+    /// - MAC recomputation: O(n) over header components
+    /// - Comparison: O(n) constant-time for MAC verification
+    pub fn verify(&self, key: &[u8]) -> Result<()> {
+        // Ensure key is not empty for MAC computation
+        ensure!(!key.is_empty(), "key cannot be empty");
+
+        // Ensure we have decoded sections available (header must be deserialized)
         let sections = self.sections.as_ref().context("header not deserialized yet")?;
 
-        // Extract all sections needed for HMAC verification
-        let expected_mac = sections.get_with_min_len(SectionType::Mac, MAC_SIZE)?;
-        let magic = sections.get_with_min_len(SectionType::Magic, MAGIC_SIZE)?;
-        let salt = sections.get_with_min_len(SectionType::Salt, ARGON_SALT_LEN)?;
-        let header_data = sections.get_with_min_len(SectionType::HeaderData, HEADER_DATA_SIZE)?;
-        let metadata_bytes = self.metadata.serialize();
+        // Extract stored MAC and header components from decoded sections
+        let expected_mac = &sections.mac;
+        let magic = &sections.magic;
+        let salt = &sections.salt;
 
-        // Verify HMAC covers all critical header sections
-        Mac::new(key)?.verify(expected_mac, &[magic, salt, header_data, &metadata_bytes])
-    }
+        // Reserialize parameters and metadata to exactly match the data used for original MAC
+        let header_data = wincode::serialize(&self.parameters)?;
+        let metadata_bytes = wincode::serialize(&self.metadata)?;
 
-    /// Creates a Header instance from parsed deserialization data
-    ///
-    /// Internal helper method used during header deserialization.
-    ///
-    /// # Arguments
-    /// * `data` - Parsed header data from deserializer
-    /// * `encoder` - Reed-Solomon encoder for future operations
-    ///
-    /// # Returns
-    /// Configured Header instance with deserialized sections
-    ///
-    /// # Errors
-    /// Returns error if:
-    /// - Parameter validation fails
-    /// - File size is zero (invalid)
-    fn from_parsed_data(data: ParsedData, encoder: SectionEncoder) -> Result<Self> {
-        // Copy parameters from parsed data
-        let params = *data.params();
-
-        // Validate the parsed parameters
-        Self::validate(&params)?;
-
-        // Ensure file size is reasonable
-        ensure!(data.metadata().size() != 0, "file size cannot be zero");
-
-        Ok(Self { encoder, params, metadata: data.metadata().clone(), sections: Some(data.into_sections()) })
-    }
-
-    /// Validates header parameters against supported values
-    ///
-    /// Ensures that all header parameters use supported algorithms
-    /// and configurations to maintain compatibility and security.
-    ///
-    /// # Arguments
-    /// * `params` - Parameters to validate
-    ///
-    /// # Returns
-    /// Ok(()) if all parameters are valid
-    ///
-    /// # Errors
-    /// Returns error if any parameter is invalid:
-    /// - Unsupported version number
-    /// - Invalid algorithm identifier
-    /// - Unsupported compression method
-    /// - Invalid encoding method
-    /// - Unsupported key derivation function
-    fn validate(params: &Params) -> Result<()> {
-        // Validate version compatibility
-        ensure!(params.version == CURRENT_VERSION, "unsupported version: {} (expected {})", params.version, CURRENT_VERSION);
-
-        // Validate algorithm selection (must include both ciphers)
-        ensure!(params.algorithm == (ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305), "invalid algorithm identifier: {:#04x}", params.algorithm);
-
-        // Validate compression method
-        ensure!(params.compression == COMPRESSION_ZLIB, "invalid compression identifier: {:#04x}", params.compression);
-
-        // Validate error correction method
-        ensure!(params.encoding == ENCODING_REED_SOLOMON, "invalid encoding identifier: {:#04x}", params.encoding);
-
-        // Validate key derivation function
-        ensure!(params.kdf == KDF_ARGON2, "invalid kdf identifier: {:#04x}", params.kdf);
-
-        Ok(())
+        // Verify MAC using constant-time comparison
+        Mac::new(key)?.verify(expected_mac, &[magic, salt, &header_data, &metadata_bytes])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{ARGON_SALT_LEN, CURRENT_VERSION, HASH_SIZE, KEY_SIZE};
-    use crate::header::metadata::FileMetadata;
+    use crate::config::{ARGON_SALT_LEN, KEY_SIZE};
+    use crate::header::metadata::Metadata;
 
-    fn valid_metadata() -> FileMetadata {
-        FileMetadata::new("test.txt", 1024, [0u8; HASH_SIZE])
+    fn valid_metadata() -> Metadata {
+        Metadata::new("test.txt", 1024, [0u8; HASH_SIZE])
     }
 
     #[test]
@@ -460,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_header_new_empty_file() {
-        let metadata = FileMetadata::new("empty.txt", 0, [0u8; HASH_SIZE]);
+        let metadata = Metadata::new("empty.txt", 0, [0u8; HASH_SIZE]);
         let header = Header::new(metadata);
         assert!(header.is_err());
         assert_eq!(header.unwrap_err().to_string(), "file size cannot be zero");
@@ -483,7 +403,6 @@ mod tests {
     fn test_header_salt_access_before_deserialize() {
         let metadata = valid_metadata();
         let header = Header::new(metadata).unwrap();
-        // Should fail because it's a new header, not deserialized
         assert!(header.salt().is_err());
     }
 
@@ -523,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_validate_params() {
-        let mut params = Params {
+        let mut params = Parameters {
             version: CURRENT_VERSION,
             algorithm: ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305,
             compression: COMPRESSION_ZLIB,
@@ -534,13 +453,13 @@ mod tests {
             kdf_parallelism: ARGON_THREADS as u8,
         };
 
-        assert!(Header::validate(&params).is_ok());
+        assert!(params.validate().is_ok());
 
         params.version = 0;
-        assert!(Header::validate(&params).is_err());
+        assert!(params.validate().is_err());
         params.version = CURRENT_VERSION;
 
         params.algorithm = 0;
-        assert!(Header::validate(&params).is_err());
+        assert!(params.validate().is_err());
     }
 }

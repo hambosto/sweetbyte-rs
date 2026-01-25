@@ -138,9 +138,6 @@ pub const CHUNK_SIZE: usize = 256 * 1024;
 /// Choice Criteria: Easy to recognize but unlikely to appear in random data
 pub const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
 
-/// Size of magic bytes field in bytes
-pub const MAGIC_SIZE: usize = 4;
-
 /// Size of authentication tag (MAC) in bytes
 ///
 /// 32 bytes (256 bits) provides strong integrity protection for authenticated
@@ -150,12 +147,6 @@ pub const MAGIC_SIZE: usize = 4;
 /// Security Impact: 2^256 probability of successful forgery attack
 /// Storage Impact: 32 bytes per file
 pub const MAC_SIZE: usize = 32;
-
-/// Size of the data portion of the header
-///
-/// This excludes the salt, MAC, and other variable-length components.
-/// The fixed data portion contains version, algorithm identifiers, and metadata.
-pub const HEADER_DATA_SIZE: usize = 12;
 
 /// Current file format version
 ///

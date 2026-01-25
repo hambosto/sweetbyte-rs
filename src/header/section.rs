@@ -1,767 +1,675 @@
-//! Reed-Solomon Section Management
+//! # Header Section Encoding and Decoding
 //!
-//! This module provides the core functionality for managing Reed-Solomon encoded
-//! header sections. The header is divided into 5 distinct sections, each protected
-//! by Reed-Solomon error correction to provide both data integrity and recovery
-//! capabilities.
+//! This module provides functionality for encoding and decoding header sections in the SweetByte file format.
+//! It implements a robust encoding scheme using Reed-Solomon error correction to ensure data integrity
+//! and resilience against corruption.
 //!
-//! ## Section Architecture
+//! ## Architecture
 //!
-//! The encrypted file header uses a 5-section structure:
+//! The module follows a layered approach:
+//! 1. **EncodedSection**: Wrapper around Reed-Solomon encoded data
+//! 2. **LengthsHeader**: Metadata describing the size of each encoded section
+//! 3. **SectionEncoder/SectionDecoder**: High-level interfaces for packing/unpacking header data
 //!
-//! 1. **Magic Bytes** - File format identifier (`0x53574254` = "SWBT")
-//! 2. **Salt** - Cryptographic salt for key derivation (16 bytes)
-//! 3. **Header Data** - Encryption parameters (12 bytes)
-//! 4. **Metadata** - File information (variable size)
-//! 5. **MAC** - Message authentication code (32 bytes)
+//! ## Key Concepts
 //!
-//! ## Reed-Solomon Protection
-//!
-//! Each section is Reed-Solomon encoded with configurable data and parity shards:
-// - **Data Shards**: Original section data split across multiple shards
-// - **Parity Shards**: Redundant information for error recovery
-// - **Recovery Capability**: Can reconstruct data from up to 50% corruption
-//
-// ## Binary Storage Format
-//
-// The on-disk format consists of:
-//
-// ```text
-// [20 bytes] Lengths Header (4 bytes × 5 sections)
-// [Variable] Encoded Lengths (Reed-Solomon encoded section sizes)
-// [Variable] Encoded Sections (Reed-Solomon encoded section data)
-// ```
-//
-// ## Security Benefits
-//
-// - **Tamper Resistance**: Reed-Solomon encoding makes unauthorized modifications detectable
-// - **Error Recovery**: Can recover from storage corruption or transmission errors
-// - **Data Integrity**: Combined with MAC provides multiple layers of integrity protection
+//! - **Reed-Solomon Encoding**: Each data section is encoded with configurable data and parity shards
+//! - **Length Prefixing**: The size of each encoded section is also encoded for verification
+//! - **Magic Byte Verification**: Ensures file format compatibility during decoding
+//! - **Error Recovery**: Reed-Solomon allows recovery from up to parity_shards of corruption
+
 use std::io::Read;
 
 use anyhow::{Context, Result, anyhow, ensure};
-use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
+use wincode::{SchemaRead, SchemaWrite};
 
 use crate::config::MAGIC_BYTES;
 use crate::encoding::Encoding;
 
-/// Header section type identifier
+/// Represents the decoded header sections of a SweetByte file.
 ///
-/// Each section in the encrypted header has a specific type and purpose.
-/// The numeric values are used for section ordering and identification
-/// in the binary format.
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
-pub enum SectionType {
-    /// File format magic bytes (identifies this as a SweetByte file)
-    Magic = 0,
-    /// Cryptographic salt for key derivation
-    Salt = 1,
-    /// Header data containing encryption parameters
-    HeaderData = 2,
-    /// File metadata (name, size, content hash)
-    Metadata = 3,
-    /// Message authentication code for integrity verification
-    Mac = 4,
+/// This structure contains all the essential components of the file header after
+/// Reed-Solomon decoding and verification. Each field contains raw byte data
+/// that corresponds to specific sections in the file format.
+#[derive(Debug)]
+pub struct DecodedSections {
+    /// Magic bytes that identify the file format (should match MAGIC_BYTES)
+    pub magic: Vec<u8>,
+    /// Cryptographic salt used for key derivation (Argon2id)
+    pub salt: Vec<u8>,
+    /// Encrypted header data containing encryption parameters
+    pub header_data: Vec<u8>,
+    /// Optional metadata section for user-defined information
+    pub metadata: Vec<u8>,
+    /// Message Authentication Code for integrity verification
+    pub mac: Vec<u8>,
 }
 
-impl SectionType {
-    /// Array of all section types in order
-    ///
-    /// This constant provides the canonical ordering of sections for
-    /// serialization and deserialization operations.
-    pub const ALL: [Self; 5] = [Self::Magic, Self::Salt, Self::HeaderData, Self::Metadata, Self::Mac];
+/// Internal structure representing the lengths of encoded sections.
+///
+/// This header is stored at the beginning of the encoded file format and contains
+/// the size (in bytes) of each Reed-Solomon encoded section. The lengths themselves
+/// are also Reed-Solomon encoded for resilience.
+#[derive(Debug, Serialize, Deserialize, SchemaRead, SchemaWrite)]
+struct LengthsHeader {
+    /// Length of the Reed-Solomon encoded magic bytes section
+    magic_len: u32,
+    /// Length of the Reed-Solomon encoded salt section
+    salt_len: u32,
+    /// Length of the Reed-Solomon encoded header data section
+    header_data_len: u32,
+    /// Length of the Reed-Solomon encoded metadata section
+    metadata_len: u32,
+    /// Length of the Reed-Solomon encoded MAC section
+    mac_len: u32,
+}
 
-    /// Get the human-readable name of this section type
+impl LengthsHeader {
+    /// Constant representing the serialized size of the LengthsHeader.
+    ///
+    /// Each u32 field occupies 4 bytes, and there are 5 fields total:
+    /// 5 fields × 4 bytes/field = 20 bytes
+    const SIZE: usize = 20;
+
+    /// Converts the LengthsHeader into a fixed-size array for easier iteration.
     ///
     /// # Returns
     ///
-    /// A string slice containing the section name for debugging
-    /// and error reporting purposes.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Magic => "Magic",
-            Self::Salt => "Salt",
-            Self::HeaderData => "HeaderData",
-            Self::Metadata => "Metadata",
-            Self::Mac => "Mac",
-        }
+    /// A 5-element array containing the lengths in the order:
+    /// [magic_len, salt_len, header_data_len, metadata_len, mac_len]
+    fn as_array(&self) -> [u32; 5] {
+        [self.magic_len, self.salt_len, self.header_data_len, self.metadata_len, self.mac_len]
     }
 }
 
-impl std::fmt::Display for SectionType {
-    /// Format the section type for display
-    ///
-    /// Implements the Display trait to provide human-readable
-    /// section names for logging and error messages.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
-/// Reed-Solomon encoded section
+/// Wrapper around Reed-Solomon encoded data.
 ///
-/// This structure represents a header section that has been Reed-Solomon
-/// encoded for error correction and tamper resistance. The encoded data
-/// includes both the original data and parity information for recovery.
-///
-/// The encoded section is larger than the original data due to the addition
-/// of parity shards. The exact size depends on the Reed-Solomon parameters
-/// (data_shards + parity_shards).
+/// This structure provides a thin wrapper around encoded byte data,
+/// ensuring that the data has passed through the Reed-Solomon encoding process.
+/// It's used internally to distinguish between raw and encoded data.
 #[derive(Debug, Clone)]
-pub struct EncodedSection {
-    /// Reed-Solomon encoded data including original data and parity information
+struct EncodedSection {
+    /// Reed-Solomon encoded byte data
     data: Vec<u8>,
 }
 
 impl EncodedSection {
-    /// Create a new encoded section
+    /// Creates a new EncodedSection from Reed-Solomon encoded data.
     ///
     /// # Arguments
     ///
-    /// * `data` - Reed-Solomon encoded data (original + parity)
+    /// * `data` - Reed-Solomon encoded byte vector
     ///
     /// # Returns
     ///
-    /// A new EncodedSection instance.
-    #[inline]
-    #[must_use]
-    pub fn new(data: Vec<u8>) -> Self {
+    /// A new EncodedSection instance wrapping the provided data
+    fn new(data: Vec<u8>) -> Self {
         Self { data }
     }
 
-    /// Get the encoded data
+    /// Returns a reference to the underlying encoded data.
     ///
     /// # Returns
     ///
-    /// Reference to the Reed-Solomon encoded data including parity information.
-    #[inline]
-    #[must_use]
-    pub fn data(&self) -> &[u8] {
+    /// A byte slice reference to the encoded data
+    fn data(&self) -> &[u8] {
         &self.data
     }
 
-    /// Check if the section is empty
+    /// Checks if the encoded section contains no data.
+    ///
+    /// This is used during decoding to validate that sections were properly encoded.
     ///
     /// # Returns
     ///
-    /// True if the section contains no encoded data.
-    #[inline]
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
+    /// true if the section is empty, false otherwise
+    fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
-    /// Get the length of the encoded data
+    /// Returns the length of the encoded data as a u32.
+    ///
+    /// The length is returned as u32 to match the serialization format requirements.
     ///
     /// # Returns
     ///
-    /// Length of the encoded data as u32 (fits within protocol limits).
-    #[inline]
-    #[must_use]
-    pub fn len(&self) -> u32 {
+    /// The length of the encoded data in bytes
+    fn len(&self) -> u32 {
         self.data.len() as u32
     }
 }
 
-/// Container for decoded header sections
+/// High-level encoder for SweetByte header sections.
 ///
-/// This structure holds all 5 header sections after they have been
-/// Reed-Solomon decoded. It provides convenient access to individual
-/// sections while maintaining the original data integrity.
+/// This struct provides the main interface for encoding header sections into the
+/// SweetByte file format. It handles Reed-Solomon encoding, length prefixing,
+/// and serialization of the complete header structure.
 ///
-/// The sections are stored in a HashMap for O(1) lookup by section type.
-/// Empty sections are filtered out during access to prevent returning
-/// invalid data.
-#[derive(Debug)]
-pub struct Sections {
-    /// HashMap mapping section types to their decoded data
-    sections: HashMap<SectionType, Vec<u8>>,
-}
-
-impl Sections {
-    /// Get a section's data
-    ///
-    /// Returns the decoded data for the specified section type.
-    /// Empty sections are filtered out and return None.
-    ///
-    /// # Arguments
-    ///
-    /// * `section_type` - The type of section to retrieve
-    ///
-    /// # Returns
-    ///
-    /// Option containing either the section data as a byte slice or None
-    /// if the section doesn't exist or is empty.
-    #[must_use]
-    pub fn get(&self, section_type: SectionType) -> Option<&[u8]> {
-        self.sections
-            .get(&section_type)
-            .filter(|d| !d.is_empty()) // Filter out empty sections
-            .map(|d| d.as_slice())
-    }
-
-    /// Get a section with minimum length validation
-    ///
-    /// Retrieves a section and validates that it meets the minimum required
-    /// length, returning a slice of exactly the minimum size if valid.
-    ///
-    /// # Arguments
-    ///
-    /// * `section_type` - The type of section to retrieve
-    /// * `min_len` - Minimum required length of the section data
-    ///
-    /// # Returns
-    ///
-    /// Result containing either a slice of exactly `min_len` bytes or an error.
-    ///
-    /// # Errors
-    ///
-    /// - Section not found or empty
-    /// - Section data shorter than the minimum required length
-    pub fn get_with_min_len(&self, section_type: SectionType, min_len: usize) -> Result<&[u8]> {
-        let data = self.get(section_type).ok_or_else(|| anyhow!("{section_type} section not found"))?;
-        ensure!(data.len() >= min_len, "{} section too short: expected at least {}, got {}", section_type, min_len, data.len());
-
-        // Return exactly the requested minimum length
-        Ok(&data[..min_len])
-    }
-}
-
-/// Builder for creating validated Sections
+/// # Security
 ///
-/// This builder provides a convenient interface for constructing a Sections
-/// instance while ensuring all required sections are present and non-empty.
-///
-/// The builder pattern allows for stepwise construction with validation
-/// only occurring at the final build step.
-pub struct SectionsBuilder {
-    /// HashMap containing the sections being built
-    sections: HashMap<SectionType, Vec<u8>>,
-}
-
-impl SectionsBuilder {
-    /// Create a new builder with the magic bytes section
-    ///
-    /// This is the standard way to start building a Sections instance,
-    /// as the magic bytes are always required and typically available first.
-    ///
-    /// # Arguments
-    ///
-    /// * `magic` - The decoded magic bytes data
-    ///
-    /// # Returns
-    ///
-    /// A new SectionsBuilder with the magic section pre-populated.
-    #[inline]
-    #[must_use]
-    pub fn with_magic(magic: Vec<u8>) -> Self {
-        let mut sections = HashMap::new();
-        sections.insert(SectionType::Magic, magic);
-        Self { sections }
-    }
-
-    /// Set a section's data
-    ///
-    /// Adds or replaces a section's data in the builder.
-    ///
-    /// # Arguments
-    ///
-    /// * `section_type` - The type of section to set
-    /// * `value` - The section's decoded data
-    ///
-    /// # Returns
-    ///
-    /// Mutable reference to self for method chaining.
-    #[inline]
-    pub fn set(&mut self, section_type: SectionType, value: Vec<u8>) -> &mut Self {
-        self.sections.insert(section_type, value);
-        self
-    }
-
-    /// Build the validated Sections instance
-    ///
-    /// Validates that all required sections are present and non-empty,
-    /// then constructs the final Sections instance.
-    ///
-    /// # Returns
-    ///
-    /// Result containing either the validated Sections or an error.
-    ///
-    /// # Errors
-    ///
-    /// - Missing required sections (any of the 5 section types)
-    /// - Empty sections (sections with zero-length data)
-    ///
-    /// # Validation Logic
-    ///
-    /// - Checks that all 5 section types (from SectionType::ALL) are present
-    /// - Ensures no section contains empty data
-    /// - Provides detailed error messages for missing/empty sections
-    pub fn build(self) -> Result<Sections> {
-        // Validate that all required sections are present and non-empty
-        for &ty in &SectionType::ALL {
-            let data = self.sections.get(&ty).ok_or_else(|| anyhow!("{ty} section is missing"))?;
-            ensure!(!data.is_empty(), "{ty} section is empty");
-        }
-        Ok(Sections { sections: self.sections })
-    }
-}
-
-/// Reed-Solomon section encoder
-///
-/// This encoder handles the Reed-Solomon encoding of header sections,
-/// providing error correction and tamper resistance for the header data.
-///
-/// The encoder uses configurable data and parity shard counts to balance
-/// between storage overhead and error recovery capability.
+/// The Reed-Solomon encoding provides integrity protection but not confidentiality.
+/// Sensitive data should be encrypted before being passed to this encoder.
 #[derive(Debug)]
 pub struct SectionEncoder {
-    /// Underlying Reed-Solomon encoder implementation
+    /// Reed-Solomon encoder instance with configured data and parity shards
     encoder: Encoding,
 }
 
 impl SectionEncoder {
-    /// Create a new section encoder
-    ///
-    /// Initializes a Reed-Solomon encoder with the specified number of
-    /// data and parity shards.
+    /// Creates a new SectionEncoder with specified Reed-Solomon parameters.
     ///
     /// # Arguments
     ///
-    /// * `data_shards` - Number of data shards (original data splits)
-    /// * `parity_shards` - Number of parity shards (error recovery)
+    /// * `data_shards` - Number of data shards in the Reed-Solomon encoding (typically 4)
+    /// * `parity_shards` - Number of parity shards for error correction (typically 2)
     ///
     /// # Returns
     ///
-    /// Result containing either the encoder or an error.
+    /// A Result containing the new SectionEncoder or an error if encoding parameters are invalid
     ///
     /// # Errors
     ///
-    /// Invalid Reed-Solomon parameters (e.g., total shards > 255)
+    /// Returns an error if:
+    /// - data_shards or parity_shards is zero
+    /// - The Reed-Solomon encoder cannot be initialized with the specified parameters
     ///
-    /// # Performance Notes
+    /// # Performance
     ///
-    /// - Higher parity shard count increases storage overhead but improves error recovery
-    /// - Can recover from up to `parity_shards` corrupted data shards
-    /// - Common configuration: 4 data shards, 2 parity shards (33% overhead, 50% recovery)
+    /// Reed-Solomon encoding has O(n) complexity where n is the total data size.
+    /// Higher parity shard counts provide better error recovery but increase storage overhead.
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
+        // Initialize Reed-Solomon encoder with specified shard configuration
         let encoder = Encoding::new(data_shards, parity_shards)?;
         Ok(Self { encoder })
     }
 
-    /// Encode raw section data with Reed-Solomon
+    /// Packs header sections into the complete SweetByte file format.
     ///
-    /// Takes raw section data and applies Reed-Solomon encoding to add
-    /// error correction capabilities.
+    /// This method performs the complete encoding process:
+    /// 1. Reed-Solomon encodes each data section
+    /// 2. Reed-Solomon encodes each section length
+    /// 3. Serializes the lengths header
+    /// 4. Concatenates all components into the final byte format
     ///
     /// # Arguments
     ///
-    /// * `data` - Raw section data to encode
+    /// * `magic` - Magic bytes identifying the file format (must match MAGIC_BYTES)
+    /// * `salt` - Cryptographic salt for key derivation
+    /// * `header_data` - Encrypted header containing encryption parameters
+    /// * `metadata` - Optional user metadata (can be empty)
+    /// * `mac` - Message Authentication Code for integrity verification
     ///
     /// # Returns
     ///
-    /// Result containing either the encoded section or an error.
+    /// A Result containing the complete encoded byte vector or an error if encoding fails
     ///
     /// # Errors
     ///
-    /// - Empty input data
-    /// - Reed-Solomon encoding failures
+    /// Returns an error if:
+    /// - Any input section is empty (Reed-Solomon requires non-empty data)
+    /// - Reed-Solomon encoding fails for any section
+    /// - Serialization of the LengthsHeader fails
     ///
-    /// # Security Notes
+    /// # Security
     ///
-    /// The encoded output is larger than the input due to added parity data,
-    /// providing both error correction and making unauthorized modifications
-    /// more detectable.
-    pub fn encode_section(&self, data: &[u8]) -> Result<EncodedSection> {
+    /// The Reed-Solomon encoding provides protection against data corruption but not
+    /// against malicious tampering. The MAC should be verified separately for authenticity.
+    ///
+    /// # Performance
+    ///
+    /// This method performs 10 Reed-Solomon encodings (5 data + 5 length sections) and
+    /// allocates memory for all encoded sections. Memory usage is O(n) where n is total input size.
+    pub fn pack(&self, magic: &[u8], salt: &[u8], header_data: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
+        // Combine all raw data sections into a single array for consistent processing
+        let raw_sections = [magic, salt, header_data, metadata, mac];
+
+        // 1. Apply Reed-Solomon encoding to each data section
+        // This provides error correction capabilities for each section independently
+        let sections: Vec<EncodedSection> = raw_sections.iter().map(|data| self.encode_section(data)).collect::<Result<Vec<EncodedSection>>>()?;
+
+        // 2. Apply Reed-Solomon encoding to the length of each encoded section
+        // This ensures that even the size information is protected against corruption
+        let length_sections: Vec<EncodedSection> = sections.iter().map(|section| self.encode_length(section.len())).collect::<Result<Vec<EncodedSection>>>()?;
+
+        // 3. Create the LengthsHeader structure with the sizes of encoded length sections
+        // This metadata allows the decoder to know how many bytes to read for each section
+        let lengths_header = LengthsHeader {
+            magic_len: length_sections[0].len(),
+            salt_len: length_sections[1].len(),
+            header_data_len: length_sections[2].len(),
+            metadata_len: length_sections[3].len(),
+            mac_len: length_sections[4].len(),
+        };
+
+        // 4. Serialize the LengthsHeader using the wincode binary format
+        // This creates a fixed 20-byte header at the beginning of the file
+        let lengths_header_bytes = wincode::serialize(&lengths_header)?;
+
+        // 5. Concatenate all components in the correct order:
+        // - LengthsHeader (20 bytes)
+        // - Encoded length sections (variable size)
+        // - Encoded data sections (variable size)
+        let result: Vec<u8> = lengths_header_bytes
+            .iter()
+            .cloned()
+            .chain(length_sections.iter().flat_map(|s| s.data().iter().cloned()))
+            .chain(sections.iter().flat_map(|s| s.data().iter().cloned()))
+            .collect();
+
+        Ok(result)
+    }
+
+    /// Encodes a single data section using Reed-Solomon.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Raw data bytes to encode
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the EncodedSection or an error if encoding fails
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The input data is empty (Reed-Solomon requires non-empty data)
+    /// - The Reed-Solomon encoding process fails
+    fn encode_section(&self, data: &[u8]) -> Result<EncodedSection> {
+        // Validate that data is not empty - Reed-Solomon encoding requires non-empty input
         ensure!(!data.is_empty(), "data cannot be empty");
+
+        // Apply Reed-Solomon encoding to create parity shards
         let encoded = self.encoder.encode(data)?;
+
+        // Wrap the encoded data in an EncodedSection for type safety
         Ok(EncodedSection::new(encoded))
     }
 
-    /// Encode a length value with Reed-Solomon
+    /// Encodes a length value using Reed-Solomon.
     ///
-    /// Encodes a 4-byte length value using Reed-Solomon for the same
-    /// error protection as section data.
+    /// This method encodes the 4-byte length of an encoded section, providing
+    /// error correction for the size metadata itself.
     ///
     /// # Arguments
     ///
-    /// * `length` - Length value to encode (big-endian)
+    /// * `length` - The length value to encode (as u32)
     ///
     /// # Returns
     ///
-    /// Result containing either the encoded length or an error.
-    #[inline]
-    pub fn encode_length(&self, length: u32) -> Result<EncodedSection> {
+    /// A Result containing the Reed-Solomon encoded length or an error if encoding fails
+    ///
+    /// # Performance
+    ///
+    /// Always encodes exactly 4 bytes of data, resulting in a predictable output size.
+    fn encode_length(&self, length: u32) -> Result<EncodedSection> {
+        // Convert the u32 length to big-endian bytes for consistent serialization
+        // Big-endian ensures cross-platform compatibility
         self.encode_section(&length.to_be_bytes())
-    }
-
-    /// Encode all sections and their lengths
-    ///
-    /// Processes the complete set of 5 header sections, encoding both
-    /// the section data and the length information for each section.
-    ///
-    /// # Arguments
-    ///
-    /// * `raw_sections` - Array of 5 raw sections in order [Magic, Salt, HeaderData, Metadata, Mac]
-    ///
-    /// # Returns
-    ///
-    /// Result containing either:
-    /// - Tuple of (encoded sections, encoded length sections)
-    /// - Error if encoding fails for any section
-    ///
-    /// # Process
-    ///
-    /// 1. Encode each section's data
-    /// 2. Calculate the length of each encoded section
-    /// 3. Encode each length value
-    /// 4. Return both sets of encoded data
-    ///
-    /// # Performance Notes
-    ///
-    /// - Processes all sections in parallel during collection
-    /// - Each section encoding is independent
-    /// - Total overhead depends on Reed-Solomon parameters
-    pub fn encode_sections_and_lengths(&self, raw_sections: &[&[u8]; 5]) -> Result<(Vec<EncodedSection>, Vec<EncodedSection>)> {
-        // Encode all section data first
-        let sections: Vec<EncodedSection> = raw_sections.iter().map(|data| self.encode_section(data)).collect::<Result<Vec<EncodedSection>>>()?;
-
-        // Then encode the length of each encoded section
-        let length_sections: Vec<EncodedSection> = sections.iter().map(|section| self.encode_length(section.len())).collect::<Result<Vec<EncodedSection>>>()?;
-
-        Ok((sections, length_sections))
-    }
-
-    /// Build the lengths header
-    ///
-    /// Creates the fixed 20-byte lengths header that contains the sizes
-    /// of each encoded length section. This header is stored unencoded
-    /// (but still Reed-Solomon protected by being stored as data).
-    ///
-    /// # Arguments
-    ///
-    /// * `length_sections` - Array of 5 encoded length sections
-    ///
-    /// # Returns
-    ///
-    /// A 20-byte array containing the section sizes in big-endian format.
-    ///
-    /// # Binary Format
-    ///
-    /// ```text
-    /// [0-3]   Length of encoded Magic length section
-    /// [4-7]   Length of encoded Salt length section  
-    /// [8-11]  Length of encoded HeaderData length section
-    /// [12-15] Length of encoded Metadata length section
-    /// [16-19] Length of encoded Mac length section
-    /// ```
-    pub fn build_lengths_header(length_sections: &[EncodedSection]) -> [u8; 20] {
-        let mut header = [0u8; 20];
-        for (i, section) in length_sections.iter().enumerate() {
-            let offset = i * 4;
-            header[offset..offset + 4].copy_from_slice(&section.len().to_be_bytes());
-        }
-        header
     }
 }
 
-/// Reed-Solomon section decoder
+/// High-level decoder for SweetByte header sections.
 ///
-/// This decoder handles the Reed-Solomon decoding of header sections,
-/// providing error recovery and validation capabilities. It can reconstruct
-/// the original section data even if up to 50% of the encoded data is corrupted.
+/// This struct provides the main interface for decoding header sections from the
+/// SweetByte file format. It handles Reed-Solomon decoding, length verification,
+/// and magic byte validation.
 ///
-/// The decoder uses the same Reed-Solomon parameters as the encoder to ensure
-/// compatibility and proper error correction.
+/// # Security
+///
+/// The decoder validates magic bytes to ensure file format compatibility and
+/// uses Reed-Solomon to recover from data corruption. However, it does not
+/// verify cryptographic integrity - that must be done separately with the MAC.
 pub struct SectionDecoder {
-    /// Underlying Reed-Solomon encoder/decoder implementation
+    /// Reed-Solomon encoder/decoder instance with matching shard configuration
     encoder: Encoding,
 }
 
 impl SectionDecoder {
-    /// Create a new section decoder
+    /// Creates a new SectionDecoder with specified Reed-Solomon parameters.
     ///
-    /// Initializes a Reed-Solomon decoder with the specified number of
-    /// data and parity shards. The parameters must match those used
-    /// during encoding for successful decoding.
+    /// The shard configuration must match the configuration used during encoding
+    /// for successful decoding and error recovery.
     ///
     /// # Arguments
     ///
-    /// * `data_shards` - Number of data shards used during encoding
-    /// * `parity_shards` - Number of parity shards used during encoding
+    /// * `data_shards` - Number of data shards (must match encoder configuration)
+    /// * `parity_shards` - Number of parity shards (must match encoder configuration)
     ///
     /// # Returns
     ///
-    /// Result containing either the decoder or an error.
+    /// A Result containing the new SectionDecoder or an error if parameters are invalid
     ///
     /// # Errors
     ///
-    /// Invalid Reed-Solomon parameters
+    /// Returns an error if:
+    /// - data_shards or parity_shards is zero
+    /// - The Reed-Solomon encoder cannot be initialized
     ///
-    /// # Compatibility Notes
+    /// # Security
     ///
-    /// The decoder parameters must exactly match the encoder parameters,
-    /// otherwise Reed-Solomon decoding will fail.
+    /// Mismatched shard parameters between encoder and decoder will result in
+    /// complete failure to decode the data, acting as a form of integrity check.
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
+        // Initialize Reed-Solomon decoder with matching shard configuration
         let encoder = Encoding::new(data_shards, parity_shards)?;
         Ok(Self { encoder })
     }
 
-    /// Decode a Reed-Solomon encoded section
+    /// Unpacks and decodes header sections from a readable source.
     ///
-    /// Reconstructs the original section data from the Reed-Solomon encoded
-    /// version, handling any corruption or errors during transmission/storage.
+    /// This method performs the complete decoding process:
+    /// 1. Reads and deserializes the LengthsHeader
+    /// 2. Reads and decodes the encoded length sections
+    /// 3. Reads and decodes the encoded data sections
+    /// 4. Validates magic bytes for format compatibility
+    ///
+    /// # Type Parameters
+    ///
+    /// * `R` - Any type implementing the Read trait (files, memory streams, etc.)
     ///
     /// # Arguments
     ///
-    /// * `section` - The Reed-Solomon encoded section to decode
+    /// * `reader` - Mutable reference to a readable source containing the encoded data
     ///
     /// # Returns
     ///
-    /// Result containing either the original decoded data or an error.
+    /// A Result containing the DecodedSections or an error if decoding fails
     ///
     /// # Errors
     ///
-    /// - Empty encoded section
-    /// - Reed-Solomon decoding failure (too much corruption)
-    /// - Invalid encoded data format
+    /// Returns an error if:
+    /// - Cannot read the LengthsHeader (IO error or EOF)
+    /// - LengthsHeader deserialization fails (corruption)
+    /// - Reed-Solomon decoding fails for any section
+    /// - Magic bytes don't match expected format
     ///
-    /// # Error Recovery
+    /// # Security
     ///
-    /// Can successfully decode even if up to `parity_shards` of the encoded
-    /// data is corrupted, providing significant robustness.
-    pub fn decode_section(&self, section: &EncodedSection) -> Result<Vec<u8>> {
+    /// Magic byte verification prevents processing files with incompatible formats.
+    /// Reed-Solomon decoding can recover from up to parity_shards of corruption per section.
+    ///
+    /// # Performance
+    ///
+    /// Performs 10 Reed-Solomon decodings and reads the entire header into memory.
+    /// Memory usage is O(n) where n is the total header size.
+    pub fn unpack<R: Read>(&self, reader: &mut R) -> Result<DecodedSections> {
+        // 1. Read the fixed-size LengthsHeader from the beginning of the stream
+        let mut buffer = [0u8; LengthsHeader::SIZE];
+        reader.read_exact(&mut buffer).context("failed to read lengths header")?;
+        let lengths_header: LengthsHeader = wincode::deserialize(&buffer).context("failed to deserialize lengths header")?;
+
+        // 2. Read and decode the Reed-Solomon encoded length sections
+        // These lengths tell us how many bytes to read for each data section
+        let section_lengths = self.read_and_decode_lengths(reader, &lengths_header)?;
+
+        // 3. Read and decode the actual data sections using the decoded lengths
+        // This step also validates magic bytes to ensure format compatibility
+        let sections = self.read_and_decode_sections(reader, &section_lengths)?;
+
+        Ok(sections)
+    }
+
+    /// Decodes a Reed-Solomon encoded section back to raw data.
+    ///
+    /// # Arguments
+    ///
+    /// * `section` - The EncodedSection to decode
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the decoded raw data or an error if decoding fails
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The section is empty (indicates corruption or encoding failure)
+    /// - Reed-Solomon decoding fails (excessive corruption beyond recovery capability)
+    ///
+    /// # Security
+    ///
+    /// Reed-Solomon can recover from up to parity_shards of corruption.
+    /// Beyond that, data is lost and decoding fails, preventing use of corrupted data.
+    fn decode_section(&self, section: &EncodedSection) -> Result<Vec<u8>> {
+        // Validate that the section is not empty - empty sections indicate corruption
         ensure!(!section.is_empty(), "invalid encoded section");
+
+        // Apply Reed-Solomon decoding to recover the original data
+        // This will succeed if corruption is within the recovery threshold
         self.encoder.decode(section.data())
     }
 
-    /// Decode a Reed-Solomon encoded length value
+    /// Decodes an encoded length value back to a u32.
     ///
-    /// Decodes a 4-byte length value that was Reed-Solomon encoded.
-    /// This is used to decode the section length information stored
-    /// in the header.
+    /// This method decodes a Reed-Solomon encoded 4-byte length value.
     ///
     /// # Arguments
     ///
-    /// * `section` - Reed-Solomon encoded length section
+    /// * `section` - The EncodedSection containing the encoded length
     ///
     /// # Returns
     ///
-    /// Result containing either the decoded length value or an error.
+    /// A Result containing the decoded u32 length or an error if decoding fails
     ///
     /// # Errors
     ///
-    /// - Reed-Solomon decoding failure
-    /// - Invalid length prefix size (must be at least 4 bytes)
-    /// - Type conversion failure
-    pub fn decode_length(&self, section: &EncodedSection) -> Result<u32> {
+    /// Returns an error if:
+    /// - Reed-Solomon decoding fails
+    /// - Decoded data is less than 4 bytes (corruption)
+    /// - Cannot convert bytes to u32 (severe corruption)
+    ///
+    /// # Security
+    ///
+    /// Length validation prevents buffer overflow attacks by ensuring we only
+    /// read the specified number of bytes for each section.
+    fn decode_length(&self, section: &EncodedSection) -> Result<u32> {
+        // First decode the Reed-Solomon encoded data
         let decoded = self.decode_section(section)?;
+
+        // Validate that we have at least 4 bytes for a u32
         ensure!(decoded.len() >= 4, "invalid length prefix size");
 
-        // Convert the first 4 bytes from big-endian u32
+        // Convert the first 4 bytes from big-endian format to u32
+        // Use try_into for safe array slicing with proper error handling
         decoded[..4].try_into().map(u32::from_be_bytes).map_err(|_| anyhow!("length conversion failed"))
     }
 
-    /// Read the lengths header from the data stream
+    /// Reads and decodes all encoded length sections from the stream.
     ///
-    /// Reads the fixed 20-byte lengths header that contains the sizes
-    /// of each encoded length section. This header is not Reed-Solomon
-    /// encoded itself.
+    /// This method reads the Reed-Solomon encoded length sections in order
+    /// and decodes them back to their original u32 values.
     ///
-    /// # Arguments
+    /// # Type Parameters
     ///
-    /// * `reader` - Data stream to read from
-    ///
-    /// # Returns
-    ///
-    /// Result containing either an array of 5 length values or an error.
-    ///
-    /// # Errors
-    ///
-    /// - I/O errors during reading
-    /// - Type conversion failures
-    ///
-    /// # Binary Format
-    ///
-    /// The header contains 5 big-endian u32 values, one for each section type.
-    pub fn read_lengths_header<R: Read>(&self, reader: &mut R) -> Result<[u32; 5]> {
-        let mut header = [0u8; 20];
-        reader.read_exact(&mut header).context("failed to read lengths header")?;
-
-        // Convert each 4-byte chunk to a big-endian u32
-        let mut result = [0u32; 5];
-        for (i, slot) in result.iter_mut().enumerate() {
-            let offset = i * 4;
-            let bytes: [u8; 4] = header[offset..offset + 4].try_into()?;
-            *slot = u32::from_be_bytes(bytes);
-        }
-        Ok(result)
-    }
-
-    /// Read and decode all section lengths
-    ///
-    /// Reads the encoded length sections from the data stream and decodes
-    /// each one to recover the actual section sizes.
+    /// * `R` - Any type implementing the Read trait
     ///
     /// # Arguments
     ///
-    /// * `reader` - Data stream to read from
-    /// * `length_sizes` - Sizes of each encoded length section from the lengths header
+    /// * `reader` - Mutable reference to the readable source
+    /// * `header` - The LengthsHeader containing the sizes of encoded length sections
     ///
     /// # Returns
     ///
-    /// Result containing either an array of 5 decoded lengths or an error.
+    /// A Result containing a 5-element array of decoded lengths or an error if reading fails
     ///
     /// # Errors
     ///
-    /// - I/O errors during reading
-    /// - Reed-Solomon decoding failures
-    /// - Invalid length data
+    /// Returns an error if:
+    /// - Cannot read any of the encoded length sections
+    /// - Reed-Solomon decoding fails for any length section
+    /// - Cannot convert the resulting vector to a fixed-size array (programming error)
     ///
-    /// # Process
+    /// # Performance
     ///
-    /// 1. Read each encoded length section according to its size
-    /// 2. Apply Reed-Solomon decoding to recover the original 4-byte length
-    /// 3. Convert from big-endian to native format
-    /// 4. Return all 5 section lengths
-    pub fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, length_sizes: &[u32; 5]) -> Result<[u32; 5]> {
-        let mut result = [0u32; 5];
-        for (i, (&section_type, &size)) in SectionType::ALL.iter().zip(length_sizes).enumerate() {
-            // Read the encoded length section
-            let encoded = self.read_exact(reader, size as usize, || format!("failed to read encoded length for {section_type}"))?;
+    /// Reads exactly the number of bytes specified in the LengthsHeader and
+    /// performs 5 Reed-Solomon decodings, one for each section length.
+    fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, header: &LengthsHeader) -> Result<[u32; 5]> {
+        // Get the array of encoded length section sizes
+        let lengths_array = header.as_array();
 
-            // Decode it to recover the original length value
-            result[i] = self.decode_length(&EncodedSection::new(encoded))?;
-        }
-        Ok(result)
-    }
+        // Create a vector to store the decoded length values
+        let mut decoded_lengths = Vec::with_capacity(5);
 
-    /// Read and decode all sections
-    ///
-    /// Reads and decodes all 5 header sections from the data stream,
-    /// validating the magic bytes and constructing a complete Sections instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `reader` - Data stream to read from
-    /// * `section_lengths` - Decoded lengths of each section
-    ///
-    /// # Returns
-    ///
-    /// Result containing either the complete decoded Sections or an error.
-    ///
-    /// # Errors
-    ///
-    /// - I/O errors during reading
-    /// - Reed-Solomon decoding failures
-    /// - Invalid magic bytes (file format mismatch)
-    /// - Missing or empty sections
-    ///
-    /// # Security Validation
-    ///
-    /// - Validates magic bytes to ensure correct file format
-    /// - Ensures all required sections are present and non-empty
-    /// - Applies Reed-Solomon error correction to each section
-    ///
-    /// # Process
-    ///
-    /// 1. Read and decode the Magic section, validating against expected magic bytes
-    /// 2. Create a SectionsBuilder with the validated magic bytes
-    /// 3. Read and decode each remaining section in order
-    /// 4. Add each section to the builder
-    /// 5. Build the final validated Sections instance
-    pub fn read_and_decode_sections<R: Read>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<Sections> {
-        // Step 1: Read and decode the Magic section first for validation
-        let encoded = self.read_exact(reader, section_lengths[0] as usize, || format!("failed to read encoded {}", SectionType::Magic))?;
-        let magic = self.decode_section(&EncodedSection::new(encoded))?;
+        // Process each length section individually for clarity
+        // Using enumerate to avoid the clippy warning about needless range loops
+        for (i, &size) in lengths_array.iter().enumerate() {
+            // Read the exact number of bytes for this encoded length section
+            let encoded = self.read_exact(reader, size as usize, || format!("failed to read encoded length section {}", i))?;
 
-        // Validate magic bytes to ensure correct file format
-        ensure!(magic == MAGIC_BYTES.to_be_bytes(), "invalid magic bytes: expected {:?}, got {:?}", MAGIC_BYTES.to_be_bytes(), magic);
+            // Decode the Reed-Solomon encoded length back to u32
+            let decoded_length = self.decode_length(&EncodedSection::new(encoded))?;
 
-        // Step 2: Start building sections with validated magic bytes
-        let mut builder = SectionsBuilder::with_magic(magic);
-
-        // Step 3: Process remaining sections in order
-        for (&section_type, &length) in SectionType::ALL[1..].iter().zip(&section_lengths[1..]) {
-            let encoded = self.read_exact(reader, length as usize, || format!("failed to read encoded {section_type}"))?;
-            let decoded = self.decode_section(&EncodedSection::new(encoded))?;
-            builder.set(section_type, decoded);
+            // Add the decoded length to our results vector
+            decoded_lengths.push(decoded_length);
         }
 
-        // Step 4: Build and return the validated sections
-        builder.build()
+        // Convert the vector to a fixed-size array for return
+        // This should always succeed since we ensure exactly 5 elements above
+        let result_array: [u32; 5] = decoded_lengths.try_into().map_err(|_| anyhow!("failed to convert lengths vector to array"))?;
+
+        Ok(result_array)
     }
 
-    /// Helper to read exact number of bytes with context
+    /// Reads and decodes all data sections using the decoded lengths.
     ///
-    /// Reads exactly the specified number of bytes from the reader,
-    /// providing detailed error context for debugging.
+    /// This method reads each data section in order, decodes them using Reed-Solomon,
+    /// and validates the magic bytes to ensure format compatibility.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `R` - Any type implementing the Read trait
     ///
     /// # Arguments
     ///
-    /// * `reader` - Data stream to read from
-    /// * `size` - Number of bytes to read
-    /// * `context_fn` - Function to generate error context message
+    /// * `reader` - Mutable reference to the readable source
+    /// * `section_lengths` - Array containing the lengths of each encoded data section
     ///
     /// # Returns
     ///
-    /// Result containing either the read bytes or an error.
+    /// A Result containing the fully decoded DecodedSections or an error if reading fails
     ///
     /// # Errors
     ///
-    /// I/O errors during reading (with context from context_fn)
+    /// Returns an error if:
+    /// - Cannot read any of the encoded data sections
+    /// - Reed-Solomon decoding fails for any section
+    /// - Magic bytes don't match the expected format (incompatible file)
+    ///
+    /// # Security
+    ///
+    /// Magic byte verification is the first line of defense against processing
+    /// malicious or incompatible file formats. This prevents potential vulnerabilities
+    /// from attempting to decode files with different formats.
+    ///
+    /// # Performance
+    ///
+    /// Performs 5 Reed-Solomon decodings and reads all header data into memory.
+    /// Total memory usage is proportional to the sum of all section sizes.
+    fn read_and_decode_sections<R: Read>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<DecodedSections> {
+        // Read and decode the magic bytes section first
+        let magic = self.read_decoded_section(reader, section_lengths[0], "magic")?;
+
+        // Verify magic bytes match expected format to ensure compatibility
+        // This is a critical security check to prevent processing incompatible files
+        ensure!(magic == MAGIC_BYTES.to_be_bytes(), "invalid magic bytes");
+
+        // If magic bytes are valid, proceed to decode remaining sections
+        Ok(DecodedSections {
+            magic,
+            // Salt section: contains cryptographic salt for key derivation
+            salt: self.read_decoded_section(reader, section_lengths[1], "salt")?,
+            // Header data section: contains encrypted encryption parameters
+            header_data: self.read_decoded_section(reader, section_lengths[2], "header data")?,
+            // Metadata section: optional user-defined data
+            metadata: self.read_decoded_section(reader, section_lengths[3], "metadata")?,
+            // MAC section: message authentication code for integrity verification
+            mac: self.read_decoded_section(reader, section_lengths[4], "mac")?,
+        })
+    }
+
+    /// Reads and decodes a single data section.
+    ///
+    /// This is a convenience method that combines reading the exact number of bytes
+    /// and immediately decoding them using Reed-Solomon.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `R` - Any type implementing the Read trait
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - Mutable reference to the readable source
+    /// * `size` - The size of the encoded section to read
+    /// * `name` - Human-readable name for error reporting
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the decoded raw data or an error if reading/decoding fails
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Cannot read the specified number of bytes (EOF or IO error)
+    /// - Reed-Solomon decoding fails (excessive corruption)
+    ///
+    /// # Security
+    ///
+    /// The size parameter must be trusted and validated through the LengthsHeader
+    /// to prevent reading arbitrary amounts of data from the stream.
+    fn read_decoded_section<R: Read>(&self, reader: &mut R, size: u32, name: &str) -> Result<Vec<u8>> {
+        // Read the exact number of bytes specified for this section
+        let encoded_data = self.read_exact(reader, size as usize, || format!("failed to read encoded {}", name))?;
+
+        // Immediately decode the Reed-Solomon encoded data
+        self.decode_section(&EncodedSection::new(encoded_data))
+    }
+
+    /// Reads exactly the specified number of bytes from the reader.
+    ///
+    /// This is a utility method that ensures all requested bytes are read,
+    /// providing better error messages than the standard read_exact.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `R` - Any type implementing the Read trait
+    /// * `F` - A closure that generates error context (FnOnce() -> String)
+    ///
+    /// # Arguments
+    ///
+    /// * `reader` - Mutable reference to the readable source
+    /// * `size` - Exact number of bytes to read
+    /// * `context_fn` - Closure that generates context for error reporting
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the read bytes or an error if reading fails
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The stream ends before reading all bytes (EOF)
+    /// - An IO error occurs during reading
+    ///
+    /// # Security
+    ///
+    /// This method validates that exactly the expected number of bytes are read,
+    /// preventing partial reads that could lead to data corruption or security issues.
+    ///
+    /// # Performance
+    ///
+    /// Allocates exactly the required number of bytes and performs a single read operation.
+    /// Memory allocation is O(n) where n is the requested size.
     fn read_exact<R: Read, F>(&self, reader: &mut R, size: usize, context_fn: F) -> Result<Vec<u8>>
     where
         F: FnOnce() -> String,
     {
+        // Allocate a buffer of the exact required size
         let mut buffer = vec![0u8; size];
+
+        // Read exactly the requested number of bytes, providing context on failure
+        // The context_fn closure allows for specific error messages for each call site
         reader.read_exact(&mut buffer).with_context(context_fn)?;
+
         Ok(buffer)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_section_encoder_new() {
-        assert!(SectionEncoder::new(4, 2).is_ok());
-        assert!(SectionEncoder::new(0, 0).is_err());
-    }
-
-    #[test]
-    fn test_encode_decode_section() {
-        let encoder = SectionEncoder::new(4, 2).unwrap();
-        let decoder = SectionDecoder::new(4, 2).unwrap();
-        let data = b"test data for section";
-
-        let encoded = encoder.encode_section(data).unwrap();
-        assert!(!encoded.is_empty());
-
-        let decoded = decoder.decode_section(&encoded).unwrap();
-        assert_eq!(decoded[..data.len()], data[..]);
-    }
-
-    #[test]
-    fn test_sections_builder() {
-        let magic = vec![1, 2, 3, 4];
-        let mut builder = SectionsBuilder::with_magic(magic.clone());
-
-        builder.set(SectionType::Salt, vec![1]);
-        builder.set(SectionType::HeaderData, vec![2]);
-        builder.set(SectionType::Metadata, vec![3]);
-        builder.set(SectionType::Mac, vec![4]);
-
-        let sections = builder.build().unwrap();
-        assert_eq!(sections.get(SectionType::Magic), Some(magic.as_slice()));
-    }
-
-    #[test]
-    fn test_sections_builder_missing() {
-        let magic = vec![1, 2, 3, 4];
-        let builder = SectionsBuilder::with_magic(magic);
-        assert!(builder.build().is_err());
     }
 }

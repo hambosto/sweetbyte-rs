@@ -37,6 +37,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 sha2 = "0.10.9"
 subtle = "2.6.1"
 walkdir = "2.5.0"
+wincode = { version = "0.2.5", features = ["derive"] }
 
 [profile.release]
 opt-level = 3

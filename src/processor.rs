@@ -36,7 +36,7 @@ use crate::cipher::{Derive, Hash};
 use crate::config::{ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME};
 use crate::file::File;
 use crate::header::Header;
-use crate::header::metadata::FileMetadata;
+use crate::header::metadata::Metadata;
 use crate::types::Processing;
 use crate::worker::Worker;
 
@@ -180,7 +180,7 @@ impl Processor {
         let content_hash = *Hash::new(&file_content).as_bytes();
 
         // Create metadata for the encrypted header
-        let metadata = FileMetadata::new(filename, file_size, content_hash);
+        let metadata = Metadata::new(filename, file_size, content_hash);
 
         // Generate cryptographically random salt for key derivation
         let salt: [u8; ARGON_SALT_LEN] = Derive::generate_salt()?;
