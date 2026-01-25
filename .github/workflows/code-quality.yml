@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          autocrlf: false
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
