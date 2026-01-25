@@ -16,10 +16,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Configure Git line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          autocrlf: false
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly
