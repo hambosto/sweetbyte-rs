@@ -1,7 +1,8 @@
 //! Header module for the SweetByte encrypted archive format.
 //!
-//! This module implements the binary header format that precedes encrypted payload data in SweetByte archives.
-//! The header contains metadata about the encrypted file, cryptographic parameters, and integrity verification data.
+//! This module implements the binary header format that precedes encrypted payload data in
+//! SweetByte archives. The header contains metadata about the encrypted file, cryptographic
+//! parameters, and integrity verification data.
 //!
 //! # Architecture
 //! The header is divided into several logical components:
@@ -9,13 +10,15 @@
 //! - **Parameters**: Cryptographic and encoding configuration
 //! - **Sections**: Binary layout and Reed-Solomon encoding/decoding
 //!
-//! The header follows a specific binary layout with Reed-Solomon error correction for resilience against corruption.
-//! All sections are encoded separately and then combined with length prefixes for proper parsing.
+//! The header follows a specific binary layout with Reed-Solomon error correction for resilience
+//! against corruption. All sections are encoded separately and then combined with length prefixes
+//! for proper parsing.
 //!
 //! # Key Concepts
 //! - **Reed-Solomon Encoding**: Forward error correction allows recovery from corrupted header data
 //! - **MAC Verification**: Message Authentication Code ensures header integrity and authenticity
-//! - **Parameter Validation**: Strict validation prevents configuration mismatches between encode/decode operations
+//! - **Parameter Validation**: Strict validation prevents configuration mismatches between
+//!   encode/decode operations
 //! - **Magic Bytes**: Fixed identifier to validate file format compatibility
 
 use std::io::Read;
@@ -187,7 +190,8 @@ impl Header {
     /// Returns the filename from the metadata.
     ///
     /// # Returns
-    /// A string slice containing the filename (may be truncated if original exceeded MAX_FILENAME_LENGTH)
+    /// A string slice containing the filename (may be truncated if original exceeded
+    /// MAX_FILENAME_LENGTH)
     #[inline]
     #[must_use]
     pub fn file_name(&self) -> &str {
@@ -320,7 +324,8 @@ impl Header {
     /// the header hasn't been tampered with or corrupted.
     ///
     /// # Arguments
-    /// * `key` - Derivation key used for MAC computation (must match the key used during serialization)
+    /// * `key` - Derivation key used for MAC computation (must match the key used during
+    ///   serialization)
     ///
     /// # Returns
     /// Ok(()) if MAC verification succeeds

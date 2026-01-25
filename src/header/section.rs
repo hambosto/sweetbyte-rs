@@ -1,8 +1,8 @@
 //! # Header Section Encoding and Decoding
 //!
-//! This module provides functionality for encoding and decoding header sections in the SweetByte file format.
-//! It implements a robust encoding scheme using Reed-Solomon error correction to ensure data integrity
-//! and resilience against corruption.
+//! This module provides functionality for encoding and decoding header sections in the SweetByte
+//! file format. It implements a robust encoding scheme using Reed-Solomon error correction to
+//! ensure data integrity and resilience against corruption.
 //!
 //! ## Architecture
 //!
@@ -13,7 +13,8 @@
 //!
 //! ## Key Concepts
 //!
-//! - **Reed-Solomon Encoding**: Each data section is encoded with configurable data and parity shards
+//! - **Reed-Solomon Encoding**: Each data section is encoded with configurable data and parity
+//!   shards
 //! - **Length Prefixing**: The size of each encoded section is also encoded for verification
 //! - **Magic Byte Verification**: Ensures file format compatibility during decoding
 //! - **Error Recovery**: Reed-Solomon allows recovery from up to parity_shards of corruption
