@@ -1,8 +1,8 @@
 //! Cryptographic Hashing Module
 //!
-//! This module provides BLAKE3-based cryptographic hashing functionality for data integrity verification.
-//! It implements constant-time comparison operations to prevent timing attacks and supports streaming
-//! hash computation for large files with progress tracking.
+//! This module provides BLAKE3-based cryptographic hashing functionality for data integrity
+//! verification. It implements constant-time comparison operations to prevent timing attacks and
+//! supports streaming hash computation for large files with progress tracking.
 //!
 //! # Architecture
 //! The Hash struct encapsulates a fixed-size BLAKE3 hash (256 bits) and provides methods for:

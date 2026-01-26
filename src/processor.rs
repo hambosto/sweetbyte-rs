@@ -130,7 +130,8 @@ impl Processor {
         let salt = Derive::generate_salt::<ARGON_SALT_LEN>()?;
 
         // Derive encryption key from password using Argon2id with configured parameters
-        // Argon2id is resistant to GPU/ASIC attacks and combines memory hardness with side-channel resistance
+        // Argon2id is resistant to GPU/ASIC attacks and combines memory hardness with side-channel
+        // resistance
         let key = Derive::new(self.password.as_bytes())?.derive_key(&salt, ARGON_MEMORY, ARGON_TIME, ARGON_THREADS)?;
 
         // Create authenticated header containing metadata and Reed-Solomon parity
