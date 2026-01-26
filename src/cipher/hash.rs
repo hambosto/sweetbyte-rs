@@ -65,7 +65,6 @@ impl Hash {
     /// - Leverages Rayon for parallel BLAKE3 computation
     /// - O(n) time complexity where n is the total data size
     /// - Constant memory usage regardless of input size
-    #[must_use]
     pub fn new<R: Read>(mut reader: R, total_size: Option<u64>) -> Result<Self> {
         // Initialize BLAKE3 hasher with default settings
         let mut hasher = Hasher::new();
