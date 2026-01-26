@@ -14,6 +14,8 @@
 //! 5. **I/O Optimization**: Uses buffered writing for maximum throughput
 //!
 //! ## Output Formats
+use anyhow::{Context, Result, bail};
+use flume::Receiver;
 ///
 /// ### Encryption Mode
 /// ```
@@ -30,10 +32,7 @@
 // - **Memory**: Reordering buffer prevents memory bloat
 // - **Latency**: Immediate error detection prevents wasted work
 // - **Scalability**: Handles high-frequency results efficiently
-use std::io::{BufWriter, Write};
-
-use anyhow::{Context, Result, bail};
-use flume::Receiver;
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 
 use crate::types::{Processing, TaskResult};
 use crate::ui::progress::ProgressBar;
@@ -142,31 +141,31 @@ impl Writer {
     /// This method runs on the main thread and provides the natural
     /// termination point for the entire pipeline. The channel closing
     /// signals that both reader and executor have completed their work.
-    pub fn write_all<W: Write>(&mut self, output: W, receiver: Receiver<TaskResult>, progress: Option<&ProgressBar>) -> Result<()> {
+    pub async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, receiver: Receiver<TaskResult>, progress: Option<&ProgressBar>) -> Result<()> {
         // Wrap output in BufWriter for efficient I/O operations
         // This reduces system call overhead and improves write performance
         let mut writer = BufWriter::new(output);
 
         // Process results until the executor closes the channel
         // This loop continues until all tasks have been processed
-        for result in receiver {
+        while let Ok(result) = receiver.recv_async().await {
             // Add the new result to the reordering buffer
             // This may release several ready results in sequence
             let ready = self.buffer.add(result);
 
             // Write any results that are ready in sequential order
             // Batch writing improves I/O performance
-            self.write_batch(&mut writer, &ready, progress)?;
+            self.write_batch(&mut writer, &ready, progress).await?;
         }
 
         // After the channel closes, flush any remaining buffered results
         // This ensures no data is lost at the end of processing
         let remaining = self.buffer.flush();
-        self.write_batch(&mut writer, &remaining, progress)?;
+        self.write_batch(&mut writer, &remaining, progress).await?;
 
         // Ensure all buffered data is physically written to storage
         // This guarantees data integrity before returning success
-        writer.flush().context("failed to flush output")
+        writer.flush().await.context("failed to flush output")
     }
 
     /// Writes a batch of results to output in sequential order
@@ -216,7 +215,7 @@ impl Writer {
     /// - **Error Detection**: Early error detection prevents wasted I/O
     /// - **Progress Updates**: Efficient progress tracking without blocking
     /// - **Memory**: Results are moved, not copied, minimizing overhead
-    fn write_batch<W: Write>(&self, writer: &mut W, results: &[TaskResult], progress: Option<&ProgressBar>) -> Result<()> {
+    async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: Option<&ProgressBar>) -> Result<()> {
         // Process each result in the batch sequentially
         // Results are already in the correct order from the buffer
         for r in results {
@@ -231,12 +230,12 @@ impl Writer {
             if matches!(self.mode, Processing::Encryption) {
                 // Write 4-byte length in big-endian format
                 // big-endian ensures cross-platform compatibility
-                writer.write_all(&(r.data.len() as u32).to_be_bytes()).context("failed to write chunk size")?;
+                writer.write_all(&(r.data.len() as u32).to_be_bytes()).await.context("failed to write chunk size")?;
             }
 
             // Write the actual data (encrypted or decrypted)
             // This is the main payload for each chunk
-            writer.write_all(&r.data).context("failed to write chunk data")?;
+            writer.write_all(&r.data).await.context("failed to write chunk data")?;
 
             // Update progress bar if provided
             // Use original size (r.size) for accurate progress tracking
@@ -256,8 +255,8 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_write_decryption_mode() {
+    #[tokio::test]
+    async fn test_write_decryption_mode() {
         let mut writer = Writer::new(Processing::Decryption);
         let mut output = Vec::new();
         let (tx, rx) = unbounded();
@@ -266,13 +265,13 @@ mod tests {
         tx.send(TaskResult::ok(1, b"world".to_vec(), 5)).unwrap();
         drop(tx);
 
-        writer.write_all(&mut output, rx, None).unwrap();
+        writer.write_all(&mut output, rx, None).await.unwrap();
 
         assert_eq!(output, b"helloworld");
     }
 
-    #[test]
-    fn test_write_encryption_mode() {
+    #[tokio::test]
+    async fn test_write_encryption_mode() {
         let mut writer = Writer::new(Processing::Encryption);
         let mut output = Vec::new();
         let (tx, rx) = unbounded();
@@ -280,15 +279,15 @@ mod tests {
         tx.send(TaskResult::ok(0, b"data".to_vec(), 4)).unwrap();
         drop(tx);
 
-        writer.write_all(&mut output, rx, None).unwrap();
+        writer.write_all(&mut output, rx, None).await.unwrap();
 
         assert_eq!(output.len(), 4 + 4);
         assert_eq!(&output[0..4], &4u32.to_be_bytes());
         assert_eq!(&output[4..], b"data");
     }
 
-    #[test]
-    fn test_write_reordering() {
+    #[tokio::test]
+    async fn test_write_reordering() {
         let mut writer = Writer::new(Processing::Decryption);
         let mut output = Vec::new();
         let (tx, rx) = unbounded();
@@ -297,7 +296,7 @@ mod tests {
         tx.send(TaskResult::ok(0, b"hello".to_vec(), 5)).unwrap();
         drop(tx);
 
-        writer.write_all(&mut output, rx, None).unwrap();
+        writer.write_all(&mut output, rx, None).await.unwrap();
 
         assert_eq!(output, b"helloworld");
     }

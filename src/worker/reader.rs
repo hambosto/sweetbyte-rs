@@ -32,10 +32,9 @@
 // - Automatic backpressure when executor is overwhelmed
 // - Clean shutdown semantics when input is exhausted
 
-use std::io::{BufReader, Read};
-
 use anyhow::{Context, Result, anyhow, ensure};
 use flume::Sender;
+use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::types::{Processing, Task};
 
@@ -139,7 +138,7 @@ impl Reader {
     /// - **Memory Efficiency**: Reuses buffers where possible
     /// - **Backpressure**: Channel operations naturally limit reading speed
     /// - **Thread Safety**: Single-threaded operation with thread-safe channels
-    pub fn read_all<R: Read>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
+    pub async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
         // Wrap input in BufReader for efficient I/O operations
         // This reduces system call overhead and improves read performance
         let mut reader = BufReader::new(input);
@@ -147,8 +146,8 @@ impl Reader {
         // Delegate to appropriate reading strategy based on processing mode
         // Each strategy is optimized for its specific use case
         match self.mode {
-            Processing::Encryption => self.read_fixed_chunks(&mut reader, sender),
-            Processing::Decryption => Self::read_length_prefixed(&mut reader, sender),
+            Processing::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
+            Processing::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
         }
     }
 
@@ -193,7 +192,7 @@ impl Reader {
     /// This method runs in the reader thread and communicates exclusively
     /// through the channel. The bounded channel provides natural backpressure
     /// to prevent overwhelming the executor when processing is slow.
-    fn read_fixed_chunks<R: Read>(&self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
+    async fn read_fixed_chunks<R: AsyncRead + Unpin>(&self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         // Allocate a single reusable buffer for all read operations
         // This minimizes memory allocations and garbage collection overhead
         let mut buffer = vec![0u8; self.chunk_size];
@@ -206,7 +205,7 @@ impl Reader {
         loop {
             // Read data into the buffer
             // This may return less than the full buffer size on the last chunk
-            let bytes_read = reader.read(&mut buffer).context("failed to read chunk")?;
+            let bytes_read = reader.read(&mut buffer).await.context("failed to read chunk")?;
 
             // Check for EOF condition
             if bytes_read == 0 {
@@ -215,7 +214,7 @@ impl Reader {
 
             // Create a task with the actual data read
             // Only copy the relevant portion of the buffer
-            sender.send(Task { data: buffer[..bytes_read].to_vec(), index }).map_err(|_| anyhow!("channel closed"))?;
+            sender.send_async(Task { data: buffer[..bytes_read].to_vec(), index }).await.map_err(|_| anyhow!("channel closed"))?;
 
             // Increment index for the next task
             index += 1;
@@ -277,7 +276,7 @@ impl Reader {
     ///
     /// This static method doesn't require &self since it doesn't use
     /// chunk_size. It operates independently in the reader thread.
-    fn read_length_prefixed<R: Read>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
+    async fn read_length_prefixed<R: AsyncRead + Unpin>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         // Track the sequential index for maintaining order
         let mut index = 0u64;
 
@@ -288,7 +287,7 @@ impl Reader {
 
             // If we can't read the length prefix, we've reached EOF
             // This is the normal termination condition for encrypted files
-            if reader.read_exact(&mut buffer_len).is_err() {
+            if reader.read_exact(&mut buffer_len).await.is_err() {
                 break;
             }
 
@@ -308,10 +307,10 @@ impl Reader {
 
             // Read exactly the expected number of bytes
             // read_exact will fail if the file is truncated or corrupted
-            reader.read_exact(&mut data).context("failed to read chunk data")?;
+            reader.read_exact(&mut data).await.context("failed to read chunk data")?;
 
             // Create task with the chunk data and send to executor
-            sender.send(Task { data, index }).map_err(|_| anyhow!("channel closed"))?;
+            sender.send_async(Task { data, index }).await.map_err(|_| anyhow!("channel closed"))?;
 
             // Increment index for the next task
             index += 1;
@@ -329,8 +328,8 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_read_fixed_chunks() {
+    #[tokio::test]
+    async fn test_read_fixed_chunks() {
         let chunk_size = MIN_CHUNK_SIZE;
         let reader = Reader::new(Processing::Encryption, chunk_size).unwrap();
 
@@ -338,22 +337,22 @@ mod tests {
         let input = Cursor::new(&data);
         let (tx, rx) = unbounded();
 
-        reader.read_all(input, &tx).unwrap();
+        reader.read_all(input, &tx).await.unwrap();
         drop(tx);
 
-        let task1 = rx.recv().unwrap();
+        let task1 = rx.recv_async().await.unwrap();
         assert_eq!(task1.index, 0);
         assert_eq!(task1.data.len(), chunk_size);
 
-        let task2 = rx.recv().unwrap();
+        let task2 = rx.recv_async().await.unwrap();
         assert_eq!(task2.index, 1);
         assert_eq!(task2.data.len(), 100);
 
-        assert!(rx.recv().is_err());
+        assert!(rx.recv_async().await.is_err());
     }
 
-    #[test]
-    fn test_read_length_prefixed() {
+    #[tokio::test]
+    async fn test_read_length_prefixed() {
         let reader = Reader::new(Processing::Decryption, MIN_CHUNK_SIZE).unwrap();
 
         let mut data = Vec::new();
@@ -367,17 +366,17 @@ mod tests {
         let input = Cursor::new(&data);
         let (tx, rx) = unbounded();
 
-        reader.read_all(input, &tx).unwrap();
+        reader.read_all(input, &tx).await.unwrap();
         drop(tx);
 
-        let task1 = rx.recv().unwrap();
+        let task1 = rx.recv_async().await.unwrap();
         assert_eq!(task1.index, 0);
         assert_eq!(task1.data, b"hello");
 
-        let task2 = rx.recv().unwrap();
+        let task2 = rx.recv_async().await.unwrap();
         assert_eq!(task2.index, 1);
         assert_eq!(task2.data, b"world");
 
-        assert!(rx.recv().is_err());
+        assert!(rx.recv_async().await.is_err());
     }
 }

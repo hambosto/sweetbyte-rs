@@ -356,7 +356,9 @@ impl Pipeline {
         // GCM authentication provides additional integrity verification
         let aes_decrypted = match self.cipher.decrypt::<Aes256Gcm>(&chacha_decrypted) {
             Ok(aes_decrypted) => aes_decrypted,
-            Err(e) => return TaskResult::err(task.index, &e.context("aes256gcm decryption failed")),
+            Err(e) => {
+                return TaskResult::err(task.index, &e.context("aes256gcm decryption failed"));
+            }
         };
 
         // Stage 4: Remove block padding applied before encryption

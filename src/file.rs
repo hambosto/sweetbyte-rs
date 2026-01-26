@@ -26,13 +26,13 @@
 //! - Progress feedback integration with UI module
 //! - Clear error messages with context
 
-use std::fs;
-use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use anyhow::{Context, Result, ensure};
 use fast_glob::glob_match;
+use tokio::fs;
+use tokio::io::{BufReader, BufWriter};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
@@ -156,14 +156,14 @@ impl File {
     /// - Insufficient permissions to read metadata
     /// - Path refers to a directory
     /// - Network/filesystem errors
-    pub fn size(&mut self) -> Result<u64> {
+    pub async fn size(&mut self) -> Result<u64> {
         // Return cached size if already computed
         if let Some(size) = self.size {
             return Ok(size);
         }
 
         // Compute and cache the size
-        let meta = fs::metadata(&self.path).with_context(|| format!("failed to get metadata: {}", self.path.display()))?;
+        let meta = fs::metadata(&self.path).await.with_context(|| format!("failed to get metadata: {}", self.path.display()))?;
 
         self.size = Some(meta.len());
 
@@ -191,9 +191,9 @@ impl File {
     ///
     /// The filename extraction is safe against path traversal attacks
     /// as it only returns the final component of the path.
-    pub fn file_metadata(&self) -> Result<(String, u64)> {
+    pub async fn file_metadata(&self) -> Result<(String, u64)> {
         // Get file metadata including size
-        let meta = fs::metadata(&self.path).with_context(|| format!("failed to get metadata: {}", self.path.display()))?;
+        let meta = fs::metadata(&self.path).await.with_context(|| format!("failed to get metadata: {}", self.path.display()))?;
 
         // Extract filename safely (only the final component)
         let filename = self.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "unknown".to_owned());
@@ -469,8 +469,8 @@ impl File {
     ///
     /// The reader should be used for streaming operations to avoid
     /// loading entire files into memory, especially important for large files.
-    pub fn reader(&self) -> Result<BufReader<fs::File>> {
-        let file = fs::File::open(&self.path).with_context(|| format!("failed to open file: {}", self.path.display()))?;
+    pub async fn reader(&self) -> Result<BufReader<fs::File>> {
+        let file = fs::File::open(&self.path).await.with_context(|| format!("failed to open file: {}", self.path.display()))?;
 
         Ok(BufReader::new(file))
     }
@@ -508,10 +508,10 @@ impl File {
     /// - Uses exclusive write access
     /// - Creates file with default permissions (respecting umask)
     /// - Atomic creation where filesystem supports it
-    pub fn writer(&self) -> Result<BufWriter<fs::File>> {
+    pub async fn writer(&self) -> Result<BufWriter<fs::File>> {
         // Ensure parent directory exists
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            fs::create_dir_all(parent).with_context(|| format!("failed to create directory: {}", parent.display()))?;
+            fs::create_dir_all(parent).await.with_context(|| format!("failed to create directory: {}", parent.display()))?;
         }
 
         // Open file for writing with truncation
@@ -520,6 +520,7 @@ impl File {
             .create(true)
             .truncate(true)
             .open(&self.path)
+            .await
             .with_context(|| format!("failed to create file: {}", self.path.display()))?;
 
         Ok(BufWriter::new(file))
@@ -552,10 +553,10 @@ impl File {
     ///
     /// Commonly used in interactive mode after successful encryption
     /// when the user opts to delete the original (unencrypted) file.
-    pub fn delete(&self) -> Result<()> {
+    pub async fn delete(&self) -> Result<()> {
         ensure!(self.exists(), "file not found: {}", self.path.display());
 
-        fs::remove_file(&self.path).with_context(|| format!("failed to delete file: {}", self.path.display()))
+        fs::remove_file(&self.path).await.with_context(|| format!("failed to delete file: {}", self.path.display()))
     }
 
     /// Validate the file according to the specified requirements
@@ -594,13 +595,13 @@ impl File {
     ///
     /// This method caches the file size when computed, avoiding repeated
     /// filesystem operations during validation.
-    pub fn validate(&mut self, must_exist: bool) -> Result<()> {
+    pub async fn validate(&mut self, must_exist: bool) -> Result<()> {
         if must_exist {
             // Input file validation
             ensure!(self.exists(), "file not found: {}", self.path.display());
             ensure!(!self.is_dir(), "path is a directory: {}", self.path.display());
 
-            let size = self.size()?;
+            let size = self.size().await?;
             ensure!(size != 0, "file is empty: {}", self.path.display());
         } else {
             // Output file validation - prevent overwrites

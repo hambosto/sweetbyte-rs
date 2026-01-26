@@ -156,15 +156,15 @@ impl Cli {
     /// - All password operations go through the secure prompt interface
     /// - File operations are validated before execution
     /// - Error messages are sanitized to avoid information leakage
-    pub fn execute(self) -> Result<()> {
+    pub async fn execute(self) -> Result<()> {
         // Initialize the secure password prompt with minimum length validation
         let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
 
         // Route to the appropriate execution handler
         match self.command {
-            Some(Commands::Encrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Encryption, &prompt),
-            Some(Commands::Decrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Decryption, &prompt),
-            Some(Commands::Interactive) | None => Self::run_interactive(&prompt),
+            Some(Commands::Encrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Encryption, &prompt).await,
+            Some(Commands::Decrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Decryption, &prompt).await,
+            Some(Commands::Interactive) | None => Self::run_interactive(&prompt).await,
         }
     }
 
@@ -192,7 +192,7 @@ impl Cli {
     /// - Output path validation prevents accidental overwrites
     /// - Password prompting avoids command-line exposure
     /// - Input file validation ensures file exists and is readable
-    fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
+    async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
         // Create and validate input file
         let mut input = File::new(input_path);
 
@@ -203,7 +203,7 @@ impl Cli {
         let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
 
         // Execute the processing operation with proper error context
-        Self::process(processing, &mut input, &output, &password)?;
+        Self::process(processing, &mut input, &output, &password).await?;
 
         // Display success message to user
         crate::ui::show_success(processing.mode(), output.path());
@@ -243,7 +243,7 @@ impl Cli {
     /// - File discovery excludes system directories and encrypted files as appropriate
     /// - Overwrite confirmation prevents accidental data loss
     /// - Optional secure deletion of source files after successful operations
-    fn run_interactive(prompt: &Prompt) -> Result<()> {
+    async fn run_interactive(prompt: &Prompt) -> Result<()> {
         // Prepare the interactive environment
         crate::ui::clear_screen()?;
         crate::ui::print_banner()?;
@@ -260,12 +260,12 @@ impl Cli {
         ensure!(!files.is_empty(), "no eligible files found");
 
         // Step 3: Display file information and let user select
-        crate::ui::show_file_info(&mut files)?;
+        crate::ui::show_file_info(&mut files).await?;
 
         // Step 4: Get user's file selection and validate it
         let path = prompt.select_file(&files)?;
         let mut input = File::new(path.to_string_lossy().into_owned());
-        input.validate(true)?; // Ensure file exists and is readable
+        input.validate(true).await?; // Ensure file exists and is readable
 
         // Step 5: Determine output path based on processing mode
         let output = File::new(input.output_path(mode).to_string_lossy().into_owned());
@@ -279,7 +279,7 @@ impl Cli {
         let password = Self::get_password(prompt, processing)?;
 
         // Step 8: Execute the encryption/decryption operation
-        Self::process(processing, &mut input, &output, &password)?;
+        Self::process(processing, &mut input, &output, &password).await?;
 
         // Step 9: Display success information
         crate::ui::show_success(mode, output.path());
@@ -290,7 +290,7 @@ impl Cli {
             ProcessorMode::Decrypt => "encrypted",
         };
         if prompt.confirm_file_deletion(input.path(), label)? {
-            input.delete()?;
+            input.delete().await?;
             crate::ui::show_source_deleted(input.path());
         }
 
@@ -321,14 +321,14 @@ impl Cli {
     /// - The type of operation that failed
     /// - The input file path for debugging
     /// - The underlying error from the processor
-    fn process(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
+    async fn process(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
         // Create processor with the user-provided password
         let processor = Processor::new(password);
 
         // Execute the appropriate operation based on processing type
         let result = match processing {
-            Processing::Encryption => processor.encrypt(input, output),
-            Processing::Decryption => processor.decrypt(input, output),
+            Processing::Encryption => processor.encrypt(input, output).await,
+            Processing::Decryption => processor.decrypt(input, output).await,
         };
 
         // Add context to any errors for better debugging

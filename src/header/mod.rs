@@ -21,9 +21,8 @@
 //!   encode/decode operations
 //! - **Magic Bytes**: Fixed identifier to validate file format compatibility
 
-use std::io::Read;
-
 use anyhow::{Context, Result, ensure};
+use tokio::io::AsyncRead;
 
 use crate::cipher::Mac;
 use crate::config::{
@@ -155,7 +154,7 @@ impl Header {
     /// # Security Notes
     /// Validates magic bytes and all cryptographic parameters to prevent
     /// malicious or corrupted headers from being processed.
-    pub fn deserialize<R: Read>(mut reader: R) -> Result<Self> {
+    pub async fn deserialize<R: AsyncRead + Unpin>(mut reader: R) -> Result<Self> {
         // Initialize Reed-Solomon encoder for future serialization operations
         let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS)?;
 
@@ -163,7 +162,7 @@ impl Header {
         let decoder = SectionDecoder::new(DATA_SHARDS, PARITY_SHARDS)?;
 
         // Unpack and decode all header sections with error correction
-        let sections = decoder.unpack(&mut reader)?;
+        let sections = decoder.unpack(&mut reader).await?;
 
         // Deserialize cryptographic parameters from header section
         let params: Parameters = wincode::deserialize(&sections.header_data)?;
@@ -411,8 +410,8 @@ mod tests {
         assert!(header.salt().is_err());
     }
 
-    #[test]
-    fn test_header_roundtrip_serialize_deserialize() {
+    #[tokio::test]
+    async fn test_header_roundtrip_serialize_deserialize() {
         let metadata = valid_metadata();
         let header = Header::new(metadata).unwrap();
 
@@ -421,7 +420,7 @@ mod tests {
 
         let serialized = header.serialize(&salt, &key).unwrap();
 
-        let deserialized_header = Header::deserialize(&serialized[..]).unwrap();
+        let deserialized_header = Header::deserialize(&serialized[..]).await.unwrap();
 
         assert_eq!(deserialized_header.file_name(), "test.txt");
         assert_eq!(deserialized_header.file_size(), 1024);
@@ -431,15 +430,15 @@ mod tests {
         assert_eq!(deserialized_header.salt().unwrap(), &salt);
     }
 
-    #[test]
-    fn test_header_verify_invalid_key() {
+    #[tokio::test]
+    async fn test_header_verify_invalid_key() {
         let metadata = valid_metadata();
         let header = Header::new(metadata).unwrap();
         let salt = [1u8; ARGON_SALT_LEN];
         let key = [2u8; KEY_SIZE];
 
         let serialized = header.serialize(&salt, &key).unwrap();
-        let deserialized_header = Header::deserialize(&serialized[..]).unwrap();
+        let deserialized_header = Header::deserialize(&serialized[..]).await.unwrap();
 
         let wrong_key = [3u8; KEY_SIZE];
         assert!(deserialized_header.verify(&wrong_key).is_err());

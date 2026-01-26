@@ -19,9 +19,8 @@
 //! - Supports constant-time operations to prevent timing attacks
 //! - Uses cryptographically secure random salt generation
 
-use std::io::Write;
-
 use anyhow::{Context, Result, ensure};
+use tokio::io::AsyncWriteExt;
 
 use crate::cipher::{Derive, Hash};
 use crate::config::{ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME};
@@ -111,16 +110,16 @@ impl Processor {
     /// - BLAKE3 hash for content integrity verification
     /// - Authenticated header with Reed-Solomon error correction
     /// - Multi-threaded encryption for performance without security compromise
-    pub fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
+    pub async fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
         // Prevent encryption of empty files (would be meaningless and vulnerable)
-        ensure!(src.size()? != 0, "cannot encrypt a file with zero size");
+        ensure!(src.size().await? != 0, "cannot encrypt a file with zero size");
 
         // Extract original filename and file size for metadata preservation
-        let (filename, file_size) = src.file_metadata()?;
+        let (filename, file_size) = src.file_metadata().await?;
 
         // Compute BLAKE3 hash of source content for integrity verification during decryption
         // This ensures any corruption or tampering is detected
-        let content_hash = Hash::new(src.reader()?, Some(file_size))?;
+        let content_hash = Hash::new(src.reader().await?, Some(file_size)).await?;
 
         // Create metadata object with original file information and content hash
         let metadata = Metadata::new(filename, file_size, *content_hash.as_bytes());
@@ -140,15 +139,15 @@ impl Processor {
         let header_bytes = header.serialize(&salt, &key)?;
 
         // Get fresh reader for source file and writer for destination
-        let reader = src.reader()?;
-        let mut writer = dest.writer()?;
+        let reader = src.reader().await?;
+        let mut writer = dest.writer().await?;
 
         // Write authenticated header to start of encrypted file
-        writer.write_all(&header_bytes)?;
+        writer.write_all(&header_bytes).await?;
 
         // Perform multi-threaded encryption of file content
         // Worker handles chunking, encryption, and parallel processing
-        Worker::new(&key, Processing::Encryption)?.process(reader, writer, file_size)?;
+        Worker::new(&key, Processing::Encryption)?.process(reader, writer, file_size).await?;
 
         // Display encryption summary to user with original file information
         crate::ui::show_header_info(header.file_name(), header.file_size(), header.file_hash());
@@ -190,17 +189,17 @@ impl Processor {
     /// - Content hash verification ensures data integrity
     /// - Constant-time operations prevent timing attacks
     /// - All verification steps must pass for successful decryption
-    pub fn decrypt(&self, src: &File, dest: &File) -> Result<()> {
+    pub async fn decrypt(&self, src: &File, dest: &File) -> Result<()> {
         // Ensure the encrypted source file actually exists
         ensure!(src.exists(), "source file not found: {}", src.path().display());
 
         // Open file handles for reading encrypted data and writing decrypted output
-        let mut reader = src.reader()?;
-        let writer = dest.writer()?;
+        let mut reader = src.reader().await?;
+        let writer = dest.writer().await?;
 
         // Deserialize and authenticate header from the encrypted file
         // This step verifies the file format and extracts metadata
-        let header = Header::deserialize(reader.get_mut())?;
+        let header = Header::deserialize(reader.get_mut()).await?;
 
         // Prevent decryption of files with zero size (invalid format)
         ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
@@ -220,11 +219,12 @@ impl Processor {
 
         // Perform multi-threaded decryption of file content
         // Worker handles chunking, decryption, and parallel processing
-        Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size())?;
+        Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size()).await?;
 
         // Verify decrypted content integrity against original hash
         // This ensures the decrypted data matches what was originally encrypted
-        Hash::new(dest.reader()?, Some(header.file_size()))?
+        Hash::new(dest.reader().await?, Some(header.file_size()))
+            .await?
             .verify(header.file_hash())
             .context("decrypted content integrity check failed")?;
 
@@ -237,14 +237,13 @@ impl Processor {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use tempfile::tempdir;
+    use tokio::fs;
 
     use super::*;
 
-    #[test]
-    fn test_processor_integration() {
+    #[tokio::test]
+    async fn test_processor_integration() {
         let dir = tempdir().unwrap();
         let base_path = dir.path();
 
@@ -254,7 +253,7 @@ mod tests {
         let enc_filename = base_path.join("test_processor_integration.txt.swx");
         let dec_filename = base_path.join("test_processor_integration_dec.txt");
 
-        fs::write(&filename, content).unwrap();
+        fs::write(&filename, content).await.unwrap();
 
         let mut src = File::new(&filename);
         let dest_enc = File::new(&enc_filename);
@@ -263,15 +262,15 @@ mod tests {
         let password = "strong_password";
         let processor = Processor::new(password);
 
-        src.validate(true).unwrap();
-        processor.encrypt(&mut src, &dest_enc).unwrap();
+        src.validate(true).await.unwrap();
+        processor.encrypt(&mut src, &dest_enc).await.unwrap();
 
         assert!(dest_enc.exists());
 
-        processor.decrypt(&dest_enc, &dest_dec).unwrap();
+        processor.decrypt(&dest_enc, &dest_dec).await.unwrap();
 
         assert!(dest_dec.exists());
-        let decrypted_content = fs::read(&dec_filename).unwrap();
+        let decrypted_content = fs::read(&dec_filename).await.unwrap();
         assert_eq!(decrypted_content, content);
     }
 }

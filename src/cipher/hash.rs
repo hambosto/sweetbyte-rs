@@ -16,11 +16,10 @@
 //! - Processes data in 256KB chunks for efficient memory usage
 //! - Supports parallel hashing via Rayon for improved performance
 
-use std::io::Read;
-
 use anyhow::{Context, Result, ensure};
 use blake3::Hasher;
 use subtle::ConstantTimeEq;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::config::HASH_SIZE;
 use crate::ui::progress::ProgressBar;
@@ -65,7 +64,7 @@ impl Hash {
     /// - Leverages Rayon for parallel BLAKE3 computation
     /// - O(n) time complexity where n is the total data size
     /// - Constant memory usage regardless of input size
-    pub fn new<R: Read>(mut reader: R, total_size: Option<u64>) -> Result<Self> {
+    pub async fn new<R: AsyncRead + Unpin>(mut reader: R, total_size: Option<u64>) -> Result<Self> {
         // Initialize BLAKE3 hasher with default settings
         let mut hasher = Hasher::new();
 
@@ -79,7 +78,7 @@ impl Hash {
         // Stream processing loop - read data in chunks until EOF
         loop {
             // Read up to buffer size from the data source
-            let bytes_read = reader.read(&mut buffer[..]).context("failed to read data for hashing")?;
+            let bytes_read = reader.read(&mut buffer[..]).await.context("failed to read data for hashing")?;
 
             // Check for end of file condition
             if bytes_read == 0 {
@@ -151,40 +150,40 @@ impl Hash {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_hash_new() {
+    #[tokio::test]
+    async fn test_hash_new() {
         let data = b"test data";
-        let hash = Hash::new(&data[..], None).unwrap();
+        let hash = Hash::new(&data[..], None).await.unwrap();
         assert_eq!(hash.as_bytes().len(), HASH_SIZE);
     }
 
-    #[test]
-    fn test_hash_deterministic() {
+    #[tokio::test]
+    async fn test_hash_deterministic() {
         let data = b"same data";
-        let hash1 = Hash::new(&data[..], None).unwrap();
-        let hash2 = Hash::new(&data[..], None).unwrap();
+        let hash1 = Hash::new(&data[..], None).await.unwrap();
+        let hash2 = Hash::new(&data[..], None).await.unwrap();
         assert_eq!(hash1.as_bytes(), hash2.as_bytes());
     }
 
-    #[test]
-    fn test_hash_verify_valid() {
+    #[tokio::test]
+    async fn test_hash_verify_valid() {
         let data = b"verify me";
-        let hash = Hash::new(&data[..], None).unwrap();
+        let hash = Hash::new(&data[..], None).await.unwrap();
         assert!(hash.verify(hash.as_bytes()).is_ok());
     }
 
-    #[test]
-    fn test_hash_verify_invalid() {
+    #[tokio::test]
+    async fn test_hash_verify_invalid() {
         let data = b"verify me";
-        let hash = Hash::new(&data[..], None).unwrap();
+        let hash = Hash::new(&data[..], None).await.unwrap();
         let mut corrupted = *hash.as_bytes();
         corrupted[0] ^= 0x01;
         assert!(hash.verify(&corrupted).is_err());
     }
 
-    #[test]
-    fn test_hash_empty() {
-        let hash = Hash::new(&[][..], None).unwrap();
+    #[tokio::test]
+    async fn test_hash_empty() {
+        let hash = Hash::new(&[][..], None).await.unwrap();
         assert!(hash.verify(hash.as_bytes()).is_ok());
     }
 }

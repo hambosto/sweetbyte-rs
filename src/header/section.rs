@@ -19,10 +19,9 @@
 //! - **Magic Byte Verification**: Ensures file format compatibility during decoding
 //! - **Error Recovery**: Reed-Solomon allows recovery from up to parity_shards of corruption
 
-use std::io::Read;
-
 use anyhow::{Context, Result, anyhow, ensure};
 use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use wincode::{SchemaRead, SchemaWrite};
 
 use crate::config::MAGIC_BYTES;
@@ -394,19 +393,19 @@ impl SectionDecoder {
     ///
     /// Performs 10 Reed-Solomon decodings and reads the entire header into memory.
     /// Memory usage is O(n) where n is the total header size.
-    pub fn unpack<R: Read>(&self, reader: &mut R) -> Result<DecodedSections> {
+    pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<DecodedSections> {
         // 1. Read the fixed-size LengthsHeader from the beginning of the stream
         let mut buffer = [0u8; LengthsHeader::SIZE];
-        reader.read_exact(&mut buffer).context("failed to read lengths header")?;
+        reader.read_exact(&mut buffer).await.context("failed to read lengths header")?;
         let lengths_header: LengthsHeader = wincode::deserialize(&buffer).context("failed to deserialize lengths header")?;
 
         // 2. Read and decode the Reed-Solomon encoded length sections
         // These lengths tell us how many bytes to read for each data section
-        let section_lengths = self.read_and_decode_lengths(reader, &lengths_header)?;
+        let section_lengths = self.read_and_decode_lengths(reader, &lengths_header).await?;
 
         // 3. Read and decode the actual data sections using the decoded lengths
         // This step also validates magic bytes to ensure format compatibility
-        let sections = self.read_and_decode_sections(reader, &section_lengths)?;
+        let sections = self.read_and_decode_sections(reader, &section_lengths).await?;
 
         Ok(sections)
     }
@@ -504,7 +503,7 @@ impl SectionDecoder {
     ///
     /// Reads exactly the number of bytes specified in the LengthsHeader and
     /// performs 5 Reed-Solomon decodings, one for each section length.
-    fn read_and_decode_lengths<R: Read>(&self, reader: &mut R, header: &LengthsHeader) -> Result<[u32; 5]> {
+    async fn read_and_decode_lengths<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &LengthsHeader) -> Result<[u32; 5]> {
         // Get the array of encoded length section sizes
         let lengths_array = header.as_array();
 
@@ -515,7 +514,7 @@ impl SectionDecoder {
         // Using enumerate to avoid the clippy warning about needless range loops
         for (i, &size) in lengths_array.iter().enumerate() {
             // Read the exact number of bytes for this encoded length section
-            let encoded = self.read_exact(reader, size as usize, || format!("failed to read encoded length section {}", i))?;
+            let encoded = self.read_exact(reader, size as usize, || format!("failed to read encoded length section {}", i)).await?;
 
             // Decode the Reed-Solomon encoded length back to u32
             let decoded_length = self.decode_length(&EncodedSection::new(encoded))?;
@@ -566,9 +565,9 @@ impl SectionDecoder {
     ///
     /// Performs 5 Reed-Solomon decodings and reads all header data into memory.
     /// Total memory usage is proportional to the sum of all section sizes.
-    fn read_and_decode_sections<R: Read>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<DecodedSections> {
+    async fn read_and_decode_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<DecodedSections> {
         // Read and decode the magic bytes section first
-        let magic = self.read_decoded_section(reader, section_lengths[0], "magic")?;
+        let magic = self.read_decoded_section(reader, section_lengths[0], "magic").await?;
 
         // Verify magic bytes match expected format to ensure compatibility
         // This is a critical security check to prevent processing incompatible files
@@ -578,13 +577,13 @@ impl SectionDecoder {
         Ok(DecodedSections {
             magic,
             // Salt section: contains cryptographic salt for key derivation
-            salt: self.read_decoded_section(reader, section_lengths[1], "salt")?,
+            salt: self.read_decoded_section(reader, section_lengths[1], "salt").await?,
             // Header data section: contains encrypted encryption parameters
-            header_data: self.read_decoded_section(reader, section_lengths[2], "header data")?,
+            header_data: self.read_decoded_section(reader, section_lengths[2], "header data").await?,
             // Metadata section: optional user-defined data
-            metadata: self.read_decoded_section(reader, section_lengths[3], "metadata")?,
+            metadata: self.read_decoded_section(reader, section_lengths[3], "metadata").await?,
             // MAC section: message authentication code for integrity verification
-            mac: self.read_decoded_section(reader, section_lengths[4], "mac")?,
+            mac: self.read_decoded_section(reader, section_lengths[4], "mac").await?,
         })
     }
 
@@ -617,9 +616,9 @@ impl SectionDecoder {
     ///
     /// The size parameter must be trusted and validated through the LengthsHeader
     /// to prevent reading arbitrary amounts of data from the stream.
-    fn read_decoded_section<R: Read>(&self, reader: &mut R, size: u32, name: &str) -> Result<Vec<u8>> {
+    async fn read_decoded_section<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, name: &str) -> Result<Vec<u8>> {
         // Read the exact number of bytes specified for this section
-        let encoded_data = self.read_exact(reader, size as usize, || format!("failed to read encoded {}", name))?;
+        let encoded_data = self.read_exact(reader, size as usize, || format!("failed to read encoded {}", name)).await?;
 
         // Immediately decode the Reed-Solomon encoded data
         self.decode_section(&EncodedSection::new(encoded_data))
@@ -660,7 +659,7 @@ impl SectionDecoder {
     ///
     /// Allocates exactly the required number of bytes and performs a single read operation.
     /// Memory allocation is O(n) where n is the requested size.
-    fn read_exact<R: Read, F>(&self, reader: &mut R, size: usize, context_fn: F) -> Result<Vec<u8>>
+    async fn read_exact<R: AsyncRead + Unpin, F>(&self, reader: &mut R, size: usize, context_fn: F) -> Result<Vec<u8>>
     where
         F: FnOnce() -> String,
     {
@@ -669,7 +668,7 @@ impl SectionDecoder {
 
         // Read exactly the requested number of bytes, providing context on failure
         // The context_fn closure allows for specific error messages for each call site
-        reader.read_exact(&mut buffer).with_context(context_fn)?;
+        reader.read_exact(&mut buffer).await.with_context(context_fn)?;
 
         Ok(buffer)
     }

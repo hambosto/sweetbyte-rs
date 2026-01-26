@@ -16,32 +16,44 @@
       nixpkgs,
       ...
     }:
-    flake-utils.lib.eachDefaultSystem (system: {
-      packages.default =
-        let
-          toolchain = fenix.packages.${system}.minimal.toolchain;
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        (pkgs.makeRustPlatform {
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        toolchain = fenix.packages.${system}.minimal.toolchain;
+        devToolchain = fenix.packages.${system}.complete.toolchain;
+        rustPlatform = pkgs.makeRustPlatform {
           cargo = toolchain;
           rustc = toolchain;
-        }).buildRustPackage
-          {
-            pname = "sweetbyte-rs";
-            version = self.shortRev or self.dirtyShortRev or "unknown";
+        };
+      in
+      {
+        packages.default = rustPlatform.buildRustPackage {
+          pname = "sweetbyte-rs";
+          version = self.shortRev or self.dirtyShortRev or "unknown";
 
-            src = ./.;
+          src = ./.;
 
-            cargoLock.lockFile = ./Cargo.lock;
+          cargoLock.lockFile = ./Cargo.lock;
 
-            doCheck = true;
+          doCheck = true;
 
-            meta = {
-              description = "A very small, very simple, yet very secure encryption tool written in rust.";
-              homepage = "https://github.com/hambosto/sweetbyte-rs";
-              license = pkgs.lib.licenses.gpl3Plus;
-              mainProgram = "sweetbyte-rs";
-            };
+          meta = {
+            description = "A very small, very simple, yet very secure encryption tool written in rust.";
+            homepage = "https://github.com/hambosto/sweetbyte-rs";
+            license = pkgs.lib.licenses.gpl3Plus;
+            mainProgram = "sweetbyte-rs";
           };
-    });
+        };
+
+        devShells.default = pkgs.mkShell {
+          packages = [ devToolchain ];
+
+          shellHook = ''
+            echo "🦀 Rust development environment for sweetbyte-rs"
+            echo "Available tools: cargo, rust-analyzer, clippy, rustfmt, cargo-watch, cargo-edit"
+          '';
+        };
+      }
+    );
 }

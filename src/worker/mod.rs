@@ -28,11 +28,11 @@
 //! - **Latency**: Minimal copying and efficient thread synchronization
 //! - **Scalability**: Automatically adapts to available CPU cores
 
-use std::io::{Read, Write};
 use std::thread;
 
 use anyhow::{Context, Result, anyhow};
 use flume::bounded;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::config::{ARGON_KEY_LEN, CHUNK_SIZE};
 use crate::types::Processing;
@@ -56,10 +56,10 @@ pub mod writer;
 ///
 /// ## Threading Model
 ///
-/// The worker creates three main threads:
-/// - **Reader thread**: Continuously reads input and produces tasks
-/// - **Executor thread**: Manages the thread pool for task processing
-/// - **Main thread**: Handles writing and progress tracking
+/// The worker creates three main tasks:
+/// - **Reader task**: Continuously reads input and produces tasks (async)
+/// - **Executor task**: Manages the thread pool for task processing (blocking)
+/// - **Writer task**: Handles writing and progress tracking (async, runs on caller)
 ///
 /// This separation allows I/O operations to run concurrently with CPU-intensive
 /// cryptographic operations, maximizing system utilization.
@@ -136,10 +136,10 @@ impl Worker {
     /// All I/O objects are moved into their respective threads, ensuring
     /// no data races. Communication happens exclusively through thread-safe
     /// bounded channels with proper error propagation.
-    pub fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
+    pub async fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
     where
-        R: Read + Send + 'static,
-        W: Write,
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Unpin + Send,
     {
         // Initialize progress tracking with total file size
         let progress = ProgressBar::new(total_size, self.mode.label())?;
@@ -163,25 +163,26 @@ impl Worker {
         let reader = Reader::new(self.mode, CHUNK_SIZE)?;
         let mut writer = Writer::new(self.mode);
 
-        // Spawn reader thread in the background
-        // This thread reads input data and produces tasks for the executor
-        let reader_handle = thread::spawn(move || reader.read_all(input, &task_sender));
+        // Spawn reader task in the background
+        // This task reads input data and produces tasks for the executor
+        let reader_handle = tokio::spawn(async move { reader.read_all(input, &task_sender).await });
 
-        // Create executor and spawn processing thread
+        // Create executor and spawn processing task
         // Executor manages the thread pool for cryptographic operations
+        // We use spawn_blocking because this is CPU-intensive work
         let executor = Executor::new(self.pipeline);
-        let executor_handle = thread::spawn(move || {
+        let executor_handle = tokio::task::spawn_blocking(move || {
             executor.process(&task_receiver, &result_sender);
         });
 
-        // Run writer on main thread while background threads process
+        // Run writer on current task while background tasks process
         // This allows progress tracking and immediate error detection
-        let write_result = writer.write_all(output, result_receiver, Some(&progress));
+        let write_result = writer.write_all(output, result_receiver, Some(&progress)).await;
 
         // Wait for background threads to complete and collect results
         // This ensures all resources are properly cleaned up
-        let read_result = reader_handle.join().map_err(|_| anyhow!("reader thread panicked"))?;
-        executor_handle.join().map_err(|_| anyhow!("executor thread panicked"))?;
+        let read_result = reader_handle.await.map_err(|_| anyhow!("reader task panicked"))?;
+        executor_handle.await.map_err(|_| anyhow!("executor task panicked"))?;
 
         // Finalize progress tracking
         progress.finish();
@@ -207,8 +208,8 @@ mod tests {
         assert!(worker.is_ok());
     }
 
-    #[test]
-    fn test_worker_roundtrip() {
+    #[tokio::test]
+    async fn test_worker_roundtrip() {
         let key = [0u8; ARGON_KEY_LEN];
 
         let enc_worker = Worker::new(&key, Processing::Encryption).unwrap();
@@ -216,14 +217,14 @@ mod tests {
         let input_len = data.len() as u64;
         let mut encrypted = Vec::new();
 
-        enc_worker.process(Cursor::new(data.clone()), &mut encrypted, input_len).unwrap();
+        enc_worker.process(Cursor::new(data.clone()), &mut encrypted, input_len).await.unwrap();
         assert!(!encrypted.is_empty());
         assert_ne!(encrypted, data);
 
         let dec_worker = Worker::new(&key, Processing::Decryption).unwrap();
         let mut decrypted = Vec::new();
 
-        dec_worker.process(Cursor::new(encrypted), &mut decrypted, input_len).unwrap();
+        dec_worker.process(Cursor::new(encrypted), &mut decrypted, input_len).await.unwrap();
 
         assert_eq!(decrypted, data);
     }

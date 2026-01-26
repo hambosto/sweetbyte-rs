@@ -118,7 +118,8 @@ use cli::Cli;
 /// - `0`: Successful execution
 /// - `1`: Error occurred (details printed to stderr)
 /// - `2`: Invalid command-line arguments (handled by clap)
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Initialize CLI and execute the requested operation
-    Cli::init().execute()
+    Cli::init().execute().await
 }

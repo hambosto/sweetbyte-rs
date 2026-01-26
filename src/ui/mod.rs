@@ -71,7 +71,7 @@ pub mod prompt;
 /// - Truncates long filenames to maintain table readability
 /// - Provides numbered selection for easy user reference
 /// - Uses dynamic content arrangement to handle varying terminal widths
-pub fn show_file_info(files: &mut [File]) -> Result<()> {
+pub async fn show_file_info(files: &mut [File]) -> Result<()> {
     // Handle empty file list with appropriate user feedback
     if files.is_empty() {
         println!("{}", console::style("No files found").yellow().bright());
@@ -103,7 +103,7 @@ pub fn show_file_info(files: &mut [File]) -> Result<()> {
         let (status_text, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
 
         // Get file size and format for human-readable display
-        let size = file.size()?;
+        let size = file.size().await?;
 
         // Add row with color-coded information
         table.add_row(vec![
