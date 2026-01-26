@@ -1,83 +1,57 @@
-//! Core Type Definitions and Error Handling
+//! Core type definitions and data structures.
 //!
-//! This module contains the fundamental types used throughout the SweetByte
-//! application. It defines enums for processing modes, structures for parallel
-//! task management, and provides conversion between related types.
+//! This module defines the fundamental types used throughout the application to represent:
+//! - Processing modes (Encrypt vs Decrypt)
+//! - Unit of work (Tasks)
+//! - Results of processing (TaskResult)
 //!
-//! ## Design Principles
-//!
-//! - **Type Safety**: Rust's type system prevents invalid states
-//! - **Zero-Cost Abstractions**: Compile-time guarantees without runtime overhead
-//! - **Clarity**: Type names clearly express their purpose
-//! - **Interoperability**: Types work well together across the codebase
-//!
-//! ## Error Handling Strategy
-//!
-//! The module uses Result types for error handling while maintaining
-//! type safety for success cases. Error information is preserved and
-//! propagated through the call stack for debugging and user feedback.
+//! These types serve as the common language between the CLI, the worker pipeline,
+//! and the UI components.
 
 use std::fmt::{Display, Formatter, Result};
 
-/// Processing mode for file operations
+/// Represents the high-level operation mode of the application.
 ///
-/// This enum represents the high-level operation mode the user wants
-/// to perform. It's used primarily for UI interactions and file filtering
-/// logic. The distinction from `Processing` is that this represents the
-/// user's intent rather than the in-progress operation.
+/// This enum is used to distinguish between the two primary functions of SweetByte:
+/// encryption and decryption.
 ///
-/// ## Usage Context
+/// # Examples
 ///
-/// - **File Discovery**: Determines which files are eligible
-/// - **UI Selection**: Presented to users for mode choice
-/// - **Path Generation**: Determines output filename transformations
-/// - **Validation Logic**: Applies different rules based on mode
+/// ```
+/// use sweetbyte_rs::types::ProcessorMode;
 ///
-/// ## Security Implications
-///
-/// The mode determines which files are shown to users, preventing
-/// accidental encryption of already-encrypted files or decryption
-/// of unencrypted files that could waste time or cause confusion.
+/// let mode = ProcessorMode::Encrypt;
+/// assert_eq!(mode.label(), "Encrypt");
+/// ```
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum ProcessorMode {
-    /// Encrypt unencrypted files
-    ///
-    /// This mode is used when users want to encrypt plaintext files.
-    /// File discovery will show only files that don't have the .swx
-    /// extension and aren't excluded by other rules.
+    /// Mode for encrypting files.
     Encrypt,
-    /// Decrypt encrypted files
-    ///
-    /// This mode is used when users want to decrypt SweetByte files.
-    /// File discovery will show only files with the .swx extension
-    /// that can be parsed as valid encrypted files.
+
+    /// Mode for decrypting files.
     Decrypt,
 }
 
 impl ProcessorMode {
-    /// All available processor modes for iteration
+    /// A slice containing all available processor modes.
     ///
-    /// This constant provides an array of all modes for use in UI
-    /// components that need to enumerate all available options.
-    /// It ensures that all modes are consistently presented to users.
+    /// Useful for iteration or validation logic that needs to check against
+    /// all possible states.
     pub const ALL: &'static [Self] = &[Self::Encrypt, Self::Decrypt];
 
-    /// Get a human-readable label for the mode
+    /// Returns a human-readable string label for the mode.
     ///
-    /// This method provides a user-friendly label for displaying
-    /// the mode in UI components. The labels are concise and
-    /// follow standard terminology for encryption software.
+    /// # Examples
     ///
-    /// # Returns
+    /// ```
+    /// use sweetbyte_rs::types::ProcessorMode;
     ///
-    /// A string slice suitable for display to users
-    ///
-    /// # Localization
-    ///
-    /// Currently returns English labels. Future versions could
-    /// integrate with a localization system for international support.
+    /// assert_eq!(ProcessorMode::Encrypt.label(), "Encrypt");
+    /// ```
     #[inline]
     pub fn label(self) -> &'static str {
+        // Match on self to return the corresponding static string literal.
+        // This is a simple mapping from enum variant to display text.
         match self {
             Self::Encrypt => "Encrypt",
             Self::Decrypt => "Decrypt",
@@ -86,100 +60,61 @@ impl ProcessorMode {
 }
 
 impl Display for ProcessorMode {
-    /// Format the ProcessorMode for display
-    ///
-    /// This implementation provides a clean string representation
-    /// suitable for user interfaces, logging, and debugging.
-    /// It delegates to the label() method for consistency.
-    ///
-    /// # Arguments
-    ///
-    /// * `f` - Formatter to write the representation to
-    ///
-    /// # Returns
-    ///
-    /// Result indicating successful formatting
+    /// Formats the mode using its label.
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        // Delegate to the label() method to get the string representation.
+        // This ensures consistency between explicit label access and Display formatting.
         f.write_str(self.label())
     }
 }
 
-/// Active processing operation state
+/// Represents the continuous state of processing.
 ///
-/// This enum represents the current state of a processing operation.
-/// Unlike `ProcessorMode` which represents user intent, this enum
-/// represents an operation that is actively in progress.
-///
-/// ## Usage Context
-///
-/// - **Worker Threads**: Indicates the operation being performed
-/// - **Progress Display**: Shows current operation to users
-/// - **Configuration**: Determines algorithm choices and parameters
-/// - **Error Context**: Provides context for error messages
-///
-/// ## Distinction from ProcessorMode
-///
-/// `ProcessorMode` = What the user wants to do
-/// `Processing` = What the system is currently doing
-///
-/// This separation allows for clearer code intent and prevents
-/// confusion between user intent and system state.
+/// Unlike [`ProcessorMode`] which represents the *intent* or configuration,
+/// `Processing` represents the *active action* (e.g., "Encrypting..." vs "Encrypt").
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Processing {
-    /// Currently encrypting data
-    ///
-    /// This state indicates that the system is actively encrypting
-    /// file content. It configures algorithms for encryption mode
-    /// and displays appropriate progress messages to users.
+    /// State when encryption is in progress.
     Encryption,
-    /// Currently decrypting data
-    ///
-    /// This state indicates that the system is actively decrypting
-    /// file content. It configures algorithms for decryption mode
-    /// and displays appropriate progress messages to users.
+
+    /// State when decryption is in progress.
     Decryption,
 }
 
 impl Processing {
-    /// Get a human-readable label for the current operation
+    /// Returns a human-readable string description of the active process.
     ///
-    /// This method provides a status message suitable for display
-    /// during active processing. The labels include ellipsis to
-    /// indicate ongoing operations.
+    /// # Examples
     ///
-    /// # Returns
+    /// ```
+    /// use sweetbyte_rs::types::Processing;
     ///
-    /// A string slice representing the current operation status
-    ///
-    /// # UI Context
-    ///
-    /// These labels are designed for progress displays and status
-    /// bars, providing clear feedback about what operation is in progress.
+    /// assert_eq!(Processing::Encryption.label(), "Encrypting...");
+    /// ```
     #[inline]
     pub fn label(self) -> &'static str {
+        // Map the processing state to a progressive verb string.
+        // Used primarily for UI feedback during long-running operations.
         match self {
             Self::Encryption => "Encrypting...",
             Self::Decryption => "Decrypting...",
         }
     }
 
-    /// Convert processing state to corresponding processor mode
+    /// Converts the processing state back to its corresponding [`ProcessorMode`].
     ///
-    /// This method bridges the gap between the active processing
-    /// state and the user intent mode, allowing conversions between
-    /// the two related but distinct enum types.
+    /// # Examples
     ///
-    /// # Returns
+    /// ```
+    /// use sweetbyte_rs::types::{Processing, ProcessorMode};
     ///
-    /// The corresponding ProcessorMode for this Processing state
-    ///
-    /// # Usage
-    ///
-    /// Useful for determining output file paths, applying the
-    /// correct validation logic, and other mode-dependent operations.
+    /// assert_eq!(Processing::Encryption.mode(), ProcessorMode::Encrypt);
+    /// ```
     #[inline]
     pub fn mode(self) -> ProcessorMode {
+        // Map the active processing state back to the configuration mode.
+        // This is useful when the UI needs to switch context based on current activity.
         match self {
             Self::Encryption => ProcessorMode::Encrypt,
             Self::Decryption => ProcessorMode::Decrypt,
@@ -188,167 +123,87 @@ impl Processing {
 }
 
 impl Display for Processing {
-    /// Format the Processing state for display
-    ///
-    /// This implementation provides a user-friendly string
-    /// representation suitable for progress displays and status
-    /// messages during active operations.
-    ///
-    /// # Arguments
-    ///
-    /// * `f` - Formatter to write the representation to
-    ///
-    /// # Returns
-    ///
-    /// Result indicating successful formatting
+    /// Formats the processing state using its label.
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        // Write the progressive verb label to the formatter.
+        // This allows using the enum directly in format! macros.
         f.write_str(self.label())
     }
 }
 
-/// Task for parallel processing workers
+/// A unit of work to be processed by the worker pipeline.
 ///
-/// This struct represents a unit of work that can be processed by
-/// worker threads in the parallel processing system. Each task
-/// contains a chunk of data and its position within the overall
-/// file for proper reconstruction.
-///
-/// ## Thread Safety
-///
-/// Task instances are thread-safe for sending between threads
-/// as they contain owned data rather than references.
-///
-/// ## Memory Management
-///
-/// The data field contains owned `Vec<u8>` data, meaning each
-/// task has its own copy of the chunk to process. This design
-/// prioritizes thread safety over memory efficiency but provides
-/// cleaner code and better isolation between worker threads.
-///
-/// ## Index Semantics
-///
-/// The index represents the position of this chunk within the
-/// overall file processing sequence, enabling proper reconstruction
-/// of the final output in the correct order.
+/// Tasks are created by the reader, processed by the executor, and finalized
+/// by the writer. Each task represents a chunk of file data.
 pub struct Task {
-    /// The data chunk to be processed
-    ///
-    /// This contains a portion of the file data that will be
-    /// encrypted or decrypted by a worker thread. The size of each
-    /// chunk is determined by the CHUNK_SIZE configuration constant.
+    /// The raw data payload to be processed.
     pub data: Vec<u8>,
-    /// Position index of this chunk in the overall sequence
-    ///
-    /// This zero-based index represents where this chunk belongs
-    /// in the final reconstructed output. It's essential for maintaining
-    /// data order during parallel processing.
+
+    /// The sequential index of this chunk (0-based).
+    /// Used to maintain order during parallel processing and reassembly.
     pub index: u64,
 }
 
-/// Result of processing a task by a worker thread
+/// The result of processing a [`Task`].
 ///
-/// This struct represents the outcome of processing a task, containing
-/// either successfully processed data or an error that occurred during
-/// processing. It enables the main thread to collect and combine results
-/// from parallel worker operations.
-///
-/// ## Error Handling
-///
-/// The error field allows graceful handling of processing failures
-/// without crashing the entire operation. Individual chunk failures
-/// can be logged while attempting to process remaining chunks.
-///
-/// ## Thread Safety
-///
-/// TaskResult instances are thread-safe for sending between threads
-/// as they contain only owned data and no references.
-///
-/// ## Memory Efficiency
-///
-/// Uses `Box<str>` for error messages to reduce memory overhead
-/// compared to String while still providing owned data.
+/// Contains the processed data (encrypted or decrypted) or an error if the
+/// operation failed.
 pub struct TaskResult {
-    /// The processed data (empty if error occurred)
-    ///
-    /// Contains the encrypted or decrypted result of processing
-    /// the task data. If processing failed, this will be empty
-    /// to avoid returning partially processed data.
+    /// The processed data payload.
+    /// Empty if an error occurred.
     pub data: Vec<u8>,
-    /// Error message if processing failed (None if successful)
-    ///
-    /// Contains a description of what went wrong during processing.
-    /// Using `Box<str>` provides memory efficiency while maintaining
-    /// ownership of the error message.
+
+    /// The error message if processing failed, or `None` on success.
     pub error: Option<Box<str>>,
-    /// Original index of the task (preserved for ordering)
-    ///
-    /// This matches the index from the original Task and is used
-    /// to ensure results are combined in the correct order even
-    /// when parallel processing completes out of order.
+
+    /// The sequential index of the chunk, corresponding to the input [`Task`].
     pub index: u64,
-    /// Size of the original data (0 if error occurred)
-    ///
-    /// Represents the size of the input data that was processed.
-    /// This can be useful for progress tracking and debugging.
+
+    /// The size of the useful data in bytes.
     pub size: usize,
 }
 
 impl TaskResult {
-    /// Create a successful TaskResult
+    /// Creates a successful task result.
     ///
-    /// This constructor creates a TaskResult representing successful
-    /// processing of a task. It contains the processed data and
-    /// metadata about the operation.
+    /// # Examples
     ///
-    /// # Arguments
+    /// ```
+    /// use sweetbyte_rs::types::TaskResult;
     ///
-    /// * `index` - Original task index for ordering
-    /// * `data` - Successfully processed data
-    /// * `size` - Size of the processed data
-    ///
-    /// # Returns
-    ///
-    /// A TaskResult with error=None indicating success
-    ///
-    /// # Usage
-    ///
-    /// Used by worker threads when processing completes successfully.
-    /// The result can be easily combined with other successful results.
+    /// let res = TaskResult::ok(0, vec![1, 2, 3], 3);
+    /// assert!(res.error.is_none());
+    /// ```
     #[inline]
     pub fn ok(index: u64, data: Vec<u8>, size: usize) -> Self {
+        // Construct a TaskResult representing success.
+        // - data: The processed byte vector.
+        // - error: None, indicating no failure.
+        // - index: To allow reordering at the writer stage.
+        // - size: The actual length of valid data.
         Self { data, error: None, index, size }
     }
 
-    /// Create a failed TaskResult
+    /// Creates a failed task result from an error.
     ///
-    /// This constructor creates a TaskResult representing a processing
-    /// failure. It captures the error information while ensuring no
-    /// partially processed data is returned.
+    /// # Examples
     ///
-    /// # Arguments
+    /// ```
+    /// use sweetbyte_rs::types::TaskResult;
+    /// use anyhow::anyhow;
     ///
-    /// * `index` - Original task index for ordering
-    /// * `error` - The error that occurred during processing
-    ///
-    /// # Returns
-    ///
-    /// A TaskResult with error=Some(description) and empty data
-    ///
-    /// # Error Handling
-    ///
-    /// The error is converted to a boxed string to reduce memory
-    /// overhead while preserving the error message for logging and
-    /// user feedback. The data field is empty to prevent returning
-    /// partially processed or corrupted data.
-    ///
-    /// # Usage
-    ///
-    /// Used by worker threads when processing fails for any reason,
-    /// including cryptographic errors, I/O failures, or validation
-    /// problems. This allows the main thread to handle errors gracefully.
+    /// let err = anyhow!("something went wrong");
+    /// let res = TaskResult::err(0, &err);
+    /// assert!(res.error.is_some());
+    /// ```
     #[inline]
     pub fn err(index: u64, error: &anyhow::Error) -> Self {
+        // Construct a TaskResult representing failure.
+        // - data: Empty vector, as we have no valid output.
+        // - error: The error string boxed for storage.
+        // - index: Preserved so we know which chunk failed.
+        // - size: 0, as there is no valid data.
         Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
     }
 }
@@ -361,26 +216,40 @@ mod tests {
 
     #[test]
     fn test_processor_mode_label() {
+        // Verify that the label method returns the expected string for Encrypt mode.
         assert_eq!(ProcessorMode::Encrypt.label(), "Encrypt");
+
+        // Verify that the label method returns the expected string for Decrypt mode.
         assert_eq!(ProcessorMode::Decrypt.label(), "Decrypt");
     }
 
     #[test]
     fn test_processing_label() {
+        // Verify that the label method returns "Encrypting..." for Encryption state.
         assert_eq!(Processing::Encryption.label(), "Encrypting...");
+
+        // Verify that the label method returns "Decrypting..." for Decryption state.
         assert_eq!(Processing::Decryption.label(), "Decrypting...");
     }
 
     #[test]
     fn test_processing_mode_conversion() {
+        // Ensure that converting Encryption state returns Encrypt mode.
         assert_eq!(Processing::Encryption.mode(), ProcessorMode::Encrypt);
+
+        // Ensure that converting Decryption state returns Decrypt mode.
         assert_eq!(Processing::Decryption.mode(), ProcessorMode::Decrypt);
     }
 
     #[test]
     fn test_task_result_ok() {
+        // Create test data for the result.
         let data = vec![1, 2, 3];
+
+        // Create a success result using the helper method.
         let result = TaskResult::ok(1, data.clone(), 3);
+
+        // Verify all fields are set correctly for a success case.
         assert_eq!(result.index, 1);
         assert_eq!(result.data, data);
         assert_eq!(result.size, 3);
@@ -389,12 +258,19 @@ mod tests {
 
     #[test]
     fn test_task_result_err() {
+        // Create a test error.
         let err = anyhow!("test error");
+
+        // Create a failure result using the helper method.
         let result = TaskResult::err(2, &err);
+
+        // Verify all fields are set correctly for a failure case.
         assert_eq!(result.index, 2);
         assert!(result.data.is_empty());
         assert_eq!(result.size, 0);
         assert!(result.error.is_some());
+
+        // Verify the error message matches.
         assert_eq!(result.error.as_deref(), Some("test error"));
     }
 }

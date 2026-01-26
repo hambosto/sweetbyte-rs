@@ -1,25 +1,19 @@
-//! # HMAC-SHA256 Message Authentication
+//! Message Authentication Code (MAC) implementation.
 //!
-//! This module provides HMAC (Hash-based Message Authentication Code) using SHA-256
-//! for cryptographic authentication of data. HMAC combines cryptographic hash functions
-//! with secret keys to provide both data integrity and authenticity.
+//! This module provides HMAC-SHA256 functionality to ensure the integrity and authenticity
+//! of the file header.
 //!
-//! ## Security Properties
+//! # Purpose
 //!
-//! - **Authenticity**: Only someone with the secret key can generate valid MACs
-//! - **Integrity**: Any modification to authenticated data will be detected
-// - **Collision Resistance**: Based on SHA-256's collision resistance
-// - **Key Separation**: Inner and outer hash layers prevent key recovery attacks
+//! While the file *body* is protected by the AEAD (AES-GCM or XChaCha20-Poly1305),
+//! the *header* (containing metadata, salt, and parameters) needs independent verification
+//! before we can even derive the keys to decrypt the body. We use HMAC-SHA256 for this purpose.
 //!
-//! ## Use Cases
+//! # Security
 //!
-//! - Authenticating encrypted file headers
-//! - Verifying the integrity of configuration metadata
-//! - Protecting against tampering in storage/transmission
-//! - Providing cryptographic guarantees beyond mere hashing
-//!
-//! ## Threat Model
-// Protects against: data tampering, forgery attempts, replay attacks (with sequence numbers)
+//! - **Algorithm**: HMAC-SHA256
+//! - **Key**: Derived specifically for the MAC (separate from encryption keys)
+//! - **Verification**: Constant-time comparison to prevent timing attacks
 
 use anyhow::{Result, anyhow, ensure};
 use hmac::{Hmac, Mac as _};
@@ -28,152 +22,64 @@ use subtle::ConstantTimeEq;
 
 use crate::config::MAC_SIZE;
 
-/// # HMAC-SHA256 Authentication
-///
-/// Provides message authentication using HMAC with SHA-256 as the underlying hash.
-/// Suitable for authenticating arbitrary data including file headers, metadata,
-/// and other sensitive information that requires integrity and authenticity guarantees.
-///
-/// The MAC output is 32 bytes (256 bits) providing strong security against
-/// forgery attempts while maintaining reasonable performance.
-///
-/// ## Security Considerations
-///
-/// - Uses cryptographically secure HMAC construction
-/// - Constant-time verification prevents timing attacks
-/// - Key should be kept secret and properly protected
-/// - Different keys should be used for different purposes
-/// - HMAC keys should be randomly generated and sufficiently long
+/// A context for computing and verifying HMAC-SHA256 tags.
 pub struct Mac {
-    /// Secret key for HMAC computation
-    /// Stored as `Vec<u8>` to support variable-length keys
-    /// Recommended minimum length: 32 bytes (256 bits)
+    /// The secret key used for HMAC generation.
     key: Vec<u8>,
 }
 
 impl Mac {
-    /// Creates a new MAC instance with the provided secret key
-    ///
-    /// # Arguments
-    /// * `key` - Secret key for HMAC computation, must not be empty
-    ///
-    /// # Returns
-    /// Configured MAC instance ready for authentication operations
+    /// Initializes a new MAC context with the given key.
     ///
     /// # Errors
-    /// Returns error if the key is empty
     ///
-    /// # Security Notes
-    /// - The key is copied into the struct for repeated use
-    /// - Key length should be at least 32 bytes for optimal security
-    /// - Keys should be generated using cryptographically secure randomness
-    /// - Different applications should use different keys (key separation)
-    /// - Consider using a secure allocator for sensitive key material
+    /// Returns an error if the key is empty.
     pub fn new(key: &[u8]) -> Result<Self> {
-        // Validate input to prevent empty key usage
+        // Enforce non-empty key.
         ensure!(!key.is_empty(), "mac key cannot be empty");
         Ok(Self { key: key.to_vec() })
     }
 
-    /// Computes HMAC-SHA256 of multiple data parts
+    /// Computes the HMAC tag for a list of data parts.
     ///
-    /// Computes HMAC over the concatenation of multiple data parts without
-    /// actually concatenating them in memory. This is efficient for authenticating
-    /// structured data like file headers with multiple fields.
-    ///
-    /// # Arguments
-    /// * `parts` - Data parts to authenticate, empty parts are automatically filtered out
+    /// This method allows feeding multiple disjoint parts (e.g., salt + metadata)
+    /// without needing to concatenate them into a single buffer first.
     ///
     /// # Returns
-    /// 32-byte HMAC tag authenticating the provided data
     ///
-    /// # Errors
-    /// Returns error if:
-    /// - HMAC initialization fails (should never happen with valid key)
-    /// - Key is empty (prevented by constructor validation)
-    ///
-    /// # Security Guarantees
-    /// - Authenticates all provided data parts in order
-    /// - MAC is cryptographically bound to the secret key
-    /// - Empty parts are ignored to prevent accidental MAC changes
-    /// - Suitable for authenticating structured data with variable fields
-    ///
-    /// # Performance Characteristics
-    /// - O(total_data_size) complexity
-    /// - SHA-256 operations optimized for modern CPUs
-    /// - No memory allocation for data concatenation
-    /// - Constant-time operations for sensitive operations
-    ///
-    /// # Use Cases
-    /// - Authenticating file headers with multiple sections
-    /// - Verifying metadata integrity
-    /// - Creating tamper-evident logs or records
-    /// - Multi-part message authentication
+    /// Returns the 32-byte HMAC-SHA256 tag.
     pub fn compute(&self, parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
-        // Initialize HMAC with SHA-256 and the secret key
-        // Hmac::new_from_slice validates key length and sets up the HMAC state
+        // Initialize HMAC-SHA256 with the stored key.
         let mut mac = Hmac::<Sha256>::new_from_slice(&self.key).map_err(|e| anyhow!("hmac creation failed: {e}"))?;
 
-        // Update HMAC with each non-empty data part
-        // This authenticates the data without requiring memory concatenation
-        parts
-            .iter()
-            .filter(|part| !part.is_empty()) // Skip empty parts to maintain consistency
-            .for_each(|part| mac.update(part));
+        // Update the HMAC state with each non-empty part.
+        // We filter empty parts to avoid unnecessary calls, though they wouldn't affect the hash.
+        parts.iter().filter(|part| !part.is_empty()).for_each(|part| mac.update(part));
 
-        // Finalize HMAC computation and extract the 32-byte tag
-        // finalize() consumes the MAC instance and returns the result
-        // into_bytes() provides access to the raw MAC bytes
+        // Finalize and return the fixed-size array.
+        // into_bytes() gives GenericArray, into() converts to [u8; 32].
         Ok(mac.finalize().into_bytes().into())
     }
 
-    /// Verifies HMAC against expected value
+    /// Verifies that the computed MAC for the data matches the expected tag.
     ///
-    /// Performs constant-time verification of HMAC to prevent timing attacks.
-    /// Computes the HMAC of the provided data and compares it with the expected value.
+    /// # Security
     ///
-    /// # Arguments
-    /// * `expected` - Expected HMAC tag (32 bytes)
-    /// * `parts` - Data parts that were originally authenticated
-    ///
-    /// # Returns
-    /// Ok(()) if verification succeeds, Err() if verification fails
-    ///
-    /// # Errors
-    /// Returns error if:
-    /// - Expected MAC length is invalid (not 32 bytes)
-    /// - Expected MAC cannot be converted to array (shouldn't happen with correct length)
-    /// - Computed MAC doesn't match expected MAC (authentication failure)
-    ///
-    /// # Security Guarantees
-    /// - Constant-time comparison prevents timing attacks
-    /// - Authentication failure provides no information about the data
-    /// - Protects against forgery attempts without the secret key
-    /// - Detects any modification to authenticated data
-    ///
-    /// # Performance
-    /// - O(total_data_size) for HMAC computation
-    /// - O(1) for constant-time comparison (32 bytes)
-    /// - No early exit on MAC mismatch to prevent timing attacks
-    ///
-    /// # Security Notes
-    /// - Always performs the full comparison to prevent timing attacks
-    /// - A verification failure indicates either data tampering or wrong key
-    /// - Never returns detailed error information that could aid attackers
-    /// - Suitable for verifying data integrity after storage or transmission
+    /// This method uses **constant-time comparison** to prevent timing attacks.
+    /// This is critical because if an attacker can determine how many bytes of the
+    /// MAC matched, they could forge a valid header.
     pub fn verify(&self, expected: &[u8], parts: &[&[u8]]) -> Result<()> {
-        // Validate expected MAC length (must be exactly 32 bytes)
+        // Basic length check.
         ensure!(expected.len() == MAC_SIZE, "invalid mac length: expected {}, got {}", MAC_SIZE, expected.len());
 
-        // Compute HMAC of the provided data parts
+        // Compute the actual MAC for the provided data parts.
         let computed = self.compute(parts)?;
 
-        // Convert expected MAC to fixed-size array for comparison
-        // This also validates that the expected MAC has correct length
+        // Convert the expected slice to a fixed-size array for comparison.
         let expected_array: [u8; MAC_SIZE] = expected.try_into().map_err(|_| anyhow!("failed to convert expected mac to array"))?;
 
-        // Perform constant-time comparison to prevent timing attacks
-        // ct_eq() returns a Choice type that prevents early exit
+        // Perform constant-time equality check.
+        // ct_eq ensures the time taken is independent of the number of matching bytes.
         ensure!(bool::from(expected_array.ct_eq(&computed)), "mac verification failed");
 
         Ok(())
@@ -217,7 +123,7 @@ mod tests {
 
         let tag = mac.compute(&[part1]).unwrap();
         let mut invalid_tag = tag;
-        invalid_tag[0] ^= 0x01;
+        invalid_tag[0] ^= 0x01; // Flip a bit
 
         assert!(mac.verify(&invalid_tag, &[part1]).is_err());
     }
@@ -230,7 +136,7 @@ mod tests {
 
         let tag = mac.compute(&[part1]).unwrap();
 
-        // Try verifying against different data
+        // Verification should fail if data changes
         assert!(mac.verify(&tag, &[b"different data"]).is_err());
     }
 
@@ -238,7 +144,8 @@ mod tests {
     fn test_compute_empty_parts() {
         let key = b"secret key";
         let mac = Mac::new(key).unwrap();
-        // Should ignore empty parts
+
+        // Ensure empty parts don't change the hash
         let tag1 = mac.compute(&[b"data"]).unwrap();
         let tag2 = mac.compute(&[b"data", b""]).unwrap();
         assert_eq!(tag1, tag2);

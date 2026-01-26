@@ -1,42 +1,24 @@
-//! Cryptographic processing pipeline for concurrent encryption/decryption
+//! Cryptographic processing pipeline.
 //!
-//! This module implements the core data transformation pipeline that processes
-//! each task through a series of cryptographic and compression operations.
-//! The pipeline is designed for thread-safe concurrent access and optimal
-/// performance for large-scale file processing.
-///
-/// ## Pipeline Architecture
-///
-/// The pipeline implements a layered approach to data security and performance:
-///
-/// ### Encryption Pipeline (Original → Encrypted)
-/// 1. **Compression**: Reduces data size for faster processing and smaller output
-/// 2. **Padding**: Ensures consistent block sizes for block cipher operations
-/// 3. **AES-256-GCM**: High-performance authenticated encryption
-/// 4. **XChaCha20-Poly1305**: Additional layer with different security properties
-/// 5. **Reed-Solomon**: Adds erasure coding for data recovery (4+2 configuration)
-///
-/// ### Decryption Pipeline (Encrypted → Original)
-/// 1. **Reed-Solomon**: Error correction and data reconstruction
-/// 2. **XChaCha20-Poly1305**: First layer of decryption
-/// 3. **AES-256-GCM**: Second layer of decryption
-/// 4. **Unpadding**: Removes block alignment padding
-/// 5. **Decompression**: Restores original data size
-///
-/// ## Security Design Rationale
-///
-/// - **Defense in Depth**: Multiple independent encryption layers
-/// - **Algorithm Diversity**: Different cipher types prevent cascade failures
-/// - **Authenticated Encryption**: Both ciphers provide integrity protection
-/// - **Key Separation**: Each algorithm uses derived keys from the master key
-/// - **Erasure Coding**: Protects against data corruption and partial loss
-///
-/// ## Performance Characteristics
-///
-/// - **Throughput**: Optimized for large data blocks with pipelined operations
-/// - **Memory**: Minimal allocations; operations work on existing buffers
-/// - **Parallelism**: Thread-safe design enables concurrent processing
-/// - **CPU Utilization**: Balanced mix of compute and memory-bound operations
+//! This module defines the `Pipeline` struct, which encapsulates the sequence of operations
+//! performed on each data chunk. It serves as the "engine" driven by the executor.
+//!
+//! # Processing Chain
+//!
+//! ## Encryption
+//! 1. **Compress**: Zlib compression (if enabled).
+//! 2. **Pad**: PKCS#7 padding to align with block size.
+//! 3. **Encrypt (Layer 1)**: AES-256-GCM.
+//! 4. **Encrypt (Layer 2)**: XChaCha20-Poly1305.
+//! 5. **Encode**: Reed-Solomon erasure coding.
+//!
+//! ## Decryption
+//! 1. **Decode**: Reed-Solomon error correction/reconstruction.
+//! 2. **Decrypt (Layer 2)**: XChaCha20-Poly1305.
+//! 3. **Decrypt (Layer 1)**: AES-256-GCM.
+//! 4. **Unpad**: Remove PKCS#7 padding.
+//! 5. **Decompress**: Zlib decompression.
+
 use anyhow::Result;
 
 use crate::cipher::{Aes256Gcm, Cipher, XChaCha20Poly1305};
@@ -46,314 +28,130 @@ use crate::encoding::Encoding;
 use crate::padding::Padding;
 use crate::types::{Processing, Task, TaskResult};
 
-/// Multi-layer cryptographic processing pipeline
+/// The unified processing engine for a single chunk of data.
 ///
-/// This struct orchestrates the complete data transformation process for both
-/// encryption and decryption operations. It combines multiple cryptographic
-/// primitives with compression and erasure coding to provide comprehensive
-/// data protection and performance optimization.
-///
-/// ## Component Overview
-///
-/// - **cipher**: Manages dual encryption with AES-256-GCM and XChaCha20-Poly1305
-/// - **encoder**: Reed-Solomon erasure coding for data recovery (4+2 configuration)
-/// - **compressor**: LZ4-based compression for size reduction and processing speed
-/// - **padding**: Block size alignment for optimal cipher performance
-/// - **mode**: Determines processing direction (encryption vs decryption)
-///
-/// ## Thread Safety
-///
-/// The pipeline is designed to be thread-safe for read-only operations:
-/// - All components are immutable after initialization
-/// - No internal mutable state during processing
-/// - Cryptographic keys are stored securely and shared safely
-/// - Compatible with `Arc<T>` for concurrent access across threads
-///
-/// ## Performance Optimization
-///
-/// The pipeline is optimized for:
-/// - **Large Blocks**: Processing efficiency scales with chunk size
-/// - **Memory Efficiency**: Minimal allocations during processing
-/// - **CPU Caches**: Sequential operations maintain good cache locality
-/// - **Parallel Processing**: Thread-safe design enables concurrent execution
+/// This struct holds the initialized cryptographic contexts and transformation tools
+/// required to process a `Task`. It is thread-safe (via `Sync`) and designed to be
+/// shared across multiple executor threads.
 pub struct Pipeline {
-    /// Dual cipher implementation for layered encryption
-    /// Supports both AES-256-GCM and XChaCha20-Poly1305 algorithms
-    /// Provides authenticated encryption with associated data (AEAD)
+    /// The dual-algorithm cipher context.
     cipher: Cipher,
-    /// Reed-Solomon encoder for erasure coding
-    /// 4 data shards + 2 parity shards configuration
-    /// Enables recovery from up to 2 shard failures
+
+    /// Reed-Solomon encoder/decoder.
     encoder: Encoding,
-    /// Fast compression engine using LZ4 algorithm
-    /// Configurable compression levels (set to Fast)
-    /// Reduces data size for faster I/O and smaller storage
+
+    /// Zlib compressor/decompressor.
     compressor: Compressor,
-    /// Block padding for cipher alignment
-    /// Ensures data meets block cipher size requirements
-    /// Uses PKCS#7-style padding for compatibility
+
+    /// PKCS#7 padding utility.
     padding: Padding,
-    /// Processing mode determining pipeline direction
-    /// Affects the order and selection of operations
+
+    /// The current operation mode (Encrypt vs Decrypt).
     mode: Processing,
 }
 
 impl Pipeline {
-    /// Creates a new processing pipeline with the given encryption key and mode
-    ///
-    /// Initializes all cryptographic components and prepares the pipeline
-    /// for either encryption or decryption operations.
+    /// Creates a new processing pipeline.
     ///
     /// # Arguments
     ///
-    /// * `key` - 32-byte Argon2-derived master key for cryptographic operations
-    /// * `mode` - Processing mode (Encryption or Decryption)
-    ///
-    /// # Returns
-    ///
-    /// A fully initialized Pipeline ready for task processing
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if:
-    /// - Cipher initialization fails (key derivation, algorithm setup)
-    /// - Reed-Solomon encoder creation fails (invalid shard configuration)
-    /// - Compressor initialization fails (memory allocation, library error)
-    /// - Padding configuration fails (invalid block size)
-    ///
-    /// # Security Notes
-    ///
-    /// The master key is immediately used to derive subkeys for each
-    /// cryptographic component. This key separation prevents cross-contamination
-    /// between different layers of encryption. All key material is handled
-    /// securely and zeroed when components are dropped.
-    ///
-    /// # Performance Considerations
-    ///
-    /// Pipeline initialization is performed once and the resulting
-    /// structure is shared across all processing threads. This design
-    /// maximizes performance by:
-    /// - Avoiding repeated key derivation operations
-    /// - Reusing cryptographic contexts across multiple operations
-    /// - Minimizing memory allocations during processing
+    /// * `key` - The master derived key.
+    /// * `mode` - Whether we are encrypting or decrypting.
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
-        // Initialize the dual cipher system with the master key
-        // This creates separate subkeys for AES-256-GCM and XChaCha20-Poly1305
+        // Initialize cryptographic primitives.
         let cipher = Cipher::new(key)?;
 
-        // Setup Reed-Solomon erasure coding with 4+2 configuration
-        // This allows recovery from up to 2 lost/corrupted data shards
+        // Initialize error correction.
+        // We use the global shard configuration.
         let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
 
-        // Initialize fast LZ4 compression for size optimization
-        // Compression level is set to Fast for optimal throughput
+        // Initialize compression.
+        // Currently hardcoded to Fast for performance balance.
         let compressor = Compressor::new(CompressionLevel::Fast)?;
 
-        // Setup block padding for cipher alignment requirements
-        // Ensures all data blocks meet minimum size for efficient processing
+        // Initialize padding.
+        // Must match the cipher's block requirement (typically 128 bytes in our config).
         let padding = Padding::new(BLOCK_SIZE)?;
 
         Ok(Self { cipher, encoder, compressor, padding, mode })
     }
 
-    /// Processes a task through the appropriate pipeline
-    ///
-    /// This is the main entry point for task processing. Based on the pipeline's
-    /// mode, it either encrypts or decrypts the task data through the complete
-    /// transformation pipeline.
-    ///
-    /// # Arguments
-    ///
-    /// * `task` - The task containing data to be processed and its sequential index
+    /// Processes a single task (data chunk) according to the pipeline mode.
     ///
     /// # Returns
     ///
-    /// A TaskResult containing either the processed data or an error if any
-    /// step in the pipeline fails. The result maintains the original task index
-    /// for proper reordering in the output buffer.
-    ///
-    /// # Performance Characteristics
-    ///
-    /// - **Encryption Pipeline**: 5 sequential operations (compress → pad → encrypt → encrypt →
-    ///   encode)
-    /// - **Decryption Pipeline**: 5 sequential operations (decode → decrypt → decrypt → unpad →
-    ///   decompress)
-    /// - **Error Handling**: Early termination on first failure to minimize wasted processing
-    /// - **Memory**: Operations work on existing data buffers when possible
-    ///
-    /// # Error Propagation
-    ///
-    /// Errors are captured immediately and wrapped in TaskResult with context:
-    /// - Each operation's error is preserved with additional context
-    /// - Task index is maintained for proper error reporting
-    /// - Processing continues with other tasks even if individual tasks fail
+    /// A `TaskResult` containing either the processed data or an error.
     #[inline]
     pub fn process(&self, task: &Task) -> TaskResult {
+        // Dispatch to the specific pipeline method based on mode.
+        // This keeps the high-level flow clear.
         match self.mode {
             Processing::Encryption => self.encrypt_pipeline(task),
             Processing::Decryption => self.decrypt_pipeline(task),
         }
     }
 
-    /// Processes data through the complete encryption pipeline
-    ///
-    /// Implements a multi-layer encryption strategy combining compression,
-    /// dual encryption with different algorithms, and erasure coding for
-    /// comprehensive data protection and performance optimization.
-    ///
-    /// ## Pipeline Stages
-    ///
-    /// 1. **Compression**: Reduces data size for faster processing and smaller output
-    /// 2. **Padding**: Ensures proper block alignment for encryption operations
-    /// 3. **AES-256-GCM**: First layer of authenticated encryption
-    /// 4. **XChaCha20-Poly1305**: Second layer for defense in depth
-    /// 5. **Reed-Solomon**: Adds erasure coding for data recovery capabilities
-    ///
-    /// ## Security Rationale
-    ///
-    /// **Algorithm Diversity**: Using different cipher families prevents cascade failures
-    /// - **Authenticated Encryption**: Both layers provide integrity and authenticity
-    /// - **Key Separation**: Each layer uses cryptographically independent subkeys
-    /// - **Erasure Coding**: Protects against data corruption and partial data loss
-    ///
-    /// ## Performance Optimization
-    ///
-    /// - **Compression First**: Reduces data size before expensive encryption operations
-    /// - **Sequential Processing**: Maintains good cache locality and memory efficiency
-    /// - **Early Exit**: Immediate error return prevents wasted processing
-    /// - **Minimal Allocations**: Reuses buffers when possible during transformations
-    ///
-    /// # Arguments
-    ///
-    /// * `task` - Task containing plaintext data to encrypt
-    ///
-    /// # Returns
-    ///
-    /// TaskResult with encrypted data or error information
-    ///
-    /// # Error Handling
-    ///
-    /// Each stage performs comprehensive error checking:
-    /// - Compression failures (memory, corruption)
-    /// - Padding errors (size limits, alignment issues)
-    /// - Encryption failures (key errors, data corruption)
-    /// - Encoding errors (shard creation, memory allocation)
+    /// Executes the encryption steps: Compress -> Pad -> AES -> ChaCha -> Encode.
     fn encrypt_pipeline(&self, task: &Task) -> TaskResult {
-        // Store original input size for progress tracking and size reporting
-        // This is needed because the final encrypted size will be larger
         let input_size = task.data.len();
 
-        // Stage 1: Compress the original data
-        // Compression reduces data size, making subsequent encryption faster
-        // LZ4 provides excellent speed with reasonable compression ratios
+        // Step 1: Compress the raw data.
+        // This reduces the amount of data to encrypt and write, and increases entropy.
         let compressed_data = match self.compressor.compress(&task.data) {
             Ok(compressed) => compressed,
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        // Stage 2: Pad compressed data to block cipher alignment
-        // Ensures data meets minimum block size requirements for AES
-        // Padding is essential for block cipher security and efficiency
+        // Step 2: Apply PKCS#7 padding.
+        // This ensures the data length is a multiple of the block size, required for
+        // some block cipher modes and good practice generally.
         let padded_data = match self.padding.pad(&compressed_data) {
             Ok(padded) => padded,
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        // Stage 3: First encryption layer with AES-256-GCM
-        // AES provides excellent performance on modern CPUs with AES-NI
-        // GCM provides authenticated encryption for integrity protection
+        // Step 3: Encrypt with AES-256-GCM (Inner Layer).
         let aes_encrypted = match self.cipher.encrypt::<Aes256Gcm>(&padded_data) {
             Ok(aes_encrypted) => aes_encrypted,
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        // Stage 4: Second encryption layer with XChaCha20-Poly1305
-        // XChaCha20 provides security even if AES has implementation flaws
-        // Different algorithm family prevents cascade failure scenarios
+        // Step 4: Encrypt with XChaCha20-Poly1305 (Outer Layer).
+        // This provides defense-in-depth. Defeating encryption requires breaking BOTH algorithms.
         let chacha_encrypted = match self.cipher.encrypt::<XChaCha20Poly1305>(&aes_encrypted) {
             Ok(chacha_encrypted) => chacha_encrypted,
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        // Stage 5: Apply Reed-Solomon erasure coding
-        // Splits data into 4 data shards + 2 parity shards
-        // Enables recovery from up to 2 lost/corrupted shards
+        // Step 5: Encode with Reed-Solomon.
+        // This adds redundancy to survive data corruption.
         let encoded_data = match self.encoder.encode(&chacha_encrypted) {
             Ok(encoded) => encoded,
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        // Return successful result with final encrypted data
-        // Original size is preserved for progress tracking purposes
+        // Return successful result.
+        // Note: size here tracks input size for progress reporting.
         TaskResult::ok(task.index, encoded_data, input_size)
     }
 
-    /// Processes data through the complete decryption pipeline
-    ///
-    /// Reverses the encryption pipeline operations in the correct order,
-    /// performing error correction, dual decryption, unpadding, and
-    /// decompression to restore the original data.
-    ///
-    /// ## Pipeline Stages (Reverse of Encryption)
-    ///
-    /// 1. **Reed-Solomon Decode**: Error correction and data reconstruction
-    /// 2. **XChaCha20-Poly1305 Decrypt**: Removes outer encryption layer
-    /// 3. **AES-256-GCM Decrypt**: Removes inner encryption layer
-    /// 4. **Unpad**: Removes block alignment padding
-    /// 5. **Decompress**: Restores original uncompressed data
-    ///
-    /// ## Error Recovery
-    ///
-    /// The decryption pipeline includes comprehensive error handling:
-    /// - Reed-Solomon can recover from corrupted/missing data shards
-    /// - Authentication failures in ciphers are detected and reported
-    /// - Padding validation ensures data integrity
-    /// - Decompression errors indicate potential corruption
-    ///
-    /// ## Security Validation
-    ///
-    /// Each decryption stage includes integrity validation:
-    /// - Cipher authentication tags detect tampering
-    /// - Padding validation checks for proper structure
-    /// - Decompression validates data format consistency
-    /// - Stage-specific context helps identify failure points
-    ///
-    /// # Arguments
-    ///
-    /// * `task` - Task containing encrypted data to decrypt
-    ///
-    /// # Returns
-    ///
-    /// TaskResult with decrypted data or detailed error information
-    ///
-    /// # Error Context
-    ///
-    /// Each error includes specific context to aid debugging:
-    /// - "failed to decode data": Reed-Solomon reconstruction issues
-    /// - "chacha20poly1305 decryption failed": Outer layer authentication failure
-    /// - "aes256gcm decryption failed": Inner layer authentication failure
-    /// - "padding validation failed": Invalid padding structure
-    /// - "decompression failed": Data format or corruption issues
+    /// Executes the decryption steps: Decode -> ChaCha -> AES -> Unpad -> Decompress.
     fn decrypt_pipeline(&self, task: &Task) -> TaskResult {
-        // Stage 1: Reed-Solomon decoding and error correction
-        // Reconstructs original data from 4+2 shard configuration
-        // Can recover from up to 2 missing or corrupted shards
+        // Step 1: Decode Reed-Solomon blocks.
+        // This attempts to reconstruct the data if corruption occurred.
         let decoded_data = match self.encoder.decode(&task.data) {
             Ok(decoded) => decoded,
             Err(e) => return TaskResult::err(task.index, &e.context("failed to decode data")),
         };
 
-        // Stage 2: Remove XChaCha20-Poly1305 encryption layer
-        // This is the outer encryption layer applied during encryption
-        // Authentication tag verification ensures data integrity
+        // Step 2: Decrypt XChaCha20-Poly1305 (Outer Layer).
+        // If authentication fails here, it means the outer layer was tampered with beyond RS repair.
         let chacha_decrypted = match self.cipher.decrypt::<XChaCha20Poly1305>(&decoded_data) {
             Ok(chacha_decrypted) => chacha_decrypted,
             Err(e) => return TaskResult::err(task.index, &e.context("chacha20poly1305 decryption failed")),
         };
 
-        // Stage 3: Remove AES-256-GCM encryption layer
-        // This is the inner encryption layer from the original encryption
-        // GCM authentication provides additional integrity verification
+        // Step 3: Decrypt AES-256-GCM (Inner Layer).
         let aes_decrypted = match self.cipher.decrypt::<Aes256Gcm>(&chacha_decrypted) {
             Ok(aes_decrypted) => aes_decrypted,
             Err(e) => {
@@ -361,27 +159,22 @@ impl Pipeline {
             }
         };
 
-        // Stage 4: Remove block padding applied before encryption
-        // Validates padding structure and extracts original data
-        // Invalid padding indicates potential tampering or corruption
+        // Step 4: Remove Padding.
+        // Checks PKCS#7 invariants.
         let unpadded_data = match self.padding.unpad(&aes_decrypted) {
             Ok(unpadded) => unpadded,
             Err(e) => return TaskResult::err(task.index, &e.context("padding validation failed")),
         };
 
-        // Stage 5: Decompress data to restore original content
-        // Reverses the LZ4 compression applied during encryption
-        // Final step in restoring the original data
+        // Step 5: Decompress Zlib data.
         let decompressed_data = match Compressor::decompress(&unpadded_data) {
             Ok(decompressed) => decompressed,
             Err(e) => return TaskResult::err(task.index, &e.context("decompression failed")),
         };
 
-        // Store the final output size for progress tracking
-        // This represents the actual size of the restored original data
+        // Calculate size of recovered data.
         let output_size = decompressed_data.len();
 
-        // Return successful result with restored original data
         TaskResult::ok(task.index, decompressed_data, output_size)
     }
 }
@@ -392,6 +185,7 @@ mod tests {
 
     #[test]
     fn test_pipeline_roundtrip() {
+        // Setup valid keys.
         let key = [0u8; ARGON_KEY_LEN];
         let pipeline_enc = Pipeline::new(&key, Processing::Encryption).unwrap();
         let pipeline_dec = Pipeline::new(&key, Processing::Decryption).unwrap();
@@ -399,13 +193,17 @@ mod tests {
         let data = b"Hello, secure world!";
         let task = Task { data: data.to_vec(), index: 0 };
 
+        // Run forward pipeline.
         let encrypted = pipeline_enc.process(&task);
         assert!(encrypted.error.is_none());
         assert_ne!(encrypted.data, data);
 
+        // Run reverse pipeline.
         let task_dec = Task { data: encrypted.data, index: 0 };
         let decrypted = pipeline_dec.process(&task_dec);
         assert!(decrypted.error.is_none());
+
+        // Check integrity.
         assert_eq!(decrypted.data, data);
     }
 }

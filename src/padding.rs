@@ -1,228 +1,89 @@
-//! PKCS#7 Padding Implementation
+//! PKCS#7 padding implementation.
 //!
-//! This module implements PKCS#7 padding for block cipher alignment. PKCS#7
-//! is a widely-used padding scheme that ensures data is properly aligned for
-//! block cipher operations while being unambiguously reversible.
+//! This module provides padding functionality to align data to block boundaries.
+//! SweetByte uses PKCS#7 (RFC 5652) padding, which is the standard for AES and other block ciphers.
 //!
-//! ## Why PKCS#7?
-// PKCS#7 (RFC 5652) is chosen for several reasons:
-//! 1. **Standardized**: Well-defined and widely implemented
-//! 2. **Unambiguous**: Each padding value is unique and verifiable
-//! 3. **Secure**: No ambiguous padding states that could aid attacks
-//! 4. **Efficient**: Simple to implement and verify
+//! # Mechanism
 //!
-//! ## Padding Process
-// For block size N:
-// - If data length is already multiple of N, add N bytes of value N
-// - Otherwise, add (N - remainder) bytes of value (N - remainder)
-// - Example for block size 8: "HELLO" → "HELLO\x03\x03\x03"
+//! If the data length is not a multiple of the block size, $N$ bytes are added,
+//! where each byte has the value $N$. This guarantees that the last byte of the
+//! padded data always indicates the number of padding bytes to remove.
 //!
-//! ## Security Considerations//!
-// - Prevents padding oracle attacks through proper validation
-// - Ensures constant-time operations to avoid timing attacks
-// - Validates padding bytes completely before accepting data
-// - Provides clear error messages for debugging (not for attackers)
+//! If data is already a multiple of the block size, a full block of padding is added.
+//! This ensures ambiguity-free unpadding.
 
 use anyhow::{Result, anyhow, ensure};
 
-/// PKCS#7 padding implementation for block cipher alignment
-///
-/// This struct provides PKCS#7 padding and unpadding operations to ensure
-/// data is properly aligned for block cipher operations. The implementation
-/// follows RFC 5652 section 6.3 for compatibility and security.
-///
-/// ## Block Size Requirements
-///
-/// The block size must be between 1 and 255 bytes:
-/// - Minimum 1: Single-byte block ciphers
-/// - Maximum 255: PKCS#7 uses single-byte padding length values
-/// - Common sizes: 8 (DES/3DES), 16 (AES), 64 (Blowfish)
-///
-/// ## Security Properties
-///
-/// - **Deterministic**: Same input always produces same padding
-/// - **Unambiguous**: Each padding pattern is unique
-/// - **Verifiable**: Padding can be validated before removal
-/// - **Constant-time**: Operations don't leak data through timing
-///
-/// ## Usage in SweetByte
-///
-/// Used in combination with block ciphers to ensure:
-/// - Proper alignment for cryptographic operations
-/// - Compatibility with standard block cipher modes
-/// - Secure handling of partial blocks
+/// A utility for adding and removing PKCS#7 padding.
 pub struct Padding {
-    /// The block size in bytes for padding operations
-    ///
-    /// This determines the alignment boundary for the data.
-    /// All padded data will have a length that's a multiple of this value.
+    /// The block size alignment (e.g., 16 for AES-128, though typically 128 bytes in our config).
     block_size: usize,
 }
 
 impl Padding {
-    /// Create a new Padding instance with the specified block size
-    ///
-    /// This constructor validates the block size parameter to ensure
-    /// it's within the acceptable range for PKCS#7 operations.
+    /// Creates a new Padding utility for the specified block size.
     ///
     /// # Arguments
     ///
-    /// * `block_size` - The block size in bytes (1-255)
+    /// * `block_size` - The block alignment size in bytes. Must be between 1 and 255.
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// * `Ok(Padding)` - Successfully created padding instance
-    /// * `Err(anyhow::Error)` - Invalid block size provided
-    ///
-    /// # Block Size Validation
-    ///
-    /// - Must be greater than 0
-    /// - Must be less than or equal to 255 (PKCS#7 limitation)
-    /// - Should match the block cipher's native block size
-    ///
-    /// # Common Block Sizes
-    ///
-    /// - 8 bytes: DES, 3DES, Blowfish (in some modes)
-    /// - 16 bytes: AES, Camellia (standard block size)
-    /// - 32 bytes: Some custom or future block ciphers
-    ///
-    /// # Security Notes
-    ///
-    /// The block size affects both security and performance:
-    /// - Larger blocks may reduce padding overhead
-    /// - Smaller blocks provide more granular alignment
-    /// - Block size should match the underlying cipher's requirements
+    /// Returns an error if the block size is invalid (0 or > 255).
     pub fn new(block_size: usize) -> Result<Self> {
         ensure!(block_size > 0, "block size must be greater than 0");
+        // PKCS#7 represents padding length as a byte, so max padding is 255 bytes.
         ensure!(block_size <= 255, "block size must be <= 255 for PKCS#7");
         Ok(Self { block_size })
     }
 
-    /// Apply PKCS#7 padding to data
-    ///
-    /// This method pads the input data to ensure its length is a multiple
-    /// of the block size. The padding follows the PKCS#7 standard where
-    /// each padding byte contains the length of the padding.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - Input data to pad (must not be empty)
+    /// Adds PKCS#7 padding to the data.
     ///
     /// # Returns
     ///
-    /// * `Ok(Vec<u8>)` - Padded data with length multiple of block size
-    /// * `Err(anyhow::Error)` - Input validation failed
-    ///
-    /// # Padding Algorithm
-    ///
-    /// 1. Calculate remainder: `remainder = data.len() % block_size`
-    /// 2. Calculate padding length: `padding_len = block_size - remainder`
-    /// 3. Add `padding_len` bytes, each with value `padding_len`
-    ///
-    /// # Examples
-    ///
-    /// Block size 16, data "HELLO":
-    /// - Input: 5 bytes, remainder = 5
-    /// - Padding length: 16 - 5 = 11
-    /// - Output: "HELLO" + 11 bytes of value 11
-    ///
-    /// Block size 16, data "1234567890123456":
-    /// - Input: 16 bytes, remainder = 0
-    /// - Padding length: 16 - 0 = 16
-    /// - Output: "1234567890123456" + 16 bytes of value 16
-    ///
-    /// # Performance
-    ///
-    /// - Time complexity: O(n) where n is input size
-    /// - Space complexity: O(n) for output allocation
-    /// - Uses iterator chain for efficient memory usage
-    ///
-    /// # Security Considerations
-    ///
-    /// - Padding is deterministic for reproducible operations
-    /// - Padding bytes are clearly identifiable for validation
-    /// - No information leakage through padding patterns
+    /// A new vector containing the original data plus padding.
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        // Validate input
         ensure!(!data.is_empty(), "data cannot be empty");
 
-        // Calculate required padding length
+        // Calculate how many bytes we need to add to reach the next block boundary.
+        // Result is in range [1, block_size].
         let padding_len = self.block_size - (data.len() % self.block_size);
 
-        // Create padded data: original + padding bytes
+        // Extend the data with `padding_len` copies of the byte value `padding_len`.
+        // e.g., if we need 3 bytes, append [0x03, 0x03, 0x03].
         let padded = data.iter().copied().chain(std::iter::repeat_n(padding_len as u8, padding_len)).collect();
 
         Ok(padded)
     }
 
-    /// Remove PKCS#7 padding from data
-    ///
-    /// This method validates and removes PKCS#7 padding from data that
-    /// was previously padded using the same block size. It performs comprehensive
-    /// validation to ensure padding integrity before removal.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - Padded data (must not be empty)
+    /// Removes PKCS#7 padding from the data.
     ///
     /// # Returns
     ///
-    /// * `Ok(Vec<u8>)` - Original data without padding
-    /// * `Err(anyhow::Error)` - Invalid padding or corrupted data
+    /// A new vector containing the data without padding.
     ///
-    /// # Unpadding Algorithm
+    /// # Errors
     ///
-    /// 1. Get last byte as padding length indicator
-    /// 2. Validate padding length (1 ≤ length ≤ block_size)
-    /// 3. Validate data has enough bytes for specified padding
-    /// 4. Verify all padding bytes have the correct value
-    /// 5. Remove padding and return original data
-    ///
-    /// # Validation Steps
-    ///
-    /// - Padding length must be between 1 and block_size
-    /// - Data must be at least padding_length bytes long
-    /// - All padding bytes must equal padding_length value
-    /// - Data must not be empty
-    ///
-    /// # Error Conditions
-    ///
-    /// - Empty input data
-    /// - Invalid padding length (0 or > block_size)
-    /// - Data too short for indicated padding length
-    /// - Inconsistent padding byte values
-    /// - Corrupted or truncated data
-    ///
-    /// # Security Benefits
-    ///
-    /// - Prevents padding oracle attacks through validation
-    /// - Detects data corruption before processing
-    /// - Clear separation of valid vs invalid padding
-    /// - Constant-time operations where possible
-    ///
-    /// # Performance
-    ///
-    /// - Time complexity: O(n) where n is padding length
-    /// - Space complexity: O(n-m) where m is padding length
-    /// - Early termination on validation failures
+    /// Returns an error if the padding is invalid (wrong values or length).
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        // Get padding length from last byte
+        // Read the last byte to determine the expected padding length.
         let padding_len = data.last().copied().ok_or_else(|| anyhow!("cannot unpad empty data"))?;
 
-        // Validate padding length range
+        // Validation: padding length must be valid (1 <= len <= block_size).
         ensure!(padding_len > 0 && padding_len <= self.block_size as u8, "invalid padding length: {padding_len}");
         let padding_len = padding_len as usize;
 
-        // Validate data has enough bytes for padding
+        // Validation: data must be at least as long as the padding.
         ensure!(data.len() >= padding_len, "data too short for padding length");
 
-        // Split data and padding
+        // Split data into content and padding.
         let (content, padding_bytes) = data.split_at(data.len() - padding_len);
 
-        // Validate all padding bytes have correct value
+        // Validation: verify ALL padding bytes have the correct value.
+        // This check is crucial to prevent padding oracle attacks (though less relevant
+        // here due to authenticated encryption, we still validate strictly).
         ensure!(padding_bytes.iter().all(|&b| b == padding_len as u8), "invalid PKCS#7 padding bytes");
 
-        // Return content without padding
         Ok(content.to_vec())
     }
 }
@@ -245,6 +106,7 @@ mod tests {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
         let padded = padding.pad(&data).unwrap();
 
+        // If exact multiple, adds full block of padding.
         assert_eq!(padded.len(), 16);
         assert_eq!(&padded[8..], &[8, 8, 8, 8, 8, 8, 8, 8]);
     }
@@ -252,9 +114,10 @@ mod tests {
     #[test]
     fn test_pad_partial_block() {
         let padding = Padding::new(8).unwrap();
-        let data = vec![1, 2, 3, 4, 5];
+        let data = vec![1, 2, 3, 4, 5]; // 5 bytes
         let padded = padding.pad(&data).unwrap();
 
+        // Needs 3 bytes to reach 8. Padding value is 3.
         assert_eq!(padded.len(), 8);
         assert_eq!(&padded[5..], &[3, 3, 3]);
     }
@@ -270,6 +133,7 @@ mod tests {
     #[test]
     fn test_unpad_invalid_padding_value() {
         let padding = Padding::new(8).unwrap();
+        // Last byte says 2, but second to last is 3. Invalid.
         let data = vec![1, 2, 3, 4, 5, 3, 3, 2];
         assert!(padding.unpad(&data).is_err());
     }
@@ -277,6 +141,7 @@ mod tests {
     #[test]
     fn test_unpad_invalid_length() {
         let padding = Padding::new(8).unwrap();
+        // Last byte says 9, but block size is 8.
         let data = vec![1, 2, 3, 9];
         assert!(padding.unpad(&data).is_err());
     }
@@ -284,6 +149,7 @@ mod tests {
     #[test]
     fn test_unpad_short_data() {
         let padding = Padding::new(8).unwrap();
+        // Last byte says 5, but total length is 1.
         let data = vec![5];
         assert!(padding.unpad(&data).is_err());
     }

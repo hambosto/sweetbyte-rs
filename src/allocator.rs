@@ -1,37 +1,20 @@
-//! Memory Allocator Configuration
+//! Global memory allocator configuration.
 //!
-//! This module configures the application to use the mimalloc memory allocator.
-//! mimalloc is a high-performance allocator that provides better performance
-//! characteristics than the default system allocator for cryptographic workloads
-//! with many small allocations and deallocations.
+//! This module configures the global memory allocator for the application.
+//! We use `mimalloc` (Microsoft's high-performance allocator) instead of the
+//! system allocator to improve performance, particularly for the highly concurrent
+//! workload typical of file encryption/decryption tasks.
 //!
-//! ## Security Considerations
-//!
-//! The choice of memory allocator can impact security through:
-//! - Memory allocation patterns that may be observable in side-channel attacks
-//! - Memory zeroization behavior when blocks are freed
-//! - Heap spraying resistance
-//!
-//! mimalloc provides better security properties including:
-//! - Randomized allocation patterns to mitigate heap spraying attacks
-//! - Reduced memory fragmentation
-//! - Better cache locality which reduces timing-based side channels
+//! `mimalloc` excels in multi-threaded environments by minimizing lock contention
+//! and fragmentation, which is critical for our worker pool architecture where
+//! large buffers are frequently allocated and deallocated across threads.
 
 use mimalloc::MiMalloc;
 
-/// Global memory allocator instance using mimalloc
+/// The global allocator instance.
 ///
-/// This replaces the default system allocator with mimalloc for improved
-/// performance and security characteristics. mimalloc is particularly well-suited
-/// for cryptographic applications due to:
-///
-/// 1. **Performance**: Faster allocation/deallocation patterns for the many small buffers used in
-///    cryptographic operations
-/// 2. **Security**: Randomized allocation patterns reduce vulnerability to heap exploitation
-///    techniques
-/// 3. **Memory Efficiency**: Better cache utilization and reduced fragmentation
-///
-/// The allocator is configured with secure defaults that prioritize safety
-/// over maximum speed, making it appropriate for security-sensitive applications.
+/// We use the default `MiMalloc` configuration. This static instance is
+/// registered as the `#[global_allocator]`, replacing the standard library's
+/// default system allocator.
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

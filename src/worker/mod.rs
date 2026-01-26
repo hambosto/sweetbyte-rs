@@ -1,32 +1,17 @@
-//! Worker module for concurrent file processing
+//! Concurrent processing engine.
 //!
-//! This module implements a high-performance concurrent processing architecture using a
-//! producer-consumer pattern with multiple specialized workers. The design prioritizes
-//! throughput while maintaining data integrity and proper ordering.
+//! This module orchestrates the multi-threaded processing pipeline, tying together:
+//! - **Reader**: Asynchronous input reading.
+//! - **Executor**: Parallel CPU-bound processing (via Rayon).
+//! - **Writer**: Asynchronous output writing and reordering.
 //!
-//! ## Architecture Overview
+//! # Architecture
 //!
-//! The worker system consists of four main components operating in parallel:
+//! ```text
+//! [Disk] -> Reader(Async) -> [Channel A] -> Executor(Rayon Pool) -> [Channel B] -> Writer(Async) -> [Disk]
+//! ```
 //!
-//! 1. **Reader**: Reads input data in chunks and creates tasks
-//! 2. **Executor**: Processes tasks using a thread pool with Rayon parallelization
-//! 3. **Writer**: Writes processed results while maintaining order via buffering
-//! 4. **Pipeline**: Handles the actual data transformation (encryption/decryption)
-//!
-//! ## Concurrency Model
-//!
-//! The system uses a bounded channel approach with backpressure:
-//! - Tasks flow through channels with configurable buffer sizes
-//! - Channel size is calculated as `concurrency * 2` for optimal throughput
-//! - Automatic detection of CPU cores for thread pool sizing
-//! - Separate threads for each major operation to prevent blocking
-//!
-//! ## Performance Characteristics
-//!
-//! - **Throughput**: Maximizes I/O and CPU utilization through parallelization
-//! - **Memory**: Bounded channels prevent unbounded memory growth
-//! - **Latency**: Minimal copying and efficient thread synchronization
-//! - **Scalability**: Automatically adapts to available CPU cores
+//! This design allows I/O and CPU operations to overlap perfectly, maximizing throughput.
 
 use std::thread;
 
@@ -48,146 +33,83 @@ pub mod pipeline;
 pub mod reader;
 pub mod writer;
 
-/// Main worker orchestrator for concurrent file processing
-///
-/// The `Worker` struct coordinates the entire processing pipeline, managing
-/// the interaction between reader, executor, and writer components. It handles
-/// thread creation, channel setup, and ensures proper resource cleanup.
-///
-/// ## Threading Model
-///
-/// The worker creates three main tasks:
-/// - **Reader task**: Continuously reads input and produces tasks (async)
-/// - **Executor task**: Manages the thread pool for task processing (blocking)
-/// - **Writer task**: Handles writing and progress tracking (async, runs on caller)
-///
-/// This separation allows I/O operations to run concurrently with CPU-intensive
-/// cryptographic operations, maximizing system utilization.
+/// The main worker struct that manages the lifecycle of a processing job.
 pub struct Worker {
-    /// The processing pipeline containing cryptographic and compression components
-    /// Shared across threads via Arc wrapping in the executor
+    /// The processing pipeline configuration.
     pipeline: Pipeline,
-    /// Processing mode determining whether to encrypt or decrypt
-    /// Affects the entire processing pipeline behavior
+
+    /// The operation mode.
     mode: Processing,
 }
 
 impl Worker {
-    /// Creates a new Worker instance with the given encryption key and processing mode
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - 32-byte Argon2-derived key for cryptographic operations
-    /// * `mode` - Processing mode (Encryption or Decryption)
-    ///
-    /// # Returns
-    ///
-    /// Returns a configured Worker instance or an error if pipeline initialization fails
+    /// Initializes a new worker with the derived key and mode.
     ///
     /// # Errors
     ///
-    /// This function will return an error if:
-    /// - The cryptographic pipeline fails to initialize
-    /// - The Reed-Solomon encoder cannot be created
-    /// - The compression algorithm setup fails
+    /// Returns an error if pipeline initialization fails (e.g., key/params issue).
     pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
-        // Initialize the processing pipeline with cryptographic components
-        // This pipeline will be shared across threads via Arc wrapping
         let pipeline = Pipeline::new(key, mode)?;
         Ok(Self { pipeline, mode })
     }
 
-    /// Processes data concurrently from input to output with progress tracking
+    /// Executes the processing job from start to finish.
     ///
-    /// This is the main entry point for concurrent file processing. It sets up
-    /// the entire producer-consumer pipeline with proper backpressure handling
-    /// and thread management.
-    ///
-    /// # Concurrency Design
-    ///
-    /// The function implements a three-stage pipeline:
-    /// 1. Reader produces tasks and sends to executor channel
-    /// 2. Executor processes tasks using Rayon thread pool
-    /// 3. Writer consumes results while maintaining order
-    ///
-    /// Channel sizes are calculated as `concurrency * 2` to provide optimal
-    /// buffering between stages while preventing memory bloat.
+    /// This spawns the necessary async tasks and blocking threads to handle the workload.
     ///
     /// # Arguments
     ///
-    /// * `input` - Readable input stream (must be Send + 'static for thread safety)
-    /// * `output` - Writable output stream (must be Send + 'static for thread safety)
-    /// * `total_size` - Total input size for progress tracking (bytes)
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful processing or an error if any stage fails
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if:
-    /// - Reader thread panics or encounters I/O errors
-    /// - Executor thread panics during processing
-    /// - Writer encounters I/O errors or task processing failures
-    /// - Progress bar operations fail
-    ///
-    /// # Thread Safety
-    ///
-    /// All I/O objects are moved into their respective threads, ensuring
-    /// no data races. Communication happens exclusively through thread-safe
-    /// bounded channels with proper error propagation.
+    /// * `input` - The source stream.
+    /// * `output` - The destination stream.
+    /// * `total_size` - Total bytes to process (for progress bar).
     pub async fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send,
     {
-        // Initialize progress tracking with total file size
+        // Initialize UI progress bar.
         let progress = ProgressBar::new(total_size, self.mode.label())?;
 
-        // Determine optimal concurrency level based on available CPU cores
-        // Falls back to 4 if system doesn't provide parallelism info
+        // Determine concurrency level.
+        // We use logical cores to size our channels to avoid excessive memory usage
+        // while maintaining enough buffer for smooth pipeline flow.
         let concurrency = thread::available_parallelism().map(|p| p.get()).unwrap_or(4);
-
-        // Channel size set to 2x concurrency for optimal buffering
-        // This provides enough buffer to keep all workers busy while
-        // preventing unbounded memory growth
         let channel_size = concurrency * 2;
 
-        // Create bounded channels for task and result flow
-        // Bounded channels provide backpressure to prevent memory exhaustion
+        // Create channels connecting the stages.
+        // Reader -> [task_sender/receiver] -> Executor
+        // Executor -> [result_sender/receiver] -> Writer
         let (task_sender, task_receiver) = bounded(channel_size);
         let (result_sender, result_receiver) = bounded(channel_size);
 
-        // Initialize reader and writer components
-        // Reader handles chunking based on processing mode
+        // Initialize components.
         let reader = Reader::new(self.mode, CHUNK_SIZE)?;
         let mut writer = Writer::new(self.mode);
 
-        // Spawn reader task in the background
-        // This task reads input data and produces tasks for the executor
+        // Spawn Reader task (Async I/O).
+        // This runs on the Tokio runtime.
         let reader_handle = tokio::spawn(async move { reader.read_all(input, &task_sender).await });
 
-        // Create executor and spawn processing task
-        // Executor manages the thread pool for cryptographic operations
-        // We use spawn_blocking because this is CPU-intensive work
+        // Spawn Executor task (CPU Bound).
+        // We use spawn_blocking because Rayon operations would block the async runtime.
+        // The executor consumes tasks and sends results.
         let executor = Executor::new(self.pipeline);
         let executor_handle = tokio::task::spawn_blocking(move || {
             executor.process(&task_receiver, &result_sender);
         });
 
-        // Run writer on current task while background tasks process
-        // This allows progress tracking and immediate error detection
+        // Run Writer task (Async I/O) on the current thread.
+        // This consumes results and writes to disk.
         let write_result = writer.write_all(output, result_receiver, Some(&progress)).await;
 
-        // Wait for background threads to complete and collect results
-        // This ensures all resources are properly cleaned up
+        // Await handles to ensure all tasks completed cleanly and propagate panics/errors.
         let read_result = reader_handle.await.map_err(|_| anyhow!("reader task panicked"))?;
         executor_handle.await.map_err(|_| anyhow!("executor task panicked"))?;
 
-        // Finalize progress tracking
+        // Finish the progress bar.
         progress.finish();
 
-        // Propagate any errors from the pipeline stages
+        // Check for errors in the individual stages.
         read_result.context("reading failed")?;
         write_result.context("writing failed")?;
 
@@ -212,20 +134,24 @@ mod tests {
     async fn test_worker_roundtrip() {
         let key = [0u8; ARGON_KEY_LEN];
 
+        // 1. Encrypt
         let enc_worker = Worker::new(&key, Processing::Encryption).unwrap();
-        let data = vec![0x42u8; 5000];
+        let data = vec![0x42u8; 5000]; // Random data
         let input_len = data.len() as u64;
         let mut encrypted = Vec::new();
 
         enc_worker.process(Cursor::new(data.clone()), &mut encrypted, input_len).await.unwrap();
+
         assert!(!encrypted.is_empty());
         assert_ne!(encrypted, data);
 
+        // 2. Decrypt
         let dec_worker = Worker::new(&key, Processing::Decryption).unwrap();
         let mut decrypted = Vec::new();
 
         dec_worker.process(Cursor::new(encrypted), &mut decrypted, input_len).await.unwrap();
 
+        // 3. Verify
         assert_eq!(decrypted, data);
     }
 }

@@ -1,32 +1,17 @@
-//! # Cryptographic Operations Module
+//! Cryptographic primitives and unified cipher interface.
 //!
-//! This module provides the core cryptographic functionality for the SweetByte file encryption
-//! system. It implements authenticated encryption using industry-standard algorithms and secure key
-//! derivation.
+//! This module provides the core cryptographic functionality, including:
+//! - **Dual-Algorithm Support**: AES-256-GCM and XChaCha20-Poly1305.
+//! - **Key Derivation**: Argon2id for password-based key derivation.
+//! - **Hashing**: BLAKE3 for content integrity.
+//! - **Message Authentication**: HMAC-SHA256 for header integrity.
 //!
-//! ## Architecture
+//! # Architecture
 //!
-//! The cipher module follows a layered architecture:
-//! - **Algorithm Layer**: Provides type-level algorithm selection (AES-256-GCM, XChaCha20-Poly1305)
-//! - **Implementation Layer**: Concrete implementations of each cipher
-//! - **Abstraction Layer**: Unified interface through the `Cipher` struct and `CipherAlgorithm`
-//!   trait
-//! - **Support Layer**: Key derivation, hashing, and MAC computation utilities
-//!
-//! ## Key Concepts
-//!
-//! - **Authenticated Encryption**: All ciphers provide both confidentiality and authenticity
-//! - **Nonce Management**: Each encryption operation generates a cryptographically secure random
-//!   nonce
-//! - **Key Splitting**: The master key is split between AES and ChaCha20 for dual encryption
-//! - **Constant-Time Operations**: Security-sensitive comparisons use constant-time algorithms
-//!
-//! ## Security Guarantees
-//!
-//! - AES-256-GCM: IND-CCA2 secure, 128-bit authentication tags
-//! - XChaCha20-Poly1305: IND-CCA2 secure, 192-bit nonces for better collision resistance
-//! - Argon2id: Memory-hard key derivation resistant to GPU/ASIC attacks
-//! - BLAKE3: Fast, secure hashing with parallelization support
+//! The [`Cipher`] struct acts as a facade, holding initialized instances of both
+//! AES-GCM and XChaCha20-Poly1305 engines. The specific algorithm to use is
+//! selected at runtime (or compile time via generics) using the [`CipherAlgorithm`]
+//! trait.
 
 use anyhow::{Context, Result};
 
@@ -44,86 +29,40 @@ pub use mac::Mac;
 
 use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
 
-/// # Algorithm Selection Types
-///
-/// This module provides marker types for compile-time algorithm selection.
-/// Using types instead of runtime strings enables zero-cost abstractions
-/// and prevents algorithm confusion attacks.
+/// Marker types for supported encryption algorithms.
 pub mod algorithm {
-    /// Marker type for AES-256-GCM algorithm selection
-    ///
-    /// AES-256-GCM provides:
-    /// - 256-bit encryption key
-    /// - 96-bit nonce (12 bytes)
-    /// - 128-bit authentication tag
-    /// - Hardware acceleration on modern CPUs (AES-NI)
+    /// Marker type for the AES-256-GCM algorithm.
     pub struct Aes256Gcm;
-    /// Marker type for XChaCha20-Poly1305 algorithm selection
-    ///
-    /// XChaCha20-Poly1305 provides:
-    /// - 256-bit encryption key
-    /// - 192-bit extended nonce (24 bytes) for better collision resistance
-    /// - 128-bit authentication tag
-    /// - Better security guarantees when nonces are randomly generated
+    /// Marker type for the XChaCha20-Poly1305 algorithm.
     pub struct XChaCha20Poly1305;
 }
 
 pub use algorithm::{Aes256Gcm, XChaCha20Poly1305};
 
-/// # Cipher Algorithm Trait
+/// A trait for dispatching encryption/decryption operations to the specific backend.
 ///
-/// This trait defines the interface for all cipher implementations.
-/// It enables generic programming over different cipher algorithms while
-/// maintaining type safety and zero-cost abstractions.
-///
-/// # Type Parameters
-///
-/// The generic parameter `A` in implementations allows compile-time
-/// algorithm selection through the marker types in the `algorithm` module.
+/// This trait allows the [`Cipher`] struct to be used generically, decoupling the
+/// high-level API from the specific cryptographic implementation.
 pub trait CipherAlgorithm {
-    /// Encrypts plaintext using the specified cipher algorithm
-    ///
-    /// # Arguments
-    /// * `cipher` - The cipher instance containing the algorithm-specific context
-    /// * `plaintext` - The data to encrypt, must not be empty
-    ///
-    /// # Returns
-    /// Ciphertext with nonce prepended, suitable for storage/transmission
-    ///
-    /// # Errors
-    /// Returns error if encryption fails due to:
-    /// - Empty plaintext input
-    /// - Cryptographic operation failures
-    /// - Memory allocation errors
+    /// Encrypts the plaintext using the specified algorithm within the cipher instance.
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>>;
 
-    /// Decrypts ciphertext using the specified cipher algorithm
-    ///
-    /// # Arguments
-    /// * `cipher` - The cipher instance containing the algorithm-specific context
-    /// * `ciphertext` - The encrypted data with nonce prepended
-    ///
-    /// # Returns
-    /// The original plaintext if authentication succeeds
-    ///
-    /// # Errors
-    /// Returns error if decryption fails due to:
-    /// - Authentication tag verification failure (tampering detection)
-    /// - Invalid nonce length
-    /// - Cryptographic operation failures
+    /// Decrypts the ciphertext using the specified algorithm within the cipher instance.
     fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>>;
 }
 
 impl CipherAlgorithm for algorithm::Aes256Gcm {
     #[inline]
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
-        // Delegate to the AES-GCM implementation
+        // Delegate to the stored AES-GCM instance.
+        // We use the inner implementation which handles nonce generation.
         cipher.aes.encrypt(plaintext)
     }
 
     #[inline]
     fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        // Delegate to the AES-GCM implementation
+        // Delegate to the stored AES-GCM instance.
+        // Expects the nonce to be prepended to the ciphertext.
         cipher.aes.decrypt(ciphertext)
     }
 }
@@ -131,123 +70,93 @@ impl CipherAlgorithm for algorithm::Aes256Gcm {
 impl CipherAlgorithm for algorithm::XChaCha20Poly1305 {
     #[inline]
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>> {
-        // Delegate to the ChaCha20-Poly1305 implementation
+        // Delegate to the stored XChaCha20-Poly1305 instance.
+        // We use the inner implementation which handles extended nonce generation.
         cipher.chacha.encrypt(plaintext)
     }
 
     #[inline]
     fn decrypt(cipher: &Cipher, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        // Delegate to the ChaCha20-Poly1305 implementation
+        // Delegate to the stored XChaCha20-Poly1305 instance.
+        // Expects the extended nonce to be prepended to the ciphertext.
         cipher.chacha.decrypt(ciphertext)
     }
 }
 
-/// # Unified Cipher Interface
+/// A unified container for all symmetric encryption contexts.
 ///
-/// This struct provides a unified interface to both AES-256-GCM and XChaCha20-Poly1305
-/// implementations. It manages key splitting and provides generic encryption/decryption
-/// operations through the `CipherAlgorithm` trait.
+/// `Cipher` is initialized with a master key (derived from a password) and
+/// splits it to initialize both AES-GCM and XChaCha20-Poly1305 contexts.
+/// This allows the application to switch algorithms on the fly or use them
+/// in combination without re-deriving keys.
 ///
-/// The key splitting strategy divides the Argon2id-derived key into two 32-byte halves:
-/// - First half: AES-256-GCM encryption key
-/// - Second half: XChaCha20-Poly1305 encryption key
+/// # Examples
 ///
-/// This dual-encryption approach provides defense-in-depth: if one algorithm
-/// is compromised, data remains protected by the other.
+/// ```
+/// use sweetbyte_rs::cipher::{Cipher, Aes256Gcm};
+/// use sweetbyte_rs::config::ARGON_KEY_LEN;
+///
+/// # fn main() -> anyhow::Result<()> {
+/// let key = [0u8; ARGON_KEY_LEN];
+/// let cipher = Cipher::new(&key)?;
+///
+/// let plaintext = b"secret message";
+/// let ciphertext = cipher.encrypt::<Aes256Gcm>(plaintext)?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct Cipher {
-    /// AES-256-GCM cipher instance with 256-bit key
+    /// The initialized AES-256-GCM context.
     aes: AesGcm,
-    /// XChaCha20-Poly1305 cipher instance with 256-bit key
+    /// The initialized XChaCha20-Poly1305 context.
     chacha: ChaCha20Poly1305,
 }
 
 impl Cipher {
-    /// Creates a new Cipher instance with dual algorithm support
+    /// Creates a new `Cipher` instance by splitting the master key.
     ///
-    /// # Arguments
-    /// * `key` - 64-byte master key derived from Argon2id, split evenly between algorithms
-    ///
-    /// # Returns
-    /// Configured Cipher instance ready for encryption/decryption operations
+    /// The provided master key (typically 64 bytes) is split into two halves:
+    /// - First 32 bytes: AES-256 key
+    /// - Second 32 bytes: XChaCha20 key
     ///
     /// # Errors
-    /// Returns error if:
-    /// - Key length validation fails (should never happen with proper Argon2id configuration)
-    /// - Sub-cipher initialization fails
     ///
-    /// # Security Notes
-    /// - The key is split exactly in half: 32 bytes for AES, 32 bytes for ChaCha20
-    /// - Both sub-ciphers are initialized with their respective key portions
-    /// - No key material is copied unnecessarily to minimize exposure in memory
+    /// Returns an error if the key cannot be split or if context initialization fails.
     pub fn new(key: &[u8; ARGON_KEY_LEN]) -> Result<Self> {
-        // Split the 64-byte master key into two 32-byte sub-keys
-        // This provides defense-in-depth: compromise of one algorithm doesn't compromise data
+        // Split the 64-byte master key into two 32-byte chunks.
+        // This allows independent keys for each algorithm, preventing
+        // cross-algorithm key reuse vulnerabilities.
         let split_key = key.split_at(KEY_SIZE);
 
-        // Convert the first half to AES-256 key (32 bytes)
+        // Convert the first slice to a fixed-size array for AES.
+        // We use try_into() to enforce strict size checking at runtime.
         let aes_key: &[u8; KEY_SIZE] = split_key.0.try_into().context("invalid AES key length")?;
 
-        // Convert the second half to ChaCha20 key (32 bytes)
+        // Convert the second slice to a fixed-size array for ChaCha.
         let chacha_key: &[u8; KEY_SIZE] = split_key.1.try_into().context("invalid ChaCha key length")?;
 
-        // Initialize both cipher instances with their respective keys
+        // Initialize both cipher contexts.
+        // Both are ready for use immediately after construction.
         Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
     }
 
-    /// Encrypts plaintext using the specified algorithm
+    /// Encrypts data using the specified algorithm `A`.
     ///
-    /// This is a generic method that allows compile-time algorithm selection
-    /// through the type parameter. The actual encryption is performed by the
-    /// specific algorithm implementation.
-    ///
-    /// # Type Parameters
-    /// * `A` - The cipher algorithm to use (Aes256Gcm or XChaCha20Poly1305)
-    ///
-    /// # Arguments
-    /// * `plaintext` - Data to encrypt, must not be empty
-    ///
-    /// # Returns
-    /// Ciphertext with nonce prepended in algorithm-specific format
-    ///
-    /// # Errors
-    /// Propagates errors from the underlying cipher implementation
-    ///
-    /// # Performance
-    /// - O(n) complexity where n is the plaintext length
-    /// - AES-256-GCM: Hardware accelerated on CPUs with AES-NI
-    /// - XChaCha20-Poly1305: Constant-time software implementation
+    /// This is a generic convenience method that delegates to [`CipherAlgorithm::encrypt`].
     #[inline]
     pub fn encrypt<A: CipherAlgorithm>(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        // Dispatch to the trait implementation for the generic type A.
+        // This uses static dispatch (monomorphization) for zero runtime overhead.
         A::encrypt(self, plaintext)
     }
 
-    /// Decrypts ciphertext using the specified algorithm
+    /// Decrypts data using the specified algorithm `A`.
     ///
-    /// This method performs authenticated decryption, automatically verifying
-    /// the authentication tag before returning plaintext. Any modification
-    /// to the ciphertext will cause decryption to fail.
-    ///
-    /// # Type Parameters
-    /// * `A` - The cipher algorithm to use (Aes256Gcm or XChaCha20Poly1305)
-    ///
-    /// # Arguments
-    /// * `ciphertext` - Encrypted data with nonce prepended
-    ///
-    /// # Returns
-    /// Original plaintext if authentication succeeds
-    ///
-    /// # Errors
-    /// Returns error if:
-    /// - Authentication tag verification fails (detects tampering)
-    /// - Ciphertext format is invalid
-    /// - Underlying cryptographic operation fails
-    ///
-    /// # Security Guarantees
-    /// - Constant-time authentication tag comparison prevents timing attacks
-    /// - Authentication failures provide no information about the plaintext
-    /// - Successful decryption guarantees ciphertext authenticity
+    /// This is a generic convenience method that delegates to [`CipherAlgorithm::decrypt`].
     #[inline]
     pub fn decrypt<A: CipherAlgorithm>(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        // Dispatch to the trait implementation for the generic type A.
+        // The implementation will handle nonce extraction and verification.
         A::decrypt(self, ciphertext)
     }
 }
@@ -258,58 +167,84 @@ mod tests {
 
     #[test]
     fn test_cipher_new_valid_key() {
+        // Use a zeroed key for deterministic testing.
         let key = [0u8; ARGON_KEY_LEN];
+
+        // Ensure the Cipher constructs successfully with a valid key length.
         let cipher = Cipher::new(&key);
         assert!(cipher.is_ok());
     }
 
     #[test]
     fn test_aes_gcm_roundtrip() {
+        // Setup the cipher with a dummy key.
         let key = [1u8; ARGON_KEY_LEN];
         let cipher = Cipher::new(&key).unwrap();
         let plaintext = b"Hello AES GCM";
 
+        // Perform encryption using the AES marker type.
         let ciphertext = cipher.encrypt::<algorithm::Aes256Gcm>(plaintext).unwrap();
+
+        // Ciphertext should not match plaintext (basic sanity check).
         assert_ne!(plaintext, &ciphertext[..]);
 
+        // Decrypt and verify we get the original data back.
         let decrypted = cipher.decrypt::<algorithm::Aes256Gcm>(&ciphertext).unwrap();
         assert_eq!(plaintext, &decrypted[..]);
     }
 
     #[test]
     fn test_chacha_roundtrip() {
+        // Setup the cipher with a dummy key.
         let key = [2u8; ARGON_KEY_LEN];
         let cipher = Cipher::new(&key).unwrap();
         let plaintext = b"Hello ChaCha20";
 
+        // Perform encryption using the ChaCha marker type.
         let ciphertext = cipher.encrypt::<algorithm::XChaCha20Poly1305>(plaintext).unwrap();
+
+        // Ciphertext should not match plaintext.
         assert_ne!(plaintext, &ciphertext[..]);
 
+        // Decrypt and verify we get the original data back.
         let decrypted = cipher.decrypt::<algorithm::XChaCha20Poly1305>(&ciphertext).unwrap();
         assert_eq!(plaintext, &decrypted[..]);
     }
 
     #[test]
     fn test_cross_algorithm_isolation() {
+        // Setup the cipher.
         let key = [3u8; ARGON_KEY_LEN];
         let cipher = Cipher::new(&key).unwrap();
         let plaintext = b"Sensitive Data";
 
+        // Encrypt with AES.
         let aes_ciphertext = cipher.encrypt::<algorithm::Aes256Gcm>(plaintext).unwrap();
 
+        // Attempt to decrypt AES ciphertext with ChaCha engine.
+        // This MUST fail because:
+        // 1. Nonce formats are different.
+        // 2. Keys are different (split from master key).
+        // 3. Algorithms are incompatible.
         let result = cipher.decrypt::<algorithm::XChaCha20Poly1305>(&aes_ciphertext);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_empty_plaintext() {
+        // Setup the cipher.
         let key = [4u8; ARGON_KEY_LEN];
         let cipher = Cipher::new(&key).unwrap();
 
-        // Check if underlying implementations enforce empty checks as documented
+        // Most AEAD implementations (or our wrapper) should reject empty payloads
+        // if that's a policy, or simply encrypt an empty payload.
+        // The original test expected an error, so we document that behavior.
+
+        // Try encrypting empty bytes with AES.
         let result_aes = cipher.encrypt::<algorithm::Aes256Gcm>(&[]);
         assert!(result_aes.is_err());
 
+        // Try encrypting empty bytes with ChaCha.
         let result_chacha = cipher.encrypt::<algorithm::XChaCha20Poly1305>(&[]);
         assert!(result_chacha.is_err());
     }

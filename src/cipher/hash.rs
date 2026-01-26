@@ -1,20 +1,15 @@
-//! Cryptographic Hashing Module
+//! Content integrity verification using BLAKE3.
 //!
-//! This module provides BLAKE3-based cryptographic hashing functionality for data integrity
-//! verification. It implements constant-time comparison operations to prevent timing attacks and
-//! supports streaming hash computation for large files with progress tracking.
+//! This module handles the computation and verification of cryptographic hashes
+//! to ensure file integrity. We use **BLAKE3**, which is:
+//! - Extremely fast (much faster than MD5, SHA-1, SHA-2, SHA-3)
+//! - Secure (based on the Bao tree hash mode and ChaCha stream cipher)
+//! - Parallelizable (utilized here via Rayon integration)
 //!
 //! # Architecture
-//! The Hash struct encapsulates a fixed-size BLAKE3 hash (256 bits) and provides methods for:
-//! - Streaming hash computation from any Read source
-//! - Constant-time verification against expected hash values
-//! - Secure hash comparison using the subtle crate
 //!
-//! # Security Considerations
-//! - Uses BLAKE3, a modern cryptographic hash function with proven security
-//! - Implements constant-time comparison to prevent timing attacks
-//! - Processes data in 256KB chunks for efficient memory usage
-//! - Supports parallel hashing via Rayon for improved performance
+//! The [`struct@Hash`] struct processes data streams asynchronously, allowing for efficient
+//! overlapping of I/O (reading from disk) and CPU work (hashing).
 
 use anyhow::{Context, Result, ensure};
 use blake3::Hasher;
@@ -24,123 +19,94 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use crate::config::HASH_SIZE;
 use crate::ui::progress::ProgressBar;
 
-/// Cryptographic hash container using BLAKE3 algorithm
+/// A container for a computed BLAKE3 hash.
 ///
-/// This struct stores a 256-bit BLAKE3 hash and provides methods for secure
-/// hash computation and verification. The hash is computed in a streaming
-/// fashion to handle arbitrarily large data without loading everything into memory.
-///
-/// # Fields
-/// - `hash`: Fixed-size array containing the 32-byte BLAKE3 hash digest
-///
-/// # Security
-/// The hash comparison operations use constant-time equality checks to prevent
-/// timing attacks that could leak information about hash values.
+/// This struct holds the final 32-byte hash digest and provides methods
+/// for verification and serialization.
 pub struct Hash {
-    /// The 32-byte BLAKE3 hash digest
+    /// The 32-byte BLAKE3 hash digest.
     hash: [u8; HASH_SIZE],
 }
 
 impl Hash {
-    /// Computes BLAKE3 hash from a readable data source
+    /// Computes the hash of a data stream asynchronously.
     ///
-    /// This method performs streaming hash computation using BLAKE3 algorithm.
-    /// It processes data in 256KB chunks and uses Rayon for parallel processing
-    /// to improve performance on multi-core systems.
+    /// This method reads from the provided async reader until EOF, updates
+    /// the hasher, and optionally updates a progress bar.
     ///
     /// # Arguments
-    /// * `reader` - Any type implementing the Read trait containing data to hash
-    /// * `total_size` - Optional total size in bytes for progress tracking
     ///
-    /// # Returns
-    /// * `Result<Hash>` - The computed hash or an error if reading fails
+    /// * `reader` - The async source of data (e.g., file, socket).
+    /// * `total_size` - Optional total size in bytes for the progress bar.
     ///
     /// # Errors
-    /// * I/O errors when reading from the data source
-    /// * Progress bar initialization errors (if total_size is provided)
     ///
-    /// # Performance
-    /// - Uses 256KB buffer size for optimal I/O performance
-    /// - Leverages Rayon for parallel BLAKE3 computation
-    /// - O(n) time complexity where n is the total data size
-    /// - Constant memory usage regardless of input size
+    /// Returns an error if reading from the underlying stream fails.
     pub async fn new<R: AsyncRead + Unpin>(mut reader: R, total_size: Option<u64>) -> Result<Self> {
-        // Initialize BLAKE3 hasher with default settings
+        // Initialize the BLAKE3 hasher.
         let mut hasher = Hasher::new();
 
-        // Allocate 256KB buffer on heap for efficient I/O operations
-        // This size balances memory usage with I/O throughput
+        // allocate a large buffer (256 KiB) on the heap to minimize system calls.
+        // We use Box to avoid blowing up the stack.
         let mut buffer = Box::new([0u8; 256 * 1024]);
 
-        // Initialize progress bar if total size is known for user feedback
+        // Initialize progress bar if total size is known.
+        // This gives user feedback during long hashing operations.
         let progress = if let Some(size) = total_size { Some(ProgressBar::new(size, "Hashing...")?) } else { None };
 
-        // Stream processing loop - read data in chunks until EOF
+        // Read loop: consume stream until EOF.
         loop {
-            // Read up to buffer size from the data source
+            // Read a chunk of data into the buffer.
             let bytes_read = reader.read(&mut buffer[..]).await.context("failed to read data for hashing")?;
 
-            // Check for end of file condition
+            // EOF check.
             if bytes_read == 0 {
                 break;
             }
 
-            // Update hasher with the read data using Rayon for parallel processing
-            // BLAKE3 is designed to take advantage of multiple cores
+            // Update the hasher with the read chunk.
+            // update_rayon leverages multithreading for large inputs if the chunk is huge,
+            // though here we are feeding 256KB chunks which might be single-threaded depending on BLAKE3
+            // config. (Standard update() is extremely fast anyway).
             hasher.update_rayon(&buffer[..bytes_read]);
 
-            // Update progress bar if it's active
+            // Update progress bar.
             if let Some(ref pb) = progress {
                 pb.add(bytes_read as u64);
             }
         }
 
-        // Clean up progress bar display
+        // Complete the progress bar.
         if let Some(pb) = progress {
             pb.finish();
         }
 
-        // Finalize the hash computation and extract the 32-byte digest
+        // Finalize the hash computation.
+        // This produces the 32-byte digest.
         let hash = *hasher.finalize().as_bytes();
+
         Ok(Self { hash })
     }
 
-    /// Verifies this hash against an expected hash value
+    /// Verifies that the stored hash matches an expected hash.
     ///
-    /// Performs constant-time comparison to prevent timing attacks that could
-    /// leak information about the hash values during verification.
-    ///
-    /// # Arguments
-    /// * `expected` - The expected hash value to verify against (32-byte array)
-    ///
-    /// # Returns
-    /// * `Result<()>` - Success if hashes match, error if they don't
+    /// This comparison is performed in constant time to prevent timing attacks,
+    /// although for public hashes this is less critical than for MACs.
     ///
     /// # Errors
-    /// * Returns error if hash verification fails, indicating data corruption or tampering
     ///
-    /// # Security
-    /// Uses subtle::ConstantTimeEq to prevent timing attacks during comparison.
-    /// This ensures that the comparison takes the same amount of time regardless of
-    /// where (or if) the differences occur in the hash values.
+    /// Returns an error if the hashes do not match.
+    #[inline]
     pub fn verify(&self, expected: &[u8; HASH_SIZE]) -> Result<()> {
-        // Perform constant-time equality check to prevent timing attacks
-        // The ct_eq method returns a Choice type that must be converted to bool
+        // Use constant-time equality check.
+        // Even though this is a hash and not a MAC, treating it as sensitive
+        // prevents any potential timing leaks if the hash is used in a sensitive context.
         ensure!(bool::from(self.hash.ct_eq(expected)), "content hash verification failed: data integrity compromised");
         Ok(())
     }
 
-    /// Returns a reference to the raw hash bytes
-    ///
-    /// Provides direct access to the 32-byte hash digest for serialization
-    /// or other operations that need the raw bytes.
-    ///
-    /// # Returns
-    /// * `&[u8; HASH_SIZE]` - Immutable reference to the 32-byte hash array
-    ///
-    /// # Security Note
-    /// The returned reference allows read-only access to maintain hash integrity.
-    /// Modifications to the hash should only occur through the constructor.
+    /// Returns a reference to the raw hash bytes.
+    #[inline]
     pub fn as_bytes(&self) -> &[u8; HASH_SIZE] {
         &self.hash
     }
@@ -177,12 +143,13 @@ mod tests {
         let data = b"verify me";
         let hash = Hash::new(&data[..], None).await.unwrap();
         let mut corrupted = *hash.as_bytes();
-        corrupted[0] ^= 0x01;
+        corrupted[0] ^= 0x01; // Flip a bit
         assert!(hash.verify(&corrupted).is_err());
     }
 
     #[tokio::test]
     async fn test_hash_empty() {
+        // Hashing empty data is valid and produces a specific hash.
         let hash = Hash::new(&[][..], None).await.unwrap();
         assert!(hash.verify(hash.as_bytes()).is_ok());
     }

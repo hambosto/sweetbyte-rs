@@ -1,163 +1,106 @@
-//! # XChaCha20-Poly1305 Authenticated Encryption
+//! XChaCha20-Poly1305 encryption implementation.
 //!
-//! This module provides XChaCha20-Poly1305 implementation for authenticated encryption.
-//! XChaCha20 extends ChaCha20 with a longer nonce (192 bits vs 96 bits) to eliminate
-//! nonce reuse concerns when using random nonces.
+//! This module provides a wrapper around the `chacha20poly1305` crate to implement
+//! authenticated encryption with associated data (AEAD) using the XChaCha20 variant.
 //!
-//! ## Security Properties
+//! # Implementation Details
 //!
-//! - **Confidentiality**: XChaCha20 provides 256-bit security level
-//! - **Authenticity**: Poly1305 provides 128-bit authentication tags
-//! - **Integrity**: Any modification to ciphertext is detected with 2^-128 probability
-//! - **Nonce Safety**: 192-bit nonces make collision probability negligible
+//! - **Algorithm**: XChaCha20-Poly1305 (Extended Nonce ChaCha20)
+//! - **Key Size**: 256 bits (32 bytes)
+//! - **Nonce Size**: 192 bits (24 bytes), randomly generated
+//! - **Tag Size**: 128 bits (16 bytes), appended automatically
+//! - **Ciphertext Format**: `[Nonce (24 bytes)] || [Ciphertext] || [Auth Tag (16 bytes)]`
 //!
-//! ## Advantages over ChaCha20-Poly1305
+//! # Why XChaCha20?
 //!
-//! - Extended nonces (24 bytes) prevent reuse even with random generation
-//! - Better security bounds for multi-message scenarios
-//! - Compatible with ChaCha20-Poly1305 (can decrypt with proper nonce handling)
-//!
-//! ## Format
-/// Ciphertext format: [nonce(24 bytes) || ciphertext || authentication_tag(16 bytes)]
+//! We use the XChaCha20 variant because it supports 192-bit nonces. This allows us to
+//! safely generate nonces randomly without practically any risk of collision (birthday paradox),
+//! unlike standard ChaCha20's 96-bit nonce which requires counter-based management
+//! for long-term safety.
+
 use anyhow::{Result, anyhow, ensure};
 use chacha20poly1305::aead::{Aead, KeyInit, OsRng};
 use chacha20poly1305::{AeadCore, XChaCha20Poly1305, XNonce};
 
 use crate::config::{CHACHA_NONCE_SIZE, KEY_SIZE};
 
-/// # XChaCha20-Poly1305 Cipher Implementation
+/// A wrapper struct for XChaCha20-Poly1305 encryption operations.
 ///
-/// Wrapper struct around the `chacha20poly1305` crate's XChaCha20Poly1305 implementation.
-/// Provides authenticated encryption with extended nonces for enhanced security.
-///
-/// The cipher uses:
-/// - 256-bit ChaCha20 encryption key
-/// - 192-bit extended nonce (generated per encryption)
-/// - 128-bit Poly1305 authentication tag
-/// - Stream cipher encryption (constant-time)
-/// - Poly1305 for authentication (constant-time)
+/// This struct holds the initialized key state and provides high-level
+/// encrypt/decrypt methods that handle extended nonce management.
 pub struct ChaCha20Poly1305 {
-    /// The underlying XChaCha20-Poly1305 cipher instance from the chacha20poly1305 crate
+    /// The inner XChaCha20-Poly1305 state.
     inner: XChaCha20Poly1305,
 }
 
 impl ChaCha20Poly1305 {
-    /// Creates a new XChaCha20-Poly1305 cipher instance
-    ///
-    /// # Arguments
-    /// * `key` - 256-bit (32-byte) ChaCha20 encryption key
-    ///
-    /// # Returns
-    /// Configured XChaCha20-Poly1305 cipher ready for encryption/decryption
+    /// Initializes a new XChaCha20-Poly1305 context with the provided key.
     ///
     /// # Errors
-    /// Returns error if key length is invalid (should be exactly 32 bytes)
     ///
-    /// # Security Notes
-    /// - The key is zeroized after use by the underlying implementation
-    /// - XChaCha20 provides better nonce reuse protection than standard ChaCha20
-    /// - All operations are constant-time to prevent timing attacks
+    /// Returns an error if the key length is invalid.
     #[inline]
     pub fn new(key: &[u8; KEY_SIZE]) -> Result<Self> {
-        // Initialize the underlying XChaCha20-Poly1305 cipher with the provided key
-        // The chacha20poly1305 crate handles key validation and secure key setup
+        // Initialize the inner structure.
+        // XChaCha20 uses the same key setup as ChaCha20.
         let inner = XChaCha20Poly1305::new_from_slice(key)?;
         Ok(Self { inner })
     }
 
-    /// Encrypts plaintext with authenticated encryption
+    /// Encrypts the plaintext and prepends the random extended nonce.
     ///
-    /// Performs XChaCha20-Poly1305 encryption with a randomly generated extended nonce.
-    /// The nonce is prepended to the ciphertext for use during decryption.
+    /// # Format
     ///
-    /// # Arguments
-    /// * `plaintext` - Data to encrypt, must not be empty
-    ///
-    /// # Returns
-    /// Ciphertext in format: [nonce(24 bytes) || encrypted_data || auth_tag(16 bytes)]
+    /// Returns a vector containing: `[Nonce (24B)][Ciphertext][Tag (16B)]`.
     ///
     /// # Errors
-    /// Returns error if:
-    /// - Plaintext is empty (prevents encrypting empty messages)
-    /// - Random number generation fails
-    /// - XChaCha20-Poly1305 encryption operation fails
     ///
-    /// # Security Guarantees
-    /// - Extended 192-bit nonces eliminate nonce reuse concerns
-    /// - Authentication tag ensures ciphertext integrity
-    /// - Encryption is IND-CPA secure
-    /// - Combined with authentication tag: IND-CCA2 secure
-    ///
-    /// # Performance Characteristics
-    /// - O(n) complexity where n is plaintext length
-    /// - Software implementation (constant-time, no hardware dependencies)
-    /// - Stream cipher allows encryption of arbitrarily large data
-    /// - Poly1305 authentication is fast and constant-time
+    /// Returns an error if:
+    /// - The plaintext is empty.
+    /// - Encryption fails.
     #[inline]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        // Validate input to prevent encryption of empty messages
+        // Enforce that plaintext is not empty.
+        // Good practice to avoid edge cases with empty messages.
         ensure!(!plaintext.is_empty(), "plaintext cannot be empty");
 
-        // Generate a cryptographically secure random 192-bit extended nonce
-        // XChaCha20 uses 24-byte nonces vs 12-byte for standard ChaCha20
+        // Generate a random 192-bit (24-byte) nonce.
+        // With 192 bits, the probability of collision is negligible even with
+        // billions of files, making random generation safe.
         let nonce_bytes = XChaCha20Poly1305::generate_nonce(&mut OsRng);
 
-        // Perform XChaCha20-Poly1305 encryption with the generated nonce
-        // The result includes the ciphertext and 128-bit Poly1305 authentication tag
+        // Perform the encryption.
+        // The inner encrypt method appends the 16-byte Poly1305 tag.
         let mut result = self
             .inner
             .encrypt(XNonce::from_slice(&nonce_bytes), plaintext)
             .map_err(|e| anyhow!("chacha20poly1305 encryption failed: {e}"))?;
 
-        // Prepend the extended nonce to the ciphertext for storage/transmission
-        // Format: [nonce(24 bytes) || ciphertext || auth_tag(16 bytes)]
+        // Prepend the nonce to the result.
+        // The recipient needs this nonce to decrypt.
         result.splice(0..0, nonce_bytes.iter().copied());
 
         Ok(result)
     }
 
-    /// Decrypts ciphertext with authentication verification
-    ///
-    /// Performs authenticated decryption of XChaCha20-Poly1305 ciphertext.
-    /// The extended nonce is extracted from the beginning of the ciphertext and
-    /// used for decryption. Authentication is verified automatically.
-    ///
-    /// # Arguments
-    /// * `ciphertext` - Encrypted data with extended nonce prepended
-    ///
-    /// # Returns
-    /// Original plaintext if authentication succeeds
+    /// Decrypts the ciphertext using the prepended extended nonce.
     ///
     /// # Errors
-    /// Returns error if:
-    /// - Ciphertext is too short (less than extended nonce size)
-    /// - Authentication tag verification fails (indicates tampering)
-    /// - Underlying XChaCha20-Poly1305 decryption fails
     ///
-    /// # Security Guarantees
-    /// - Authentication failure provides no information about plaintext
-    /// - Constant-time authentication tag comparison via Poly1305
-    /// - Successful decryption guarantees ciphertext authenticity
-    /// - Extended nonce prevents collision attacks
-    /// - Protects against chosen ciphertext attacks
-    ///
-    /// # Performance Characteristics
-    /// - O(n) complexity where n is ciphertext length
-    /// - Software implementation (consistent performance across platforms)
-    /// - Stream cipher allows parallel processing of ciphertext blocks
-    /// - Poly1305 authentication is fast and constant-time
+    /// Returns an error if:
+    /// - The ciphertext is shorter than the nonce size.
+    /// - The authentication tag verification fails.
     #[inline]
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        // Validate minimum ciphertext length (at least extended nonce + minimal encrypted data + auth tag)
+        // Validate minimum length.
+        // Must be at least 24 bytes (nonce) + tag.
         ensure!(ciphertext.len() >= CHACHA_NONCE_SIZE, "ciphertext too short: need at least {} bytes, got {}", CHACHA_NONCE_SIZE, ciphertext.len());
 
-        // Split ciphertext into extended nonce and encrypted data portions
-        // First 24 bytes: extended nonce, remainder: encrypted data + authentication tag
+        // Extract the nonce (first 24 bytes) and the encrypted payload.
         let (nonce_bytes, data) = ciphertext.split_at(CHACHA_NONCE_SIZE);
 
-        // Perform authenticated decryption
-        // The chacha20poly1305 crate automatically verifies the Poly1305 authentication tag
-        // and returns error if verification fails (detects tampering)
+        // Perform decryption and authentication.
+        // Verifies the Poly1305 tag and decrypts if valid.
         self.inner.decrypt(XNonce::from_slice(nonce_bytes), data).map_err(|_| anyhow!("chacha20poly1305 authentication failed"))
     }
 }
@@ -168,6 +111,7 @@ mod tests {
 
     #[test]
     fn test_chacha_new() {
+        // Verify valid construction.
         let key = [0u8; KEY_SIZE];
         let cipher = ChaCha20Poly1305::new(&key);
         assert!(cipher.is_ok());
@@ -175,21 +119,28 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
+        // Setup cipher.
         let key = [0u8; KEY_SIZE];
         let cipher = ChaCha20Poly1305::new(&key).unwrap();
         let plaintext = b"Hello, XChaCha20!";
 
+        // Encrypt.
         let ciphertext = cipher.encrypt(plaintext).unwrap();
+
+        // Verify output is different.
         assert_ne!(plaintext, &ciphertext[..]);
 
+        // Verify length: 24 (nonce) + 17 (plaintext) + 16 (tag) = 57 bytes.
         assert_eq!(ciphertext.len(), CHACHA_NONCE_SIZE + plaintext.len() + 16);
 
+        // Decrypt and verify.
         let decrypted = cipher.decrypt(&ciphertext).unwrap();
         assert_eq!(plaintext, &decrypted[..]);
     }
 
     #[test]
     fn test_encrypt_empty_plaintext() {
+        // Verify empty plaintext rejection.
         let key = [0u8; KEY_SIZE];
         let cipher = ChaCha20Poly1305::new(&key).unwrap();
         assert!(cipher.encrypt(&[]).is_err());
@@ -197,6 +148,7 @@ mod tests {
 
     #[test]
     fn test_decrypt_too_short() {
+        // Verify short input rejection.
         let key = [0u8; KEY_SIZE];
         let cipher = ChaCha20Poly1305::new(&key).unwrap();
         let ciphertext = vec![0u8; CHACHA_NONCE_SIZE - 1];
@@ -205,14 +157,17 @@ mod tests {
 
     #[test]
     fn test_decrypt_tampered_ciphertext() {
+        // Setup cipher and encrypt.
         let key = [0u8; KEY_SIZE];
         let cipher = ChaCha20Poly1305::new(&key).unwrap();
         let plaintext = b"Secret Message";
         let mut ciphertext = cipher.encrypt(plaintext).unwrap();
 
+        // Tamper with ciphertext payload.
         let payload_idx = CHACHA_NONCE_SIZE;
         ciphertext[payload_idx] ^= 0x01;
 
+        // Verify decryption failure.
         let result = cipher.decrypt(&ciphertext);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "chacha20poly1305 authentication failed");

@@ -1,277 +1,141 @@
-//! Global Configuration Constants
+//! Application configuration and cryptographic constants.
 //!
-//! This module contains all configuration parameters used throughout the SweetByte
-//! application. These constants define cryptographic parameters, file formats,
-//! performance settings, and security policies.
+//! This module defines the core constants used throughout the application, including:
+//! - Cryptographic parameters (key sizes, nonce sizes, iteration counts)
+//! - Application limits (buffer sizes, filename lengths)
+//! - Feature flags and magic bytes
+//! - Default configuration values
 //!
-//! ## Design Philosophy
-//!
-//! The configuration follows these principles:
-//! - **Security First**: All cryptographic parameters use conservative, well-vetted values
-//! - **Performance Aware**: Parameters balance security with reasonable performance
-//! - **Future Proof**: Version numbers and algorithm identifiers support format evolution
-//! - **Cross Platform**: Values work consistently across different operating systems
-//!
-//! ## Security Considerations
-//!
-//! - Argon2 parameters are chosen to resist GPU/ASIC attacks
-//! - Nonce sizes provide sufficient collision resistance
-//! - Key sizes meet current security standards (128+ bits of security)
-//! - Reed-Solomon parameters provide strong error correction without excessive overhead
+//! These constants ensure consistency across the codebase and serve as the single
+//! source of truth for the file format specification.
 
-/// Application name used in user interfaces and file metadata
+/// The application name used in user-facing output and prompts.
 pub const APP_NAME: &str = "SweetByte";
 
-/// File extension for encrypted files
-///
-/// This extension identifies files encrypted by SweetByte. It should be
-/// unique enough to avoid conflicts with other applications while being
-/// memorable and easy to type.
+/// The default file extension appended to encrypted files.
 pub const FILE_EXTENSION: &str = ".swx";
 
-// === Argon2 Key Derivation Parameters ===
-// These parameters control the computational cost of password-based key derivation.
-// They are chosen to provide strong resistance against brute-force attacks while
-// remaining usable on typical modern hardware.
-
-/// Argon2 time cost parameter (number of iterations)
+/// Argon2id time cost (number of passes).
 ///
-/// This value determines how many passes the algorithm makes over memory.
-/// Higher values increase resistance to brute-force attacks but also increase
-/// processing time. Three iterations provide a good security/performance balance.
-///
-/// Security Impact: Each additional iteration doubles the attack cost
-/// Performance Impact: Linear increase in processing time
+/// We use 3 passes to balance security and usability. This provides
+/// substantial resistance to GPU-based cracking while keeping the
+/// derivation time reasonable for the user (typically < 1 second).
 pub const ARGON_TIME: u32 = 3;
 
-/// Argon2 memory cost parameter in kilobytes
+/// Argon2id memory cost in KiB.
 ///
-/// This controls how much memory the algorithm uses, which is critical for
-/// resisting GPU and ASIC attacks that have limited memory. 64MB provides
-/// strong protection while remaining accessible on most systems.
-///
-/// Security Impact: Higher memory requirements make parallel attacks more expensive
-/// Performance Impact: Linear increase in memory usage, minimal CPU impact
+/// Set to 64 MiB (64 * 1024). This memory hardness requirement makes
+/// ASIC/FPGA attacks significantly more expensive by requiring
+/// dedicated RAM per candidate password tester.
 pub const ARGON_MEMORY: u32 = 64 * 1024;
 
-/// Argon2 parallelism parameter (number of threads)
+/// Argon2id parallelism factor (number of threads).
 ///
-/// Controls how many parallel lanes the algorithm uses. Four threads provide
-/// good parallelism on modern multi-core processors while maintaining compatibility
-/// with systems that have fewer cores.
-///
-/// Security Impact: Parallelism increases resistance to certain attack vectors
-/// Performance Impact: Utilizes multiple CPU cores for faster processing
+/// Set to 4 threads. This utilizes modern multi-core CPUs to compute
+/// the hash faster for the legitimate user, while forcing an attacker
+/// to replicate this parallelism (increasing silicon area cost).
 pub const ARGON_THREADS: u32 = 4;
 
-/// Length of derived keys in bytes
+/// Length of the derived master key in bytes.
 ///
-/// 64 bytes (512 bits) provides sufficient length to derive both encryption
-/// and MAC keys while maintaining a security margin. This exceeds the minimum
-/// requirements for AES-256 and other supported algorithms.
+/// We derive a 64-byte key to support our dual-cipher architecture
+/// (potentially splitting into two 32-byte keys) or for future extensibility.
 pub const ARGON_KEY_LEN: usize = 64;
 
-/// Length of Argon2 salt in bytes
+/// Length of the random salt used for key derivation in bytes.
 ///
-/// 32 bytes provides 256 bits of randomness, which is more than sufficient
-/// to prevent salt collision attacks. Each encryption operation uses a unique
-/// salt to ensure identical passwords produce different keys.
-///
-/// Security Impact: Prevents pre-computation attacks and rainbow table attacks
-/// Storage Cost: 32 bytes per encrypted file is negligible
+/// 32 bytes (256 bits) provides complete protection against pre-computation
+/// attacks (rainbow tables) and ensures uniqueness per file.
 pub const ARGON_SALT_LEN: usize = 32;
 
-// === Reed-Solomon Error Correction Parameters ===
-// These parameters control the resilience of the encoding against data corruption.
-// The chosen values provide strong protection while keeping overhead reasonable.
-
-/// Number of data shards in Reed-Solomon encoding
+/// Number of data shards for Reed-Solomon erasure coding.
 ///
-/// Data shards contain the original file data. Four shards provide a good
-/// balance between error correction capability and computational overhead.
-///
-/// Performance Impact: More shards increase parallel processing potential
-/// Storage Impact: No storage overhead for data shards
+/// This is the "k" parameter in the (n, k) RS code. We split data into
+/// 4 original data shards.
 pub const DATA_SHARDS: usize = 4;
 
-/// Number of parity shards in Reed-Solomon encoding
+/// Number of parity shards for Reed-Solomon erasure coding.
 ///
-/// Parity shards provide error correction capability. Ten parity shards allow
-/// recovery from up to 10 corrupted shards out of 14 total (4 data + 10 parity),
-/// providing approximately 71% error tolerance.
-///
-/// Error Tolerance: Can recover from any 10 corrupted shards
-/// Storage Overhead: Increases file size by 250% (10/4 parity ratio)
+/// This is the "m" parameter. We generate 10 parity shards, allowing
+/// recovery from the loss of any 10 shards (total 14). This provides
+/// extremely high resilience to data corruption.
 pub const PARITY_SHARDS: usize = 10;
 
-// === Processing and Buffering Parameters ===
-// These parameters control how data is processed in chunks for memory efficiency.
-
-/// Block size for padding and cryptographic operations
+/// The block size for operations requiring alignment, in bytes.
 ///
-/// 128 bytes aligns well with modern CPU cache lines and cryptographic block sizes.
-/// This size provides good performance for both small and large files.
-///
-/// Performance Impact: Optimized for cache efficiency and SIMD operations
-/// Memory Impact: Minimal per-operation memory overhead
+/// 128 bytes allows for alignment with cache lines and SIMD registers,
+/// optimizing memory access patterns during processing.
 pub const BLOCK_SIZE: usize = 128;
 
-/// Chunk size for file processing operations
+/// Size of data chunks read from the file in bytes.
 ///
-/// 256KB chunks provide a good balance between memory usage and I/O efficiency.
-/// This size allows streaming processing of large files while keeping memory
-/// usage reasonable on constrained systems.
-///
-/// Memory Impact: Peak memory usage is approximately this size
-/// I/O Impact: Optimized for modern storage devices
+/// Set to 256 KiB. This size is chosen to:
+/// 1. Amortize the overhead of channel passing and thread synchronization.
+/// 2. Fit comfortably in CPU L2/L3 caches.
+/// 3. Keep memory usage proportional to thread count.
 pub const CHUNK_SIZE: usize = 256 * 1024;
 
-// === File Format and Protocol Constants ===
-// These constants define the binary format of encrypted files and protocol identifiers.
-
-/// Magic bytes for file format identification
+/// Magic bytes identifying a SweetByte encrypted file.
 ///
-/// This 4-byte value identifies files created by SweetByte. It's checked
-/// during decryption to verify file format compatibility and to prevent
-/// processing of unrelated files.
-///
-/// Choice Criteria: Easy to recognize but unlikely to appear in random data
+/// `0xDEAD_BEEF` is a recognizable pattern used in the file header
+/// to quickly verify file type before attempting expensive decryption.
 pub const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
 
-/// Size of authentication tag (MAC) in bytes
-///
-/// 32 bytes (256 bits) provides strong integrity protection for authenticated
-/// encryption algorithms. This size is compatible with both AES-GCM and
-/// ChaCha20-Poly1305 security requirements.
-///
-/// Security Impact: 2^256 probability of successful forgery attack
-/// Storage Impact: 32 bytes per file
+/// Size of the HMAC-SHA256 authentication tag in bytes.
 pub const MAC_SIZE: usize = 32;
 
-/// Current file format version
+/// The current file format version.
 ///
-/// Version 2 includes all current features while maintaining compatibility
-/// with future extensions. The version number allows the application to
-/// handle different file formats gracefully.
-///
-/// Format Evolution: Future versions will maintain backward compatibility
-/// where possible, or provide clear upgrade paths.
+/// Version 2 (`0x0002`) supports the latest header features including
+/// Reed-Solomon protected headers and metadata.
 pub const CURRENT_VERSION: u16 = 0x0002;
 
-// === Algorithm Identifiers ===
-// These constants identify the algorithms used in the encrypted file format.
-
-/// Identifier for AES-256-GCM encryption algorithm
-///
-/// AES with 256-bit key in Galois/Counter Mode provides:
-/// - Strong encryption (256-bit security level)
-/// - Authenticated encryption (integrity protection)
-/// - Hardware acceleration support on most modern CPUs
+/// Algorithm identifier for AES-256-GCM.
 pub const ALGORITHM_AES_256_GCM: u8 = 0x01;
 
-/// Identifier for XChaCha20-Poly1305 encryption algorithm
-///
-/// XChaCha20 with Poly1305 provides:
-/// - Strong encryption (256-bit security level)
-/// - Authenticated encryption (integrity protection)
-/// - Excellent performance on all platforms, even without AES hardware
-/// - Extended nonce for better collision resistance
+/// Algorithm identifier for XChaCha20-Poly1305.
 pub const ALGORITHM_CHACHA20_POLY1305: u8 = 0x02;
 
-/// Size of hash digests used throughout the application
-///
-/// 32 bytes (256 bits) is used for SHA-256 hashes, providing:
-/// - Strong collision resistance
-/// - Compatibility with existing standards
-/// - Efficient computation on modern hardware
+/// Size of the generic hash output (BLAKE3) in bytes.
 pub const HASH_SIZE: usize = 32;
 
-/// Identifier for ZLIB compression algorithm
-///
-/// ZLIB (DEFLATE) provides good compression with reasonable speed
-/// and is widely supported across platforms and languages.
+/// Compression method identifier for Zlib.
 pub const COMPRESSION_ZLIB: u8 = 0x01;
 
-/// Identifier for Reed-Solomon error correction encoding
-///
-/// Reed-Solomon provides protection against data corruption and can
-/// recover from multiple shard failures simultaneously.
+/// Encoding method identifier for Reed-Solomon.
 pub const ENCODING_REED_SOLOMON: u8 = 0x01;
 
-/// Identifier for Argon2 key derivation function
-///
-/// Argon2 is the winner of the Password Hashing Competition and provides
-/// strong resistance against GPU/ASIC attacks.
+/// Key Derivation Function identifier for Argon2id.
 pub const KDF_ARGON2: u8 = 0x01;
 
-// === File and User Interface Limits ===
-// These constants define limits and constraints for safe operation.
-
-/// Maximum filename length that can be stored in metadata
+/// Maximum allowed length for filenames preserved in metadata.
 ///
-/// 256 bytes accommodates most filename conventions across operating systems
-/// while preventing excessive metadata size. This includes UTF-8 encoding,
-/// so it supports international filenames.
+/// 256 bytes covers most filesystem limits (e.g., ext4 is 255 bytes).
 pub const MAX_FILENAME_LENGTH: usize = 256;
 
-/// Size of AES-GCM nonce in bytes
+/// Size of the nonce for AES-GCM in bytes.
 ///
-/// 12 bytes (96 bits) is the recommended size for AES-GCM. This provides
-/// sufficient randomness while keeping the nonce size reasonable and
-/// maintaining good performance characteristics.
+/// Standard 12 bytes (96 bits) as recommended by NIST SP 800-38D.
 pub const AES_NONCE_SIZE: usize = 12;
 
-/// Size of encryption keys in bytes
+/// Size of the raw encryption key in bytes.
 ///
-/// 32 bytes (256 bits) provides strong security for both AES-256 and
-/// ChaCha20. This meets current security recommendations and provides
-/// a comfortable security margin against future cryptanalytic advances.
+/// 32 bytes (256 bits) for AES-256 and XChaCha20.
 pub const KEY_SIZE: usize = 32;
 
-/// Size of XChaCha20 nonce in bytes
+/// Size of the extended nonce for XChaCha20 in bytes.
 ///
-/// 24 bytes (192 bits) is the standard size for XChaCha20. The extended
-/// nonce size provides excellent collision resistance while maintaining
-/// compatibility with the ChaCha20 specification.
+/// 24 bytes (192 bits) allows for random nonces without risk of collision,
+/// unlike standard ChaCha20's 12-byte nonce.
 pub const CHACHA_NONCE_SIZE: usize = 24;
 
-/// Minimum password length for user passwords
+/// Minimum required password length.
 ///
-/// 8 characters provides a reasonable balance between security and usability.
-/// Shorter passwords are vulnerable to brute-force attacks, while longer
-/// requirements may discourage users from using strong passwords.
-///
-/// Security Impact: Prevents obviously weak passwords
-/// Usability Impact: Reasonable minimum that most users accept
+/// Enforces a basic level of entropy for user passwords.
 pub const PASSWORD_MIN_LENGTH: usize = 8;
 
-// === File Discovery and Exclusion Patterns ===
-// These patterns define which files and directories are automatically excluded
-// from the interactive file browser to prevent accidental encryption of system
-// files and improve user experience.
-
-/// File and directory patterns to exclude from file discovery
+/// List of file and directory patterns to exclude during recursive directory scanning.
 ///
-/// These patterns prevent accidental encryption of:
-/// - Build artifacts and dependencies (target, vendor, node_modules)
-/// - Version control metadata (.git, .github)
-/// - Configuration and cache directories (.config, .local, .cache)
-/// - Security-sensitive files (.ssh, .gnupg)
-/// - Source code files that typically don't need encryption (*.rs, *.go)
-///
-/// This improves user experience by focusing on relevant files and preventing
-/// accidental system file encryption that could cause boot or functionality issues.
-pub const EXCLUDED_PATTERNS: &[&str] = &[
-    "target",       // Rust build artifacts
-    "vendor",       // Go/Cargo dependencies
-    "node_modules", // Node.js dependencies
-    ".git",         // Git repository metadata
-    ".github",      // GitHub workflows and metadata
-    ".config",      // User configuration files
-    ".local",       // Local user data
-    ".cache",       // Application cache files
-    ".ssh",         // SSH keys and configuration
-    ".gnupg",       // GPG keys and configuration
-    "*.rs",         // Rust source files
-    "*.go",         // Go source files
-];
+/// Includes version control directories, build artifacts, and system caches
+/// to prevent encrypting unnecessary or temporary files.
+pub const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go"];

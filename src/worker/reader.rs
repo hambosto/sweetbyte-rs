@@ -1,36 +1,10 @@
-//! Concurrent file reader with chunking strategies
+//! Asynchronous file reading and chunking.
 //!
-//! This module implements the input stage of the concurrent processing pipeline.
-//! The reader is responsible for efficiently reading input data, chunking it
-//! appropriately, and producing tasks for the executor thread.
-//!
-//! ## Reading Strategies
-// The reader implements two different strategies based on processing mode:
-//
-// ### Encryption Mode (Fixed Chunking)
-// - Reads data in fixed-size chunks (default 1MB)
-// - Each chunk becomes an independent task
-// - Optimized for throughput and parallel processing
-// - Simple and deterministic behavior
-//
-// ### Decryption Mode (Length-Prefixed)
-// - Reads length-prefixed chunks written during encryption
-// - Preserves original data boundaries
-// - Handles variable-sized encrypted chunks
-// - Ensures complete data recovery
-//!
-//! ## Performance Optimization
-// - **Buffered I/O**: Uses BufReader for efficient disk access
-// - **Minimal Allocation**: Reuses buffer for fixed-size chunks
-// - **Zero-Copy**: Moves data directly to tasks without copying
-// - **Backpressure**: Channel operations provide natural flow control
-//!
-//! ## Concurrency Design
-// The reader operates in a dedicated thread and communicates exclusively
-// through bounded channels. This design provides:
-// - Non-blocking I/O operations
-// - Automatic backpressure when executor is overwhelmed
-// - Clean shutdown semantics when input is exhausted
+//! This module handles reading the input file and splitting it into manageable `Task` chunks
+//! for parallel processing. It supports two modes:
+//! - **Fixed Chunks** (Encryption): Reads exactly `N` bytes.
+//! - **Variable Chunks** (Decryption): Reads a length header, then the payload (reversing the write
+//!   format).
 
 use anyhow::{Context, Result, anyhow, ensure};
 use flume::Sender;
@@ -38,281 +12,109 @@ use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 
 use crate::types::{Processing, Task};
 
-/// Minimum allowed chunk size for fixed-size reading (256KB)
-///
-/// This constant ensures that chunks are large enough to provide good
-/// performance benefits from parallel processing while not being so large
-/// that they cause memory pressure or latency issues. 256KB provides
-/// a good balance between I/O efficiency and parallelization benefits.
+/// Minimum allowed chunk size (256 KiB) to ensure efficiency.
 pub const MIN_CHUNK_SIZE: usize = 256 * 1024;
 
-/// Concurrent file reader with adaptive chunking strategies
-///
-/// The Reader is responsible for the input stage of the processing pipeline.
-/// It reads data from the input source and creates tasks for the executor.
-/// The reading strategy depends on whether we're encrypting or decrypting.
-///
-/// ## Design Philosophy
-///
-/// - **Encryption**: Fixed-size chunks for optimal parallelization
-/// - **Decryption**: Length-prefixed chunks to maintain original boundaries
-/// - **Performance**: Buffered I/O and minimal allocations
-/// - **Thread Safety**: Single-threaded operation with channel communication
-///
-/// ## Memory Management
-///
-/// For encryption mode, a single buffer is reused across reads to minimize
-/// allocations. For decryption mode, dynamic allocation is necessary due to
-/// variable chunk sizes determined by the encrypted format.
+/// Handles reading input streams and generating tasks.
 pub struct Reader {
-    /// Processing mode determining the reading strategy
-    /// Affects chunking behavior and data boundaries
+    /// The processing mode (Encrypt/Decrypt).
     mode: Processing,
-    /// Fixed chunk size for encryption mode
-    /// Ignored for decryption mode which uses length-prefixed chunks
-    /// Must be at least MIN_CHUNK_SIZE to ensure performance
+
+    /// The target size for chunks (for encryption).
     chunk_size: usize,
 }
 
 impl Reader {
-    /// Creates a new Reader with the specified mode and chunk size
-    ///
-    /// Initializes the reader with appropriate settings for the processing mode.
-    /// The chunk size validation ensures good performance characteristics.
+    /// Creates a new reader configuration.
     ///
     /// # Arguments
     ///
-    /// * `mode` - Processing mode (Encryption or Decryption)
-    /// * `chunk_size` - Size of chunks for encryption mode (ignored for decryption)
-    ///
-    /// # Returns
-    ///
-    /// A configured Reader instance or an error if chunk size is invalid
+    /// * `mode` - Whether we are encrypting or decrypting.
+    /// * `chunk_size` - Size of chunks to read (encryption only).
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - Chunk size is below MIN_CHUNK_SIZE (256KB)
-    /// - This minimum ensures adequate parallelization efficiency
-    ///
-    /// # Performance Notes
-    ///
-    /// The minimum chunk size is carefully chosen to balance:
-    /// - **Parallelization**: Large enough to benefit from concurrent processing
-    /// - **Memory Usage**: Not so large as to cause memory pressure
-    /// - **I/O Efficiency**: Matches typical filesystem block sizes
-    /// - **Latency**: Keeps task processing latency reasonable
+    /// Returns an error if `chunk_size` is too small.
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
         ensure!(chunk_size >= MIN_CHUNK_SIZE, "chunk size must be at least {MIN_CHUNK_SIZE} bytes, got {chunk_size}");
         Ok(Self { mode, chunk_size })
     }
 
-    /// Reads all data from input and sends tasks to the executor
+    /// Reads the entire stream and sends chunks to the worker channel.
     ///
-    /// This is the main entry point for the reader. It wraps the input in a
-    /// buffered reader for performance and delegates to the appropriate
-    /// reading strategy based on the processing mode.
-    ///
-    /// ## Reading Strategies
-    ///
-    /// - **Encryption**: Fixed-size chunks (see `read_fixed_chunks`)
-    /// - **Decryption**: Length-prefixed chunks (see `read_length_prefixed`)
-    ///
-    /// # Arguments
-    ///
-    /// * `input` - Readable input stream
-    /// * `sender` - Channel sender for task distribution to executor
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful completion or an error if reading fails
-    ///
-    /// # Error Handling
-    ///
-    /// Errors from I/O operations are propagated with context. Channel send
-    /// errors indicate that the executor has shut down unexpectedly.
-    ///
-    /// # Performance Notes
-    ///
-    /// - **Buffered I/O**: BufReader reduces system call overhead
-    /// - **Memory Efficiency**: Reuses buffers where possible
-    /// - **Backpressure**: Channel operations naturally limit reading speed
-    /// - **Thread Safety**: Single-threaded operation with thread-safe channels
+    /// This runs asynchronously and blocks only on I/O or backpressure from the channel.
     pub async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
-        // Wrap input in BufReader for efficient I/O operations
-        // This reduces system call overhead and improves read performance
         let mut reader = BufReader::new(input);
 
-        // Delegate to appropriate reading strategy based on processing mode
-        // Each strategy is optimized for its specific use case
+        // Dispatch based on mode.
+        // Encryption uses fixed block sizes.
+        // Decryption respects the encoded chunk boundaries.
         match self.mode {
             Processing::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
             Processing::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
         }
     }
 
-    /// Reads data in fixed-size chunks for encryption processing
-    ///
-    /// This method implements the reading strategy for encryption mode.
-    /// It reads data in fixed-size chunks and creates tasks for each chunk.
-    /// This approach maximizes parallelization efficiency.
-    ///
-    /// ## Algorithm
-    ///
-    /// 1. Allocate a reusable buffer of the configured chunk size
-    /// 2. Read data into the buffer repeatedly until EOF
-    /// 3. Create a task for each chunk (even partial chunks)
-    /// 4. Send tasks to the executor via the channel
-    /// 5. Increment task index for ordering purposes
-    ///
-    /// ## Performance Characteristics
-    ///
-    /// - **Memory**: Single reusable buffer minimizes allocations
-    /// - **I/O**: Buffered reading reduces system call overhead
-    /// - **Parallelization**: Fixed chunks provide consistent workload
-    /// - **Backpressure**: Channel operations limit reading speed
-    ///
-    /// # Arguments
-    ///
-    /// * `reader` - Buffered input reader
-    /// * `sender` - Channel sender for task distribution
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful completion or an error if operations fail
-    ///
-    /// # Error Handling
-    ///
-    /// - **I/O Errors**: Propagated with context about the failed operation
-    /// - **Channel Errors**: Occur when executor shuts down unexpectedly
-    /// - **Partial Success**: Tasks sent before error remain valid
-    ///
-    /// # Concurrency Notes
-    ///
-    /// This method runs in the reader thread and communicates exclusively
-    /// through the channel. The bounded channel provides natural backpressure
-    /// to prevent overwhelming the executor when processing is slow.
+    /// Reads fixed-size chunks for encryption.
     async fn read_fixed_chunks<R: AsyncRead + Unpin>(&self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
-        // Allocate a single reusable buffer for all read operations
-        // This minimizes memory allocations and garbage collection overhead
+        // Reuse buffer allocation?
+        // Actually we allocate new vectors for each task to send ownership.
+        // To optimize, we could use a buffer pool, but simple allocation is fine for now.
         let mut buffer = vec![0u8; self.chunk_size];
 
-        // Track the sequential index for each task
-        // This enables proper ordering in the output buffer
         let mut index = 0u64;
 
-        // Continue reading until EOF (bytes_read == 0)
         loop {
-            // Read data into the buffer
-            // This may return less than the full buffer size on the last chunk
+            // Read up to chunk_size bytes.
+            // Note: read() might return fewer bytes if EOF is reached.
+            // We don't use read_exact here because the last chunk will be short.
             let bytes_read = reader.read(&mut buffer).await.context("failed to read chunk")?;
 
-            // Check for EOF condition
             if bytes_read == 0 {
+                // EOF reached.
                 break;
             }
 
-            // Create a task with the actual data read
-            // Only copy the relevant portion of the buffer
+            // Create task with the actual data read.
+            // We slice `buffer[..bytes_read]` and convert to Vec, which copies the data.
             sender.send_async(Task { data: buffer[..bytes_read].to_vec(), index }).await.map_err(|_| anyhow!("channel closed"))?;
 
-            // Increment index for the next task
             index += 1;
         }
 
         Ok(())
     }
 
-    /// Reads length-prefixed chunks for decryption processing
+    /// Reads length-prefixed chunks for decryption.
     ///
-    /// This method implements the reading strategy for decryption mode.
-    /// It reads data that was written with length prefixes during encryption.
-    /// This ensures that the original data boundaries are preserved.
-    ///
-    /// ## Data Format
-    ///
-    /// Each chunk in the encrypted file has the format:
-    /// ```
-    /// [4-byte length (big-endian)] [chunk data]
-    /// ```
-    ///
-    /// The length prefix allows the reader to know exactly how much
-    /// data to read for each chunk, handling variable-sized encrypted
-    /// blocks correctly.
-    ///
-    /// ## Algorithm
-    ///
-    /// 1. Read 4-byte length prefix
-    /// 2. Convert to usize (big-endian)
-    /// 3. Skip zero-length chunks (padding artifacts)
-    /// 4. Read exactly that many bytes of data
-    /// 5. Create task and send to executor
-    /// 6. Repeat until EOF
-    ///
-    /// ## Performance Characteristics
-    ///
-    /// - **Variable Size**: Handles chunks of different sizes efficiently
-    /// - **Memory**: Allocates exact size needed for each chunk
-    /// - **Error Detection**: Detects truncated/corrupted input files
-    /// - **Efficiency**: read_exact ensures precise I/O operations
-    ///
-    /// # Arguments
-    ///
-    /// * `reader` - Buffered input reader
-    /// * `sender` - Channel sender for task distribution
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful completion or an error if operations fail
-    ///
-    /// # Error Handling
-    ///
-    /// - **EOF Detection**: Normal termination when length prefix read fails
-    /// - **Truncated Data**: read_exact errors indicate corrupted input
-    /// - **Channel Errors**: Executor shutdown conditions
-    /// - **Memory**: Allocation failures for large chunks
-    ///
-    /// # Concurrency Notes
-    ///
-    /// This static method doesn't require &self since it doesn't use
-    /// chunk_size. It operates independently in the reader thread.
+    /// The format assumed is: `[Length: u32][Data: bytes]...`
     async fn read_length_prefixed<R: AsyncRead + Unpin>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
-        // Track the sequential index for maintaining order
         let mut index = 0u64;
 
         loop {
-            // Read the 4-byte length prefix
-            // This tells us exactly how much data to expect for this chunk
+            // Step 1: Read the 4-byte length prefix.
             let mut buffer_len = [0u8; 4];
 
-            // If we can't read the length prefix, we've reached EOF
-            // This is the normal termination condition for encrypted files
+            // If we can't read 4 bytes (EOF), we stop.
             if reader.read_exact(&mut buffer_len).await.is_err() {
                 break;
             }
 
-            // Convert the length prefix to usize
-            // Uses big-endian format for cross-platform compatibility
+            // Parse length (Big Endian).
             let chunk_len = u32::from_be_bytes(buffer_len) as usize;
 
-            // Skip zero-length chunks (may occur from padding)
-            // This maintains compatibility with the encryption output format
             if chunk_len == 0 {
+                // Should not happen in valid streams, but handle gracefully.
                 continue;
             }
 
-            // Allocate exact size needed for this chunk
-            // This avoids waste and handles variable chunk sizes efficiently
+            // Step 2: Read the actual payload.
             let mut data = vec![0u8; chunk_len];
-
-            // Read exactly the expected number of bytes
-            // read_exact will fail if the file is truncated or corrupted
             reader.read_exact(&mut data).await.context("failed to read chunk data")?;
 
-            // Create task with the chunk data and send to executor
+            // Send to worker.
             sender.send_async(Task { data, index }).await.map_err(|_| anyhow!("channel closed"))?;
 
-            // Increment index for the next task
             index += 1;
         }
 
@@ -333,21 +135,25 @@ mod tests {
         let chunk_size = MIN_CHUNK_SIZE;
         let reader = Reader::new(Processing::Encryption, chunk_size).unwrap();
 
+        // Create data: 1 full chunk + 100 bytes.
         let data = vec![1u8; chunk_size + 100];
         let input = Cursor::new(&data);
         let (tx, rx) = unbounded();
 
         reader.read_all(input, &tx).await.unwrap();
-        drop(tx);
+        drop(tx); // Close sender to finish stream
 
+        // First task: full chunk.
         let task1 = rx.recv_async().await.unwrap();
         assert_eq!(task1.index, 0);
         assert_eq!(task1.data.len(), chunk_size);
 
+        // Second task: remainder.
         let task2 = rx.recv_async().await.unwrap();
         assert_eq!(task2.index, 1);
         assert_eq!(task2.data.len(), 100);
 
+        // No more tasks.
         assert!(rx.recv_async().await.is_err());
     }
 
@@ -356,10 +162,10 @@ mod tests {
         let reader = Reader::new(Processing::Decryption, MIN_CHUNK_SIZE).unwrap();
 
         let mut data = Vec::new();
-
+        // Chunk 1: "hello"
         data.extend_from_slice(&5u32.to_be_bytes());
         data.extend_from_slice(b"hello");
-
+        // Chunk 2: "world"
         data.extend_from_slice(&5u32.to_be_bytes());
         data.extend_from_slice(b"world");
 

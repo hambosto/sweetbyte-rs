@@ -1,23 +1,7 @@
-//! Command Line Interface Module
+//! Command-line interface definition and entry point logic.
 //!
-//! This module handles all command-line argument parsing, validation, and execution
-//! flow for the SweetByte encryption tool. It provides both direct command execution
-//! and interactive modes for user convenience.
-//!
-//! ## Architecture
-//!
-//! The CLI module follows a clean separation of concerns:
-//! - **Argument Parsing**: Uses clap for robust command-line parsing with validation
-//! - **Execution Flow**: Orchestrates the encryption/decryption workflow
-//! - **User Interaction**: Handles password prompts and file selection in interactive mode
-//!
-//! ## Security Considerations
-//!
-//! The CLI module implements several security measures:
-//! - Password length validation prevents weak passwords
-//! - File existence checks prevent accidental overwrites
-//! - Input validation prevents path traversal attacks
-//! - Secure password prompting avoids command-line exposure
+//! This module uses `clap` to parse command-line arguments and `dialoguer` to handle
+//! interactive prompts. It routes user intent to the appropriate `Processor` actions.
 
 use anyhow::{Context, Result, bail, ensure};
 use clap::{Parser, Subcommand};
@@ -28,263 +12,141 @@ use crate::processor::Processor;
 use crate::types::{Processing, ProcessorMode};
 use crate::ui::prompt::Prompt;
 
-/// Available command-line subcommands
-///
-/// This enum defines the primary operations supported by SweetByte. Each variant
-/// represents a distinct mode of operation with its own set of arguments.
+/// The supported subcommands for the CLI.
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Encrypt a file with AES-256-GCM or XChaCha20-Poly1305
-    ///
-    /// ## Arguments
-    ///
-    /// * `input` - Path to the source file to encrypt
-    /// * `output` - Optional output path. If not provided, uses input + .swx extension
-    /// * `password` - Optional password. If not provided, will prompt securely
-    ///
-    /// ## Security Notes
-    ///
-    /// - Providing passwords via command line is **not recommended** as they may be visible in
-    ///   process lists and shell history
-    /// - The tool will generate a unique salt for each encryption operation
-    /// - Output files include integrity verification through authenticated encryption
+    /// Encrypt a specific file.
     Encrypt {
-        /// Input file path to encrypt
+        /// Input file path.
         #[arg(short, long)]
         input: String,
 
-        /// Optional output file path (defaults to input + .swx)
+        /// Output file path (optional, defaults to <input>.swx).
         #[arg(short, long)]
         output: Option<String>,
 
-        /// Optional password (not recommended - use prompt instead)
+        /// Password (optional, will prompt if omitted).
         #[arg(short, long)]
         password: Option<String>,
     },
-    /// Decrypt a previously encrypted file
-    ///
-    /// ## Arguments
-    ///
-    /// * `input` - Path to the encrypted .swx file
-    /// * `output` - Optional output path. If not provided, strips .swx extension
-    /// * `password` - Optional password. If not provided, will prompt securely
-    ///
-    /// ## Security Notes
-    ///
-    /// - Decryption will fail if the password is incorrect or the file is corrupted
-    /// - The tool performs integrity verification using the embedded MAC
-    /// - Original filename and metadata are restored from the encrypted header
+
+    /// Decrypt a specific file.
     Decrypt {
-        /// Input encrypted file path (.swx file)
+        /// Input file path (must end in .swx).
         #[arg(short, long)]
         input: String,
 
-        /// Optional output file path (defaults to input without .swx)
+        /// Output file path (optional, defaults to original filename).
         #[arg(short, long)]
         output: Option<String>,
 
-        /// Optional password (not recommended - use prompt instead)
+        /// Password (optional, will prompt if omitted).
         #[arg(short, long)]
         password: Option<String>,
     },
-    /// Launch interactive mode for guided file operations
-    ///
-    /// Interactive mode provides a user-friendly interface with:
-    /// - File browser for selecting input files
-    /// - Mode selection (encrypt/decrypt)
-    /// - Secure password prompts
-    /// - Confirmation dialogs for destructive operations
-    /// - Automatic file cleanup options
+
+    /// Launch interactive mode (default if no args provided).
     Interactive,
 }
 
-/// Main command-line interface structure
-///
-/// This struct defines the top-level CLI configuration and serves as the entry
-/// point for all command-line operations. It integrates with clap for automatic
-/// help generation, argument validation, and error handling.
-///
-/// ## Features
-///
-/// - **Automatic Help**: `--help` displays comprehensive usage information
-/// - **Version Info**: `--version` shows the current application version
-/// - **Error Handling**: Provides clear error messages for invalid inputs
-/// - **Interactive Mode**: Falls back to interactive mode if no subcommand provided
+/// The main argument parser structure.
 #[derive(Parser)]
 #[command(name = "sweetbyte-rs", version = "26.1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
 pub struct Cli {
-    /// Optional subcommand to execute
-    ///
-    /// If no subcommand is provided, the application will launch in interactive mode.
-    /// This design choice ensures a good user experience for both power users
-    /// (who prefer direct commands) and casual users (who benefit from guidance).
+    /// The command to execute.
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
 impl Cli {
-    /// Initialize the CLI by parsing command-line arguments
-    ///
-    /// This method leverages clap's derive macros to automatically parse
-    /// and validate command-line arguments. It will exit the process
-    /// with appropriate error codes if parsing fails.
-    ///
-    /// # Returns
-    ///
-    /// Returns a configured `Cli` instance ready for execution.
+    /// Parses arguments from the command line.
     pub fn init() -> Self {
         Self::parse()
     }
 
-    /// Execute the parsed command or launch interactive mode
+    /// Executes the parsed command.
     ///
-    /// This is the main execution dispatcher that routes to the appropriate
-    /// handler based on the parsed command. It ensures proper error handling
-    /// and provides a consistent user experience across all modes.
-    ///
-    /// # Arguments
-    ///
-    /// * `self` - The parsed CLI configuration
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Successful execution
-    /// * `Err(anyhow::Error)` - Execution failed with error context
-    ///
-    /// # Security Considerations
-    ///
-    /// - All password operations go through the secure prompt interface
-    /// - File operations are validated before execution
-    /// - Error messages are sanitized to avoid information leakage
+    /// This delegates to either `run_mode` (for direct commands) or `run_interactive`.
     pub async fn execute(self) -> Result<()> {
-        // Initialize the secure password prompt with minimum length validation
+        // Initialize the prompt handler with config settings.
         let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
 
-        // Route to the appropriate execution handler
         match self.command {
             Some(Commands::Encrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Encryption, &prompt).await,
+
             Some(Commands::Decrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Decryption, &prompt).await,
+
+            // Default to interactive mode if no subcommand is given.
             Some(Commands::Interactive) | None => Self::run_interactive(&prompt).await,
         }
     }
 
-    /// Execute direct (non-interactive) encryption or decryption
-    ///
-    /// This method handles the direct command-line mode where all parameters
-    /// are provided explicitly. It performs validation, password handling,
-    /// and executes the requested operation.
-    ///
-    /// # Arguments
-    ///
-    /// * `input_path` - Path to the input file
-    /// * `output_path` - Optional output path (auto-generated if not provided)
-    /// * `password` - Optional password (will prompt if not provided)
-    /// * `processing` - Whether to encrypt or decrypt
-    /// * `prompt` - Secure password prompt interface
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Operation completed successfully
-    /// * `Err(anyhow::Error)` - Operation failed with context
-    ///
-    /// # Security Notes
-    ///
-    /// - Output path validation prevents accidental overwrites
-    /// - Password prompting avoids command-line exposure
-    /// - Input file validation ensures file exists and is readable
+    /// Runs a specific operation mode (Encrypt/Decrypt) based on CLI arguments.
     async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
-        // Create and validate input file
+        // Create file handle for input.
         let mut input = File::new(input_path);
 
-        // Generate output path if not provided, ensuring proper extension handling
+        // Determine output path: use provided or derive from input.
         let output = File::new(output_path.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
 
-        // Handle password securely - prompt if not provided via command line
+        // Get password: use provided or prompt user.
+        // We use map(Ok) to fit the Option into result chaining logic.
         let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
 
-        // Execute the processing operation with proper error context
+        // Execute the processing logic.
         Self::process(processing, &mut input, &output, &password).await?;
 
-        // Display success message to user
+        // Show success message.
         crate::ui::show_success(processing.mode(), output.path());
 
         Ok(())
     }
 
-    /// Execute interactive mode with guided user workflow
-    ///
-    /// Interactive mode provides a user-friendly interface with step-by-step
-    /// guidance through the encryption/decryption process. It includes file
-    /// browsing, confirmation dialogs, and optional cleanup operations.
-    ///
-    /// # Arguments
-    ///
-    /// * `prompt` - Secure prompt interface for user interactions
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Interactive session completed successfully
-    /// * `Err(anyhow::Error)` - Session failed or was canceled
-    ///
-    /// # Interactive Workflow
-    ///
-    /// 1. Display welcome banner and clear screen
-    /// 2. Prompt for processing mode (encrypt/decrypt)
-    /// 3. Discover and display eligible files
-    /// 4. Allow user to select target file
-    /// 5. Validate selected file and determine output path
-    /// 6. Confirm overwrite if output file exists
-    /// 7. Securely prompt for password
-    /// 8. Execute the operation
-    /// 9. Display results and offer cleanup options
-    ///
-    /// # Security Features
-    ///
-    /// - File discovery excludes system directories and encrypted files as appropriate
-    /// - Overwrite confirmation prevents accidental data loss
-    /// - Optional secure deletion of source files after successful operations
+    /// Runs the interactive wizard.
     async fn run_interactive(prompt: &Prompt) -> Result<()> {
-        // Prepare the interactive environment
+        // Setup UI.
         crate::ui::clear_screen()?;
         crate::ui::print_banner()?;
 
-        // Step 1: Select processing mode (encrypt/decrypt)
+        // Step 1: Select Mode (Encrypt/Decrypt).
         let mode = prompt.select_processing_mode()?;
         let processing = match mode {
             ProcessorMode::Encrypt => Processing::Encryption,
             ProcessorMode::Decrypt => Processing::Decryption,
         };
 
-        // Step 2: Discover eligible files in current directory and subdirectories
+        // Step 2: Discover eligible files.
+        // This scans the current directory for files matching the mode criteria.
         let mut files = File::discover(mode);
         ensure!(!files.is_empty(), "no eligible files found");
 
-        // Step 3: Display file information and let user select
+        // Step 3: Show file list.
         crate::ui::show_file_info(&mut files).await?;
 
-        // Step 4: Get user's file selection and validate it
+        // Step 4: Select file.
         let path = prompt.select_file(&files)?;
         let mut input = File::new(path.to_string_lossy().into_owned());
-        input.validate(true).await?; // Ensure file exists and is readable
 
-        // Step 5: Determine output path based on processing mode
+        // Validate selection (e.g., ensure it still exists and isn't empty).
+        input.validate(true).await?;
+
+        // Prepare output path.
         let output = File::new(input.output_path(mode).to_string_lossy().into_owned());
 
-        // Step 6: Prevent accidental overwrites with confirmation
+        // Step 5: Check overwrite.
         if output.exists() && !prompt.confirm_file_overwrite(output.path())? {
             bail!("operation canceled");
         }
 
-        // Step 7: Securely obtain password from user
+        // Step 6: Get Password.
         let password = Self::get_password(prompt, processing)?;
 
-        // Step 8: Execute the encryption/decryption operation
+        // Step 7: Process.
         Self::process(processing, &mut input, &output, &password).await?;
 
-        // Step 9: Display success information
         crate::ui::show_success(mode, output.path());
 
-        // Step 10: Offer optional secure cleanup of source file
+        // Step 8: Offer deletion of source file (cleanup).
         let label = match mode {
             ProcessorMode::Encrypt => "original",
             ProcessorMode::Decrypt => "encrypted",
@@ -297,65 +159,21 @@ impl Cli {
         Ok(())
     }
 
-    /// Execute the core encryption/decryption operation
-    ///
-    /// This is a thin wrapper around the `Processor` that provides
-    /// consistent error handling and context information across both
-    /// direct and interactive modes.
-    ///
-    /// # Arguments
-    ///
-    /// * `processing` - The operation type (encryption or decryption)
-    /// * `input` - Input file reference (must be validated)
-    /// * `output` - Output file reference
-    /// * `password` - The user's password for key derivation
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Operation completed successfully
-    /// * `Err(anyhow::Error)` - Operation failed with detailed context
-    ///
-    /// # Error Handling
-    ///
-    /// All errors are wrapped with context information including:
-    /// - The type of operation that failed
-    /// - The input file path for debugging
-    /// - The underlying error from the processor
+    /// Helper to dispatch processing to the Processor struct.
     async fn process(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
-        // Create processor with the user-provided password
         let processor = Processor::new(password);
 
-        // Execute the appropriate operation based on processing type
+        // Run the appropriate method on the processor.
         let result = match processing {
             Processing::Encryption => processor.encrypt(input, output).await,
             Processing::Decryption => processor.decrypt(input, output).await,
         };
 
-        // Add context to any errors for better debugging
+        // Add context to any error that occurs.
         result.with_context(|| format!("{} failed: {}", processing, input.path().display()))
     }
 
-    /// Get password from user with appropriate prompt for operation type
-    ///
-    /// This method routes to the correct prompt method based on whether
-    /// we're encrypting or decrypting, ensuring the user sees the right
-    /// contextual information.
-    ///
-    /// # Arguments
-    ///
-    /// * `prompt` - The secure prompt interface
-    /// * `processing` - The operation type to determine prompt style
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(String)` - The password entered by the user
-    /// * `Err(anyhow::Error)` - Password entry failed or was canceled
-    ///
-    /// # Security Notes
-    ///
-    /// - Passwords are never echoed to the terminal
-    /// - Passwords are not stored in command history
-    /// - Memory is zeroized after use by the prompt implementation
+    /// Helper to get the correct password prompt based on mode.
     fn get_password(prompt: &Prompt, processing: Processing) -> Result<String> {
         match processing {
             Processing::Encryption => prompt.prompt_encryption_password(),
