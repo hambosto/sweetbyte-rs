@@ -1,147 +1,150 @@
-//! # BLAKE3 Hashing Module
+//! Cryptographic Hashing Module
 //!
-//! This module provides BLAKE3 hashing functionality for data integrity verification.
-//! BLAKE3 is a modern, fast, and secure cryptographic hash function that offers
-//! excellent performance on modern CPUs with parallelization capabilities.
+//! This module provides BLAKE3-based cryptographic hashing functionality for data integrity verification.
+//! It implements constant-time comparison operations to prevent timing attacks and supports streaming
+//! hash computation for large files with progress tracking.
 //!
-//! ## Security Properties
+//! # Architecture
+//! The Hash struct encapsulates a fixed-size BLAKE3 hash (256 bits) and provides methods for:
+//! - Streaming hash computation from any Read source
+//! - Constant-time verification against expected hash values
+//! - Secure hash comparison using the subtle crate
 //!
-//! - **Collision Resistance**: 256-bit output provides 2^128 collision resistance
-//! - **Preimage Resistance**: 256-bit output provides 2^256 preimage resistance
-//! - **Parallelization**: Designed for efficient parallel computation
-//! - **Performance**: Fastest modern hash function on most hardware
-//!
-//! ## Features
-/// - **Rayon Integration**: Uses Rayon for parallel processing of large data
-/// - **Constant-Time Verification**: Prevents timing attacks during hash comparison
-/// - **Memory Efficiency**: Streaming hash computation for large files
-/// - **XOF Support**: Can be extended for arbitrary-length output if needed
-use anyhow::{Result, ensure};
+//! # Security Considerations
+//! - Uses BLAKE3, a modern cryptographic hash function with proven security
+//! - Implements constant-time comparison to prevent timing attacks
+//! - Processes data in 256KB chunks for efficient memory usage
+//! - Supports parallel hashing via Rayon for improved performance
+
+use std::io::Read;
+
+use anyhow::{Context, Result, ensure};
+use blake3::Hasher;
 use subtle::ConstantTimeEq;
 
 use crate::config::HASH_SIZE;
+use crate::ui::progress::ProgressBar;
 
-/// # BLAKE3 Hash Wrapper
+/// Cryptographic hash container using BLAKE3 algorithm
 ///
-/// Provides convenient BLAKE3 hashing with parallel processing support
-/// and constant-time verification for security-sensitive comparisons.
+/// This struct stores a 256-bit BLAKE3 hash and provides methods for secure
+/// hash computation and verification. The hash is computed in a streaming
+/// fashion to handle arbitrarily large data without loading everything into memory.
 ///
-/// The hash output is 32 bytes (256 bits) providing strong security guarantees
-/// while maintaining excellent performance characteristics.
+/// # Fields
+/// - `hash`: Fixed-size array containing the 32-byte BLAKE3 hash digest
 ///
-/// ## Security Considerations
-///
-/// - Uses constant-time comparison to prevent timing attacks
-/// - Parallel processing improves performance without compromising security
-/// - BLAKE3 is designed for modern hardware and is widely trusted
-/// - Suitable for both integrity verification and deduplication
+/// # Security
+/// The hash comparison operations use constant-time equality checks to prevent
+/// timing attacks that could leak information about hash values.
 pub struct Hash {
-    /// The 256-bit BLAKE3 hash digest
-    /// Stored as a fixed-size array for efficient memory layout
+    /// The 32-byte BLAKE3 hash digest
     hash: [u8; HASH_SIZE],
 }
 
 impl Hash {
-    /// Computes BLAKE3 hash of input data with parallel processing
+    /// Computes BLAKE3 hash from a readable data source
     ///
-    /// Creates a BLAKE3 hash of the provided data using Rayon for parallel
-    /// processing when beneficial (typically for data larger than a few KB).
-    ///
-    /// # Arguments
-    /// * `data` - Input data to hash, can be any size including empty
-    ///
-    /// # Returns
-    /// Hash instance containing the 256-bit BLAKE3 digest
-    ///
-    /// # Security Guarantees
-    /// - Cryptographically secure hash function
-    /// - Collision resistant with 2^128 security level
-    /// - Preimage resistant with 2^256 security level
-    /// - Deterministic: same input always produces same output
-    ///
-    /// # Performance Characteristics
-    /// - O(n) complexity where n is input length
-    /// - Parallel processing for large inputs (> few KB)
-    /// - Hardware-accelerated on supported CPUs (SIMD instructions)
-    /// - Memory-efficient streaming computation
-    ///
-    /// # Notes
-    /// - Uses Rayon thread pool for parallel processing
-    /// - Empty input produces a valid, non-zero hash
-    /// - Suitable for files of any size, including gigabytes
-    #[must_use]
-    pub fn new(data: &[u8]) -> Self {
-        // Create new BLAKE3 hasher instance
-        let mut hasher = blake3::Hasher::new();
-
-        // Update hasher with input data using parallel processing
-        // update_rayon automatically uses parallelism when beneficial
-        // For small inputs, it behaves like regular update()
-        hasher.update_rayon(data);
-
-        // Finalize hash computation and extract 32-byte digest
-        // finalize() returns a Hash type, as_bytes() provides &[u8; 32]
-        let hash = *hasher.finalize().as_bytes();
-        Self { hash }
-    }
-
-    /// Returns the hash digest as a byte array reference
-    ///
-    /// Provides access to the underlying 256-bit hash digest for storage,
-    /// comparison, or serialization purposes.
-    ///
-    /// # Returns
-    /// Reference to the 32-byte BLAKE3 hash digest
-    ///
-    /// # Security Notes
-    /// - Returns an immutable reference, hash cannot be modified
-    /// - The hash value itself is not secret
-    /// - Suitable for storage alongside encrypted data
-    ///
-    /// # Performance
-    /// - Zero-cost operation: just returns a reference
-    /// - No copying or allocation involved
-    #[must_use]
-    pub const fn as_bytes(&self) -> &[u8; HASH_SIZE] {
-        &self.hash
-    }
-
-    /// Verifies that the hash matches an expected value
-    ///
-    /// Performs constant-time comparison to prevent timing attacks that could
-    /// leak information about the hash value or input data.
+    /// This method performs streaming hash computation using BLAKE3 algorithm.
+    /// It processes data in 256KB chunks and uses Rayon for parallel processing
+    /// to improve performance on multi-core systems.
     ///
     /// # Arguments
-    /// * `expected` - Expected hash value to compare against (32 bytes)
+    /// * `reader` - Any type implementing the Read trait containing data to hash
+    /// * `total_size` - Optional total size in bytes for progress tracking
     ///
     /// # Returns
-    /// Ok(()) if hashes match, Err() if they differ
+    /// * `Result<Hash>` - The computed hash or an error if reading fails
     ///
     /// # Errors
-    /// Returns error if:
-    /// - Hashes do not match (indicates data corruption or tampering)
-    ///
-    /// # Security Guarantees
-    /// - Constant-time comparison prevents timing attacks
-    /// - No early return on mismatched bytes
-    /// - Attackers cannot gain information about hash values through timing
-    /// - Provides cryptographic integrity verification
+    /// * I/O errors when reading from the data source
+    /// * Progress bar initialization errors (if total_size is provided)
     ///
     /// # Performance
-    /// - O(1) time complexity (constant 32-byte comparison)
-    /// - No early exit: always compares all 32 bytes
-    /// - Minimal overhead over direct byte comparison
+    /// - Uses 256KB buffer size for optimal I/O performance
+    /// - Leverages Rayon for parallel BLAKE3 computation
+    /// - O(n) time complexity where n is the total data size
+    /// - Constant memory usage regardless of input size
+    #[must_use]
+    pub fn new<R: Read>(mut reader: R, total_size: Option<u64>) -> Result<Self> {
+        // Initialize BLAKE3 hasher with default settings
+        let mut hasher = Hasher::new();
+
+        // Allocate 256KB buffer on heap for efficient I/O operations
+        // This size balances memory usage with I/O throughput
+        let mut buffer = Box::new([0u8; 256 * 1024]);
+
+        // Initialize progress bar if total size is known for user feedback
+        let progress = if let Some(size) = total_size { Some(ProgressBar::new(size, "Hashing...")?) } else { None };
+
+        // Stream processing loop - read data in chunks until EOF
+        loop {
+            // Read up to buffer size from the data source
+            let bytes_read = reader.read(&mut buffer[..]).context("failed to read data for hashing")?;
+
+            // Check for end of file condition
+            if bytes_read == 0 {
+                break;
+            }
+
+            // Update hasher with the read data using Rayon for parallel processing
+            // BLAKE3 is designed to take advantage of multiple cores
+            hasher.update_rayon(&buffer[..bytes_read]);
+
+            // Update progress bar if it's active
+            if let Some(ref pb) = progress {
+                pb.add(bytes_read as u64);
+            }
+        }
+
+        // Clean up progress bar display
+        if let Some(pb) = progress {
+            pb.finish();
+        }
+
+        // Finalize the hash computation and extract the 32-byte digest
+        let hash = *hasher.finalize().as_bytes();
+        Ok(Self { hash })
+    }
+
+    /// Verifies this hash against an expected hash value
     ///
-    /// # Use Cases
-    /// - File integrity verification after decryption
-    /// - Detecting data corruption during transmission
-    /// - Verifying that decrypted data matches original hash
+    /// Performs constant-time comparison to prevent timing attacks that could
+    /// leak information about the hash values during verification.
+    ///
+    /// # Arguments
+    /// * `expected` - The expected hash value to verify against (32-byte array)
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success if hashes match, error if they don't
+    ///
+    /// # Errors
+    /// * Returns error if hash verification fails, indicating data corruption or tampering
+    ///
+    /// # Security
+    /// Uses subtle::ConstantTimeEq to prevent timing attacks during comparison.
+    /// This ensures that the comparison takes the same amount of time regardless of
+    /// where (or if) the differences occur in the hash values.
     pub fn verify(&self, expected: &[u8; HASH_SIZE]) -> Result<()> {
-        // Perform constant-time equality check using subtle crate
-        // ct_eq() returns a Choice type that prevents early exit
-        // This prevents timing attacks that could leak hash information
+        // Perform constant-time equality check to prevent timing attacks
+        // The ct_eq method returns a Choice type that must be converted to bool
         ensure!(bool::from(self.hash.ct_eq(expected)), "content hash verification failed: data integrity compromised");
         Ok(())
+    }
+
+    /// Returns a reference to the raw hash bytes
+    ///
+    /// Provides direct access to the 32-byte hash digest for serialization
+    /// or other operations that need the raw bytes.
+    ///
+    /// # Returns
+    /// * `&[u8; HASH_SIZE]` - Immutable reference to the 32-byte hash array
+    ///
+    /// # Security Note
+    /// The returned reference allows read-only access to maintain hash integrity.
+    /// Modifications to the hash should only occur through the constructor.
+    pub fn as_bytes(&self) -> &[u8; HASH_SIZE] {
+        &self.hash
     }
 }
 
@@ -152,37 +155,37 @@ mod tests {
     #[test]
     fn test_hash_new() {
         let data = b"test data";
-        let hash = Hash::new(data);
+        let hash = Hash::new(&data[..], None).unwrap();
         assert_eq!(hash.as_bytes().len(), HASH_SIZE);
     }
 
     #[test]
     fn test_hash_deterministic() {
         let data = b"same data";
-        let hash1 = Hash::new(data);
-        let hash2 = Hash::new(data);
+        let hash1 = Hash::new(&data[..], None).unwrap();
+        let hash2 = Hash::new(&data[..], None).unwrap();
         assert_eq!(hash1.as_bytes(), hash2.as_bytes());
     }
 
     #[test]
     fn test_hash_verify_valid() {
         let data = b"verify me";
-        let hash = Hash::new(data);
+        let hash = Hash::new(&data[..], None).unwrap();
         assert!(hash.verify(hash.as_bytes()).is_ok());
     }
 
     #[test]
     fn test_hash_verify_invalid() {
         let data = b"verify me";
-        let hash = Hash::new(data);
+        let hash = Hash::new(&data[..], None).unwrap();
         let mut corrupted = *hash.as_bytes();
-        corrupted[0] ^= 0x01; // Flip first byte
+        corrupted[0] ^= 0x01;
         assert!(hash.verify(&corrupted).is_err());
     }
 
     #[test]
     fn test_hash_empty() {
-        let hash = Hash::new(&[]);
+        let hash = Hash::new(&[][..], None).unwrap();
         assert!(hash.verify(hash.as_bytes()).is_ok());
     }
 }

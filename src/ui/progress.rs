@@ -144,31 +144,3 @@ impl ProgressBar {
         self.bar.finish()
     }
 }
-
-/// Automatic cleanup when progress bar goes out of scope
-///
-/// Ensures proper finalization of the progress bar display if `finish()`
-/// was not called explicitly. This prevents incomplete or hanging progress
-/// indicators in the terminal.
-///
-/// # Behavior
-///
-/// - Only applies if the progress bar is already finished
-/// - Sets the final message to "Done" for consistency
-/// - Safe to call multiple times due to internal state checks
-///
-/// # User Experience Impact
-///
-/// This implementation ensures users always see a completed state,
-/// even if the calling code forgets to call `finish()` explicitly.
-/// This provides a safety net for better user experience and prevents
-/// confusing incomplete progress indicators.
-impl Drop for ProgressBar {
-    fn drop(&mut self) {
-        // Only modify the final state if the bar is already finished
-        // This prevents interference with normal completion flows
-        if self.bar.is_finished() {
-            self.bar.finish_with_message("Done");
-        }
-    }
-}

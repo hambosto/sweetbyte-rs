@@ -1,34 +1,25 @@
-//! Main Encryption/Decryption Processing Orchestrator
+//! File Encryption/Decryption Processor
 //!
-//! This module contains the high-level Processor that orchestrates the complete
-//! encryption and decryption workflows. It integrates all components including
-//! key derivation, header management, file I/O, and parallel processing.
+//! This module provides the main high-level interface for encrypting and decrypting files
+//! using the SweetByte cryptographic format. It orchestrates the entire encryption pipeline
+//! including key derivation, metadata handling, header serialization, and secure data processing.
 //!
-//! ## Architecture
+//! # Architecture
+//! The Processor acts as the main orchestrator that coordinates between:
+//! - Key derivation using Argon2id with configurable parameters
+//! - File metadata preservation and integrity verification via BLAKE3 hashing
+//! - Header serialization/deserialization with Reed-Solomon error correction
+//! - Multi-threaded cryptographic operations via the Worker system
+//! - User interface feedback for operation progress
 //!
-//! The Processor follows a pipeline architecture:
-// Encryption Pipeline:
-//! 1. File validation and metadata extraction
-//! 2. Content hashing for integrity verification
-//! 3. Salt generation and key derivation
-// 4. Header creation and serialization
-// 5. Parallel encryption processing
-//
-// Decryption Pipeline:
-// 1. Header parsing and validation
-// 2. Salt extraction and key derivation
-// 3. Header integrity verification
-// 4. Parallel decryption processing
-// 5. Content integrity verification
-//!
-//! ## Security Features
-// - **Strong Key Derivation**: Argon2 with validated parameters
-// - **Integrity Protection**: Multiple layers of verification
-// - **Secure Memory**: Proper handling of sensitive data
-// - **Input Validation**: Comprehensive checks before operations
-// - **Error Isolation**: Detailed error context without information leakage
+//! # Security Model
+//! - Uses Argon2id for password-based key derivation (memory-hard KDF)
+//! - Implements authenticated encryption with associated data (AEAD)
+//! - Provides integrity verification through BLAKE3 content hashing
+//! - Supports constant-time operations to prevent timing attacks
+//! - Uses cryptographically secure random salt generation
 
-use std::io::{Read, Write};
+use std::io::Write;
 
 use anyhow::{Context, Result, ensure};
 
@@ -40,265 +31,203 @@ use crate::header::metadata::Metadata;
 use crate::types::Processing;
 use crate::worker::Worker;
 
-/// Main processor for encryption and decryption operations
+/// High-level file encryption and decryption processor
 ///
-/// This struct orchestrates the complete SweetByte workflow, handling both
-/// encryption and decryption with comprehensive security and integrity checks.
-/// It serves as the high-level interface that coordinates all cryptographic
-/// components and file operations.
+/// This struct provides the main API for encrypting and decrypting files using
+/// the SweetByte format. It handles the complete cryptographic pipeline from
+/// password-based key derivation through to final file output.
 ///
-/// ## Security Architecture
+/// # Fields
+/// - `password`: The user-provided password used for key derivation
 ///
-/// The processor implements defense-in-depth with multiple security layers:
+/// # Security Considerations
+/// - Password is stored as a String and used for Argon2id key derivation
+/// - Memory-hard KDF parameters are configurable via config constants
+/// - All cryptographic operations are performed by specialized sub-modules
+/// - Integrity is verified through multiple layers (header auth + content hash)
 ///
-/// 1. **Input Validation**: Ensures files are appropriate for processing
-/// 2. **Integrity Hashing**: Verifies content before/after operations
-/// 3. **Authenticated Encryption**: Uses AEAD ciphers for confidentiality+integrity
-/// 4. **Header Verification**: Validates metadata before processing
-/// 5. **Post-Processing Verification**: Confirms successful operations
-///
-/// ## Memory Management
-///
-/// The processor is designed to handle large files efficiently:
-/// - Streaming operations for file I/O
-/// - Parallel processing for CPU-intensive operations
-/// - Minimal memory footprint during processing
-/// - Secure handling of cryptographic keys
-///
-/// ## Error Handling
-///
-/// All operations include comprehensive error handling with context:
-/// - Clear error messages for users
-/// - Detailed context for debugging
-/// - Security-aware error reporting
-/// - Graceful failure without data loss
+/// # Usage Pattern
+/// ```rust
+/// let processor = Processor::new("user_password");
+/// processor.encrypt(&mut source_file, &dest_file)?;
+/// processor.decrypt(&encrypted_file, &output_file)?;
+/// ```
 pub struct Processor {
-    /// User password for key derivation
-    ///
-    /// This password is used as input to the Argon2 key derivation function.
-    /// It's stored as a String for convenience but should be handled securely
-    /// throughout the processing pipeline.
+    /// User password for key derivation (stored in memory only)
     password: String,
 }
 
 impl Processor {
-    /// Create a new Processor with the specified password
+    /// Creates a new Processor instance with the specified password
     ///
-    /// This constructor initializes the processor for encryption/decryption
-    /// operations. The password will be used for key derivation and should
-    /// be the same for both encryption and corresponding decryption.
+    /// Initializes the processor with a user-provided password that will be
+    /// used for Argon2id key derivation during encryption and decryption operations.
     ///
     /// # Arguments
-    ///
-    /// * `password` - The user's password (anything convertible to String)
+    /// * `password` - Any type convertible to String, typically a string literal
     ///
     /// # Returns
+    /// * `Self` - New Processor instance containing the password
     ///
-    /// A new Processor instance ready for operations
-    ///
-    /// # Password Security
-    ///
-    /// The password should be:
-    /// - At least 8 characters long (enforced by UI)
-    /// - Reasonably complex for security
-    /// - Different for different files for maximum security
-    ///
-    /// # Thread Safety
-    ///
-    /// Processor instances are not thread-safe due to the password field.
-    /// Create separate instances for concurrent operations if needed.
-    ///
-    /// # Memory Management
-    ///
-    /// The password is stored in memory for the lifetime of the Processor.
-    /// Consider dropping the Processor instance promptly after use to
-    /// minimize password exposure time in memory.
+    /// # Security Note
+    /// The password is stored in memory as a String. In a production environment,
+    /// consider using secure string handling to zero memory after use.
     pub fn new(password: impl Into<String>) -> Self {
         Self { password: password.into() }
     }
 
-    /// Encrypt a file with comprehensive security and integrity checks
+    /// Encrypts a source file to a destination file using SweetByte format
     ///
-    /// This method performs the complete SweetByte encryption workflow,
-    /// including metadata extraction, key derivation, header creation,
-    /// and parallel processing with integrity verification.
+    /// Performs the complete encryption pipeline:
+    /// 1. Validates source file is non-empty
+    /// 2. Extracts file metadata (name, size)
+    /// 3. Computes BLAKE3 content hash for integrity verification
+    /// 4. Generates cryptographically secure salt
+    /// 5. Derives encryption key using Argon2id
+    /// 6. Creates and serializes authenticated header
+    /// 7. Encrypts file content using multi-threaded worker
+    /// 8. Displays operation summary to user
     ///
     /// # Arguments
-    ///
-    /// * `src` - Source file to encrypt (must exist and be readable)
-    /// * `dest` - Destination file for encrypted output (must not exist)
+    /// * `src` - Mutable reference to source file to encrypt
+    /// * `dest` - Reference to destination file for encrypted output
     ///
     /// # Returns
+    /// * `Result<()>` - Success or error information
     ///
-    /// * `Ok(())` - Encryption completed successfully
-    /// * `Err(anyhow::Error)` - Encryption failed with detailed context
+    /// # Errors
+    /// * Source file is empty (0 bytes)
+    /// * File metadata extraction failures
+    /// * Hash computation errors (I/O failures)
+    /// * Salt generation failures (CSPRNG errors)
+    /// * Key derivation failures (memory allocation, password issues)
+    /// * Header serialization failures
+    /// * File I/O errors during writing
+    /// * Worker thread failures or encryption errors
     ///
-    /// # Encryption Process
-    ///
-    /// 1. **Validation**: Ensure source file exists and is not empty
-    /// 2. **Metadata Extraction**: Get filename, size, and content hash
-    /// 3. **Key Generation**: Generate random salt and derive encryption key
-    /// 4. **Header Creation**: Create encrypted header with metadata
-    /// 5. **Content Encryption**: Parallel processing of file content
-    /// 6. **Finalization**: Write encrypted file with header
-    ///
-    /// # Security Features
-    ///
-    /// - **Unique Salt**: Each encryption uses a cryptographically random salt
-    /// - **Strong KDF**: Argon2 with validated parameters resists brute-force
-    /// - **Authenticated Encryption**: Protects both confidentiality and integrity
-    /// - **Content Verification**: Hashes original content for later verification
-    /// - **Header Protection**: Header is encrypted with the derived key
-    ///
-    /// # Performance Considerations
-    ///
-    /// - Memory usage scales with file chunk size, not total file size
-    /// - Parallel processing utilizes all available CPU cores
-    /// - Streaming I/O minimizes memory footprint
-    /// - Key derivation is the most CPU-intensive step
-    ///
-    /// # Error Conditions
-    ///
-    /// - Source file doesn't exist or is unreadable
-    /// - Source file is empty (nothing to encrypt)
-    /// - Destination file already exists
-    /// - Insufficient disk space
-    /// - Permission denied for file operations
-    /// - Cryptographic operation failures
+    /// # Security Guarantees
+    /// - Random 16-byte salt for each encryption (prevents rainbow table attacks)
+    /// - Argon2id with configurable memory/time parameters (memory-hard KDF)
+    /// - BLAKE3 hash for content integrity verification
+    /// - Authenticated header with Reed-Solomon error correction
+    /// - Multi-threaded encryption for performance without security compromise
     pub fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
-        // Validate source file
+        // Prevent encryption of empty files (would be meaningless and vulnerable)
         ensure!(src.size()? != 0, "cannot encrypt a file with zero size");
 
-        // Extract file metadata for the header
+        // Extract original filename and file size for metadata preservation
         let (filename, file_size) = src.file_metadata()?;
 
-        // Read entire file for content hashing
-        let mut file_content = Vec::new();
-        src.reader()?.read_to_end(&mut file_content).context("failed to read file for hashing")?;
+        // Compute BLAKE3 hash of source content for integrity verification during decryption
+        // This ensures any corruption or tampering is detected
+        let content_hash = Hash::new(src.reader()?, Some(file_size))?;
 
-        // Compute content hash for integrity verification
-        let content_hash = *Hash::new(&file_content).as_bytes();
+        // Create metadata object with original file information and content hash
+        let metadata = Metadata::new(filename, file_size, *content_hash.as_bytes());
 
-        // Create metadata for the encrypted header
-        let metadata = Metadata::new(filename, file_size, content_hash);
+        // Generate cryptographically secure random salt for key derivation
+        // 16 bytes provides 128 bits of entropy, sufficient for password-based KDF
+        let salt = Derive::generate_salt::<ARGON_SALT_LEN>()?;
 
-        // Generate cryptographically random salt for key derivation
-        let salt: [u8; ARGON_SALT_LEN] = Derive::generate_salt()?;
-
-        // Derive encryption key from password and salt using Argon2
+        // Derive encryption key from password using Argon2id with configured parameters
+        // Argon2id is resistant to GPU/ASIC attacks and combines memory hardness with side-channel resistance
         let key = Derive::new(self.password.as_bytes())?.derive_key(&salt, ARGON_MEMORY, ARGON_TIME, ARGON_THREADS)?;
 
-        // Create and serialize the encrypted header
+        // Create authenticated header containing metadata and Reed-Solomon parity
         let header = Header::new(metadata)?;
+        // Serialize header with salt and encrypt using derived key for authentication
         let header_bytes = header.serialize(&salt, &key)?;
 
-        // Write header to destination file
+        // Get fresh reader for source file and writer for destination
+        let reader = src.reader()?;
         let mut writer = dest.writer()?;
+
+        // Write authenticated header to start of encrypted file
         writer.write_all(&header_bytes)?;
 
-        // Process file content with parallel encryption
-        let reader = src.reader()?.into_inner();
-        let writer = writer.into_inner().context("failed to get inner writer")?;
+        // Perform multi-threaded encryption of file content
+        // Worker handles chunking, encryption, and parallel processing
         Worker::new(&key, Processing::Encryption)?.process(reader, writer, file_size)?;
 
-        // Display encryption summary to user
+        // Display encryption summary to user with original file information
         crate::ui::show_header_info(header.file_name(), header.file_size(), header.file_hash());
 
         Ok(())
     }
 
-    /// Decrypt a file with comprehensive validation and integrity checks
+    /// Decrypts a source file to a destination file from SweetByte format
     ///
-    /// This method performs the complete SweetByte decryption workflow,
-    /// including header parsing, key derivation, content decryption, and
-    /// multiple layers of integrity verification.
+    /// Performs the complete decryption pipeline with comprehensive verification:
+    /// 1. Validates source file existence
+    /// 2. Deserializes and authenticates the file header
+    /// 3. Derives decryption key using stored Argon2id parameters
+    /// 4. Verifies header authenticity (detects wrong password/tampering)
+    /// 5. Decrypts file content using multi-threaded worker
+    /// 6. Verifies decrypted content integrity against stored hash
+    /// 7. Displays operation summary to user
     ///
     /// # Arguments
-    ///
-    /// * `src` - Encrypted source file (must exist and be valid .swx file)
-    /// * `dest` - Destination file for decrypted output (must not exist)
+    /// * `src` - Reference to encrypted source file
+    /// * `dest` - Reference to destination file for decrypted output
     ///
     /// # Returns
+    /// * `Result<()>` - Success or error information
     ///
-    /// * `Ok(())` - Decryption completed successfully
-    /// * `Err(anyhow::Error)` - Decryption failed with detailed context
+    /// # Errors
+    /// * Source file does not exist
+    /// * Header deserialization failures (corrupt file, format errors)
+    /// * Empty file detection (invalid SweetByte file)
+    /// * Key derivation failures (wrong password, parameter errors)
+    /// * Header authentication failures (wrong password or tampered header)
+    /// * Decryption process failures (corrupt ciphertext, worker errors)
+    /// * Content integrity verification failures (corrupted decrypted data)
+    /// * File I/O errors during writing
     ///
-    /// # Decryption Process
-    ///
-    /// 1. **Validation**: Ensure source file exists and is accessible
-    /// 2. **Header Parsing**: Read and parse encrypted header
-    /// 3. **Key Derivation**: Derive key using stored salt and parameters
-    /// 4. **Header Verification**: Validate header integrity with MAC
-    /// 5. **Content Decryption**: Parallel processing of encrypted content
-    /// 6. **Final Verification**: Verify decrypted content matches original hash
-    ///
-    /// # Security Features
-    ///
-    /// - **Password Verification**: Header MAC verifies correct password
-    /// - **Integrity Protection**: Multiple layers ensure data hasn't been corrupted
-    /// - **Constant-Time Operations**: Prevents timing-based attacks on password
-    /// - **Content Verification**: Ensures decrypted data matches original
-    /// - **Metadata Validation**: Verifies file format and algorithm support
-    ///
-    /// # Performance Considerations
-    ///
-    /// - Header validation is fast, processing scales with file size
-    /// - Parallel decryption utilizes all available CPU cores
-    /// - Memory usage is controlled through chunk-based processing
-    /// - Final verification requires reading the entire decrypted file
-    ///
-    /// # Error Conditions
-    ///
-    /// - Source file doesn't exist or is unreadable
-    /// - File is not a valid SweetByte encrypted file
-    /// - Incorrect password (most common failure)
-    /// - File corruption detected during validation
-    /// - Corrupted header or encrypted content
-    /// - Insufficient disk space for output
-    /// - Permission denied for file operations
-    ///
-    /// # Security Notes
-    ///
-    /// The decryption process provides strong protection against:
-    /// - Incorrect passwords (header MAC verification)
-    /// - File corruption (multiple integrity checks)
-    /// - Malicious modifications (authenticated encryption)
-    /// - Truncation attacks (size verification)
+    /// # Security Guarantees
+    /// - Header authentication prevents decryption with wrong password
+    /// - Reed-Solomon error correction recovers from limited corruption
+    /// - Content hash verification ensures data integrity
+    /// - Constant-time operations prevent timing attacks
+    /// - All verification steps must pass for successful decryption
     pub fn decrypt(&self, src: &File, dest: &File) -> Result<()> {
-        // Validate source file exists
+        // Ensure the encrypted source file actually exists
         ensure!(src.exists(), "source file not found: {}", src.path().display());
 
-        // Open and parse the encrypted header
+        // Open file handles for reading encrypted data and writing decrypted output
         let mut reader = src.reader()?;
+        let writer = dest.writer()?;
+
+        // Deserialize and authenticate header from the encrypted file
+        // This step verifies the file format and extracts metadata
         let header = Header::deserialize(reader.get_mut())?;
 
-        // Validate file size from header
+        // Prevent decryption of files with zero size (invalid format)
         ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
-        // Extract salt and key derivation parameters from header
-        let salt = header.salt()?;
-        let key = Derive::new(self.password.as_bytes())?.derive_key(salt, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
+        // Derive decryption key using the same Argon2id parameters from the header
+        // This ensures only the correct password can decrypt the file
+        let key = Derive::new(self.password.as_bytes())?.derive_key(
+            header.salt()?,                  // Salt from encrypted file
+            header.kdf_memory(),             // Memory cost parameter
+            header.kdf_time().into(),        // Time cost parameter
+            header.kdf_parallelism().into(), // Thread count
+        )?;
 
-        // Verify header integrity and password correctness
+        // Verify header authenticity using derived key
+        // This detects wrong passwords or header tampering
         header.verify(&key).context("incorrect password or corrupt file")?;
 
-        // Store expected hash for final verification
-        let expected_hash = header.file_hash();
-
-        // Process encrypted content with parallel decryption
-        // Pass the BufReader directly to preserve buffered data that hasn't been logically read yet
-        // The Worker will wrap it in another BufReader, which is slightly inefficient but correct
-        // Using into_inner() here would lose buffered data and cause decryption failure
-        let writer = dest.writer()?.into_inner().context("failed to get inner writer")?;
+        // Perform multi-threaded decryption of file content
+        // Worker handles chunking, decryption, and parallel processing
         Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size())?;
 
-        // Verify decrypted content integrity
-        let mut decrypted_content = Vec::new();
-        dest.reader()?.read_to_end(&mut decrypted_content).context("failed to read decrypted file for verification")?;
+        // Verify decrypted content integrity against original hash
+        // This ensures the decrypted data matches what was originally encrypted
+        Hash::new(dest.reader()?, Some(header.file_size()))?
+            .verify(header.file_hash())
+            .context("decrypted content integrity check failed")?;
 
-        Hash::new(&decrypted_content).verify(expected_hash).context("decrypted content integrity check failed")?;
-
-        // Display decryption summary to user
+        // Display decryption summary with recovered file information
         crate::ui::show_header_info(header.file_name(), header.file_size(), header.file_hash());
 
         Ok(())
