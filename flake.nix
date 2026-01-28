@@ -3,57 +3,52 @@
   description = "A very small, very simple, yet very secure encryption tool written in rust.";
 
   inputs = {
-    fenix.url = "github:nix-community/fenix";
-    flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    systems.url = "github:nix-systems/default";
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs =
     {
-      self,
-      fenix,
-      flake-utils,
       nixpkgs,
+      systems,
+      rust-overlay,
+      self,
       ...
     }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        toolchain = fenix.packages.${system}.minimal.toolchain;
-        devToolchain = fenix.packages.${system}.complete.toolchain;
-        rustPlatform = pkgs.makeRustPlatform {
-          cargo = toolchain;
-          rustc = toolchain;
-        };
-      in
-      {
-        packages.default = rustPlatform.buildRustPackage {
-          pname = "sweetbyte-rs";
-          version = self.shortRev or self.dirtyShortRev or "unknown";
-
-          src = ./.;
-
-          cargoLock.lockFile = ./Cargo.lock;
-
-          doCheck = true;
-
-          meta = {
-            description = "A very small, very simple, yet very secure encryption tool written in rust.";
-            homepage = "https://github.com/hambosto/sweetbyte-rs";
-            license = pkgs.lib.licenses.gpl3Plus;
-            mainProgram = "sweetbyte-rs";
+    let
+      withOverlay = pkgs: pkgs.extend (import rust-overlay);
+      eachSystem =
+        fn:
+        nixpkgs.lib.genAttrs (import systems) (system: fn (withOverlay nixpkgs.legacyPackages.${system}));
+    in
+    {
+      packages = eachSystem (
+        pkgs:
+        let
+          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+            extensions = [
+              "rust-src"
+              "rust-analyzer"
+              "clippy"
+              "rustfmt"
+            ];
           };
-        };
+        in
+        {
+          default = pkgs.callPackage ./nix/package.nix {
+            rustPlatform = pkgs.makeRustPlatform {
+              cargo = rustToolchain;
+              rustc = rustToolchain;
+            };
+          };
+        }
+      );
 
-        devShells.default = pkgs.mkShell {
-          packages = [ devToolchain ];
-
-          shellHook = ''
-            echo "🦀 Rust development environment for sweetbyte-rs"
-            echo "Available tools: cargo, rust-analyzer, clippy, rustfmt, cargo-watch, cargo-edit"
-          '';
+      devShells = eachSystem (pkgs: {
+        default = pkgs.callPackage ./nix/shell.nix {
+          sweetbyte-rs = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
-      }
-    );
+      });
+    };
 }
