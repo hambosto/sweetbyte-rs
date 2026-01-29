@@ -1,5 +1,6 @@
 {
   lib,
+  cmake,
   rustPlatform,
 }:
 rustPlatform.buildRustPackage (
@@ -21,6 +22,10 @@ rustPlatform.buildRustPackage (
         ../Cargo.toml
       ];
     };
+
+    nativeBuildInputs = [
+      cmake
+    ];
 
     cargoLock.lockFile = ../Cargo.lock;
 
