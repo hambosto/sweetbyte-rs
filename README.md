@@ -46,7 +46,7 @@ SweetByte was built with three core principles in mind:
 Files encrypted with the Go version **cannot** be decrypted by this tool, and vice-versa. The file format has been significantly improved to include:
 
 1.  **Enhanced Metadata Protection:** A dedicated, Reed-Solomon protected metadata section containing the original filename, file size, and content hash.
-2.  **Stronger Integrity Checks:** Integration of **BLAKE3** hashing for content integrity verification, in addition to HMAC-SHA256 for header authentication.
+2.  **Stronger Integrity Checks:** Integration of **SHA-1** hashing for content integrity verification, in addition to HMAC-SHA256 for header authentication.
 3.  **Format Hardening:** Updated magic bytes (`0xDEADBEEF`) and versioning (`0x0002`) to prevent accidental processing of incompatible files.
 
 ## Core Features
@@ -55,7 +55,7 @@ Files encrypted with the Go version **cannot** be decrypted by this tool, and vi
 - **Strong Key Derivation:** Utilizes **Argon2id**, the winner of the Password Hashing Competition, to protect against brute-force attacks on your password.
 - **Resilient File Format:** Integrates **Reed-Solomon error correction codes**, which add redundancy to the data. This allows the file to be successfully decrypted even if it suffers from partial corruption (up to 10 parity shards per 4 data shards).
 - **Tamper-Proof Header:** Each encrypted file includes a secure header that is authenticated with **HMAC-SHA256** using constant-time comparison to prevent tampering and timing attacks.
-- **Content Integrity:** Calculates and verifies a **BLAKE3** hash of the original file content to ensure 100% data integrity after decryption.
+- **Content Integrity:** Calculates and verifies a **SHA-1** hash of the original file content to ensure 100% data integrity after decryption.
 - **Efficient Streaming:** Processes files in concurrent chunks using a multi-threaded pipeline, ensuring low memory usage and high throughput, even for very large files.
 - **Dual-Mode Operation:**
     - **Interactive Mode:** A user-friendly, wizard-style interface that guides you through every step.
@@ -88,7 +88,7 @@ When encrypting a file, the data passes through the following stages:
 This multi-stage process results in a final file that is not only encrypted but also compressed and fortified against data rot.
 
 #### Decryption Flow
-Decryption is the exact reverse of the encryption pipeline, unwrapping each layer to securely restore the original data. Finally, the **BLAKE3** hash of the restored data is verified against the hash stored in the secure header.
+Decryption is the exact reverse of the encryption pipeline, unwrapping each layer to securely restore the original data. Finally, the **SHA-1** hash of the restored data is verified against the hash stored in the secure header.
 
 ## Architecture
 
@@ -194,9 +194,9 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 | Section | Raw Size | Description |
 |---------|----------|-------------|
 | **Magic Bytes** | 4 bytes | `0xDEADBEEF` - Identifies the file as a SweetByte v2 encrypted file. |
-| **Salt** | 16 bytes | Unique random salt for Argon2id key derivation. |
+| **Salt** | 32 bytes | Unique random salt for Argon2id key derivation. |
 | **HeaderData** | 12 bytes | Serialized encryption and compression parameters (Version, Algorithm, etc.). |
-| **Metadata** | Variable | Contains original filename, file size, and **BLAKE3** content hash. |
+| **Metadata** | Variable | Contains original filename, file size, and **SHA-1** content hash. |
 | **MAC** | 32 bytes | **HMAC-SHA256** for header integrity and authenticity. |
 
 **HeaderData Layout (12 bytes)**
@@ -220,13 +220,13 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 | Argon2id memory | 64 MB | Resists GPU/ASIC attacks |
 | Argon2id parallelism | 4 lanes | Efficient multi-threaded hashing |
 | Derived key length | 64 bytes | Split into 32B for encryption, 32B for HMAC |
-| Salt length | 16 bytes | Unique per file, prevents rainbow tables |
+| Salt length | 32 bytes | Unique per file, prevents rainbow tables |
 | AES-256-GCM key | 32 bytes | Industry-standard authenticated encryption |
 | AES-256-GCM nonce | 12 bytes | Randomly generated per encryption |
 | XChaCha20-Poly1305 key | 32 bytes | Modern stream cipher |
 | XChaCha20-Poly1305 nonce | 24 bytes | Extended nonce for higher throughput |
 | HMAC | SHA-256 | 32-byte authentication tag for header |
-| Content Hash | BLAKE3 | 32-byte hash for file content integrity |
+| Content Hash | SHA-1 | 20-byte hash for file content integrity |
 | Reed-Solomon data shards | 4 | Input data split into 4 parts |
 | Reed-Solomon parity shards | 10 | Recovery capacity for 10 corrupted shards |
 
@@ -244,6 +244,19 @@ The encryption pipeline processes each chunk independently:
 ## Usage
 
 #### Installation
+
+**Using Nix (Recommended):**
+
+```sh
+# Run directly without installation
+nix run github:hambosto/sweetbyte-rs
+
+# Or enter development shell with sweetbyte-rs available
+nix develop github:hambosto/sweetbyte-rs
+
+# Build and install from source flake
+nix profile install github:hambosto/sweetbyte-rs
+```
 
 **From Source:**
 
@@ -311,8 +324,11 @@ SweetByte is built with Rust 2024 edition.
 
 - Rust (latest stable recommended)
 - Git
+- **For Nix:** Nix with flakes enabled
 
 ### Build Process
+
+#### Using Cargo
 
 ```sh
 git clone https://github.com/hambosto/sweetbyte-rs.git
@@ -321,6 +337,33 @@ cargo build --release
 ```
 
 The binary will be at `target/release/sweetbyte-rs`.
+
+#### Using Nix
+
+```sh
+# Clone and enter directory
+git clone https://github.com/hambosto/sweetbyte-rs.git
+cd sweetbyte-rs
+
+# Build the package
+nix build
+
+# Run the built binary
+./result/bin/sweetbyte-rs
+
+# Or install to your user profile
+nix profile install ./result
+```
+
+#### Development Shell
+
+Enter a development environment with all dependencies:
+
+```sh
+nix develop
+```
+
+This provides Rust toolchain, clippy, rustfmt, and rust-analyzer.
 
 ### Development Commands
 
@@ -350,11 +393,12 @@ SweetByte is built with a modular architecture, with each module handling a spec
 | `config` | Application constants: `MAGIC_BYTES` (`0xDEADBEEF`), `VERSION` (`2`), crypto params (Argon2id, RS shards). |
 | `encoding` | Reed-Solomon error correction using `reed_solomon_erasure` (4 data + 10 parity shards). |
 | `file` | File discovery, validation, and safe path handling. |
-| `header` | Secure header management. Submodules: `serializer`, `deserializer`, `metadata` (filename, size, BLAKE3 hash), `section`. |
+| `header` | Secure header management. Submodules: `parameter`, `metadata` (filename, size, SHA-1 hash), `section`. |
 | `padding` | PKCS7 padding (128-byte blocks). |
 | `processor` | Orchestrates the encryption/decryption workflow, managing key derivation and worker pipelines. |
-| `worker` | Concurrent pipeline: `Reader` -> `Executor` (Rayon) -> `Writer`. Handles chunk processing. |
+| `types` | Core types: `Processing`, `ProcessorMode`, `Task`, `TaskResult`. |
 | `ui` | UI components: Progress bars (`indicatif`), tables (`comfy-table`), and prompts (`dialoguer`). |
+| `worker` | Concurrent pipeline: `Reader` -> `Executor` (Rayon) -> `Writer`. Handles chunk processing. Submodules: `buffer`, `pipeline`. |
 
 ## Security Considerations
 
@@ -372,10 +416,15 @@ Contributions are welcome. For major changes, please open an issue first to disc
 Before submitting a pull request:
 
 ```sh
+# Using Cargo
 cargo fmt
 cargo clippy
 cargo test
 cargo doc --no-deps
+
+# Or using Nix for development environment
+nix develop
+cargo fmt && cargo clippy && cargo test && cargo doc --no-deps
 ```
 
 Ensure all checks pass with no warnings.

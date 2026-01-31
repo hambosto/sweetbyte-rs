@@ -1,6 +1,5 @@
 {
   lib,
-  cmake,
   rustPlatform,
 }:
 rustPlatform.buildRustPackage (
@@ -11,7 +10,7 @@ rustPlatform.buildRustPackage (
   in
   {
     pname = "sweetbyte-rs";
-    version = "26.1.0";
+    version = "v26.1.0";
 
     src = toSource {
       root = ../.;
@@ -22,10 +21,6 @@ rustPlatform.buildRustPackage (
         ../Cargo.toml
       ];
     };
-
-    nativeBuildInputs = [
-      cmake
-    ];
 
     cargoLock.lockFile = ../Cargo.lock;
 

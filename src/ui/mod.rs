@@ -1,12 +1,6 @@
-//! User Interface output formatting.
-//!
-//! This module provides functions for displaying information to the user in a visually
-//! appealing way using tables, colors, and banners. It abstracts the underlying
-//! console output libraries (`comfy_table`, `console`, `figlet_rs`).
-
 use std::path::Path;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result};
 use bytesize::ByteSize;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
@@ -21,12 +15,6 @@ use crate::types::ProcessorMode;
 pub mod progress;
 pub mod prompt;
 
-/// Displays a table of discovered files with their status.
-///
-/// # Arguments
-///
-/// * `files` - Mutable slice of files to display (mutable because fetching size might be
-///   async/lazy, though here we await it).
 pub async fn show_file_info(files: &mut [File]) -> Result<()> {
     if files.is_empty() {
         println!("{}", console::style("No files found").yellow().bright());
@@ -37,7 +25,6 @@ pub async fn show_file_info(files: &mut [File]) -> Result<()> {
     println!("{} {}", console::style("✔").green().bright(), console::style(format!("Found {} file(s):", files.len())).white().bright());
     println!();
 
-    // Configure table look and feel.
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -45,16 +32,10 @@ pub async fn show_file_info(files: &mut [File]) -> Result<()> {
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![Cell::new("No").fg(Color::White), Cell::new("Name").fg(Color::White), Cell::new("Size").fg(Color::White), Cell::new("Status").fg(Color::White)]);
 
-    // Populate rows.
     for (i, file) in files.iter_mut().enumerate() {
         let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-
-        // Truncate long filenames for display.
         let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_owned() };
-
-        // Determine status coloring.
         let (status_text, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
-
         let size = file.size().await?;
 
         table.add_row(vec![Cell::new(i + 1), Cell::new(&display_name).fg(Color::Green), Cell::new(ByteSize(size).to_string()), Cell::new(status_text).fg(status_color)]);
@@ -66,7 +47,6 @@ pub async fn show_file_info(files: &mut [File]) -> Result<()> {
     Ok(())
 }
 
-/// Displays a success message after an operation.
 pub fn show_success(mode: ProcessorMode, path: &Path) {
     let action = match mode {
         ProcessorMode::Encrypt => "encrypted",
@@ -79,47 +59,34 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
     println!("{} {}", console::style("✔").green().bright(), console::style(format!("File {action} successfully: {filename}")).white().bright());
 }
 
-/// Displays confirmation that a source file was deleted.
 pub fn show_source_deleted(path: &Path) {
     let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
 
     println!("{} {}", console::style("✔").green().bright(), console::style(format!("Source file deleted: {filename}")).white().bright());
 }
 
-/// Clears the terminal screen.
 pub fn clear_screen() -> Result<()> {
-    let term = Term::stdout();
-    term.clear_screen().map_err(|e| anyhow!("failed to clear screen: {e}"))?;
+    Term::stdout().clear_screen().context("clear screen")?;
+
     Ok(())
 }
 
-/// Displays header information extracted from a file.
-///
-/// Used after encryption/decryption to confirm metadata validity.
-pub fn show_header_info(filename: &str, size: u64, hash: &[u8]) {
+pub fn show_header_info(filename: &str, size: u64, hash: &str) {
     println!();
     println!("{} {}", console::style("✔").green().bright(), console::style("Header Information:").bold());
 
-    let hash_hex: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
-
     let mut table = Table::new();
     table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
-
     table.add_row(vec![Cell::new("Original Filename").fg(Color::Green), Cell::new(filename).fg(Color::White)]);
     table.add_row(vec![Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
-    table.add_row(vec![Cell::new("Original Hash").fg(Color::Green), Cell::new(hash_hex).fg(Color::White)]);
+    table.add_row(vec![Cell::new("Original Hash").fg(Color::Green), Cell::new(hash).fg(Color::White)]);
 
     print!("{table}");
 }
 
-/// Prints the application banner using ASCII art.
 pub fn print_banner() -> Result<()> {
-    // Load embedded font file.
-    let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow!("failed to load font: {e}"))?;
-
-    let fig = font.convert(APP_NAME).ok_or_else(|| anyhow!("failed to convert text to banner"))?;
-
+    let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|error| anyhow::anyhow!("load font: {error}"))?;
+    let fig = font.convert(APP_NAME).context("render banner")?;
     println!("{}", console::style(fig).green().bright());
-
     Ok(())
 }

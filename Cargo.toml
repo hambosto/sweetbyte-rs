@@ -15,30 +15,29 @@ repository = "https://github.com/hambosto/sweetbyte-rs"
 aes-gcm = "0.10.3"
 anyhow = "1.0.100"
 argon2 = "0.5.3"
-blake3 = { version = "1.8.3", features = ["rayon"] }
 bytesize = "2.3.1"
 chacha20poly1305 = "0.10.1"
-clap = { version = "4.5.55", features = ["derive"] }
+clap = { version = "4.5.56", features = ["derive"] }
 comfy-table = "7.2.2"
 console = "0.16.2"
 dialoguer = "0.12.0"
 fast-glob = "1.0.0"
 figlet-rs = "0.1.5"
-flate2 = { version = "1.1.8", features = ["zlib-ng"] }
+flate2 = "1.1.8"
 flume = "0.12.0"
 hashbrown = "0.16.1"
 hmac = "0.12.1"
 indicatif = "0.18.3"
-mimalloc = { version = "0.1.48", features = ["v3"] }
 rand = "0.9.2"
 rayon = "1.11.0"
-reed-solomon-erasure = { version = "6.0.0", features = ["simd-accel"] }
+reed-solomon-erasure = "6.0.0"
 serde = { version = "1.0.228", features = ["derive"] }
 sha2 = "0.10.9"
+sha_file_hashing = "0.1.1"
 subtle = "2.6.1"
 tokio = { version = "1.49.0", features = ["full"] }
 walkdir = "2.5.0"
-wincode = { version = "0.2.5", features = ["derive"] }
+wincode = { version = "0.3.1", features = ["derive"] }
 
 [profile.release]
 opt-level = 3
