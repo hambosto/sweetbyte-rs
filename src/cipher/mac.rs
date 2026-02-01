@@ -20,7 +20,6 @@ impl Mac {
 
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
         let mut mac = Hmac::<Sha256>::new_from_slice(&self.key).context("create hmac")?;
-
         parts.iter().filter(|part| !part.is_empty()).for_each(|part| mac.update(part));
 
         Ok(mac.finalize().into_bytes().into())
@@ -33,7 +32,6 @@ impl Mac {
 
         let computed_parts = self.compute_parts(parts)?;
         let expected: [u8; MAC_SIZE] = expected.try_into().context("convert mac")?;
-
         if !bool::from(expected.ct_eq(&computed_parts)) {
             anyhow::bail!("mac mismatch");
         }

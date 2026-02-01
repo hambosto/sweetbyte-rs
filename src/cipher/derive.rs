@@ -22,8 +22,8 @@ impl Derive {
     pub fn derive_key(&self, salt: &[u8], memory: u32, time: u32, parallelism: u32) -> Result<[u8; ARGON_KEY_LEN]> {
         let params = Params::new(memory, time, parallelism, Some(ARGON_KEY_LEN)).map_err(|error| anyhow::anyhow!("invalid argon2 params: {error}"))?;
         let argon2 = Argon2::new(Argon2id, V0x13, params);
-
         let mut derived_key = [0u8; ARGON_KEY_LEN];
+
         argon2
             .hash_password_into(&self.key, salt, &mut derived_key)
             .map_err(|error| anyhow::anyhow!("derive argon2 key: {error}"))?;
@@ -31,8 +31,8 @@ impl Derive {
         Ok(derived_key)
     }
 
-    pub fn generate_salt<const N: usize>() -> Result<[u8; N]> {
-        let mut bytes = [0u8; N];
+    pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
+        let mut bytes = vec![0u8; size];
 
         OsRng.try_fill_bytes(&mut bytes).context("generate salt")?;
 

@@ -56,8 +56,8 @@ impl Compressor {
         }
 
         let mut encoder = ZlibEncoder::new(Vec::new(), self.level);
-
         encoder.write_all(data).context("compress")?;
+
         encoder.finish().context("compress finalize")
     }
 
@@ -68,7 +68,6 @@ impl Compressor {
 
         let mut decoder = ZlibDecoder::new(data);
         let mut decompressed = Vec::new();
-
         decoder.read_to_end(&mut decompressed).context("decompress")?;
 
         Ok(decompressed)

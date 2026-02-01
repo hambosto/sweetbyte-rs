@@ -100,7 +100,6 @@ impl SectionShield {
             reader.read_exact(&mut buffer).await.context("read length section")?;
 
             let decoded = self.decode_non_empty(&buffer)?;
-
             if decoded.len() < 4 {
                 anyhow::bail!("invalid length prefix");
             }
@@ -130,7 +129,6 @@ impl SectionShield {
 
     async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, _name: &str) -> Result<Vec<u8>> {
         let mut buffer = vec![0u8; size as usize];
-
         reader.read_exact(&mut buffer).await.context("read")?;
 
         self.decode_non_empty(&buffer)

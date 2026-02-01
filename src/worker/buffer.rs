@@ -14,7 +14,6 @@ impl Buffer {
 
     pub fn add(&mut self, result: TaskResult) -> Vec<TaskResult> {
         self.buffer.insert(result.index, result);
-
         let mut ready: Vec<TaskResult> = Vec::new();
 
         while let Some(result) = self.buffer.remove(&self.next_idx) {
@@ -31,7 +30,6 @@ impl Buffer {
         }
 
         let mut results: Vec<(u64, TaskResult)> = self.buffer.drain().collect();
-
         results.sort_unstable_by_key(|(idx, _)| *idx);
 
         self.next_idx = 0;

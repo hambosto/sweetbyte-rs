@@ -30,18 +30,15 @@ impl Reader {
 
     async fn read_fixed_chunks<R: AsyncRead + Unpin>(&self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         let mut buffer = vec![0u8; self.chunk_size];
-
         let mut index = 0u64;
 
         loop {
             let bytes_read = reader.read(&mut buffer).await.context("read chunk")?;
-
             if bytes_read == 0 {
                 break;
             }
 
             sender.send_async(Task { data: buffer[..bytes_read].to_vec(), index }).await.context("send chunk: channel closed")?;
-
             index += 1;
         }
 
@@ -53,13 +50,11 @@ impl Reader {
 
         loop {
             let mut buffer_len = [0u8; 4];
-
             if reader.read_exact(&mut buffer_len).await.is_err() {
                 break;
             }
 
             let chunk_len = u32::from_be_bytes(buffer_len) as usize;
-
             if chunk_len == 0 {
                 continue;
             }
@@ -67,7 +62,6 @@ impl Reader {
             let mut data = vec![0u8; chunk_len];
             reader.read_exact(&mut data).await.context("read chunk data")?;
             sender.send_async(Task { data, index }).await.context("send chunk: channel closed")?;
-
             index += 1;
         }
 

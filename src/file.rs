@@ -45,8 +45,8 @@ impl File {
         }
 
         let meta = fs::metadata(&self.path).await.with_context(|| format!("metadata read error: {}", self.path.display()))?;
-
         self.size = Some(meta.len());
+
         Ok(meta.len())
     }
 
@@ -140,23 +140,17 @@ impl File {
         fs::remove_file(&self.path).await.with_context(|| format!("delete file: {}", self.path.display()))
     }
 
-    pub async fn validate(&mut self, must_exist: bool) -> Result<()> {
-        if must_exist {
-            if !self.exists() {
-                anyhow::bail!("file not found: {}", self.path().display())
-            }
+    pub async fn validate(&mut self) -> Result<()> {
+        if !self.exists() {
+            anyhow::bail!("file not found: {}", self.path().display())
+        }
 
-            if self.is_dir() {
-                anyhow::bail!("path is a directory: {}", self.path().display())
-            }
+        if self.is_dir() {
+            anyhow::bail!("path is a directory: {}", self.path().display())
+        }
 
-            if self.size().await? == 0 {
-                anyhow::bail!("file is empty: {}", self.path().display())
-            }
-        } else {
-            if self.exists() {
-                anyhow::bail!("file already exists: {}", self.path().display())
-            }
+        if self.size().await? == 0 {
+            anyhow::bail!("file is empty: {}", self.path().display())
         }
 
         Ok(())
@@ -165,6 +159,7 @@ impl File {
     pub fn validate_hash(&self, expected_hash: impl AsRef<str>) -> Result<bool> {
         let path = self.path.clone();
         let expected = expected_hash.as_ref().to_owned();
+
         path.validate(&expected).context("validate hash")
     }
 

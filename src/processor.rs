@@ -19,21 +19,19 @@ impl Processor {
     }
 
     pub async fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
-        if src.size().await? == 0 {
-            anyhow::bail!("zero-size file");
-        }
-
         let (filename, file_size, content_hash) = src.file_metadata().await?;
         let metadata = Metadata::new(filename, file_size, content_hash);
-        let salt = Derive::generate_salt::<ARGON_SALT_LEN>()?;
+
+        let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
         let key = Derive::new(self.password.as_bytes())?.derive_key(&salt, ARGON_MEMORY, ARGON_TIME, ARGON_THREADS)?;
+
         let header = Header::new(metadata)?;
         let header_bytes = header.serialize(&salt, &key)?;
-        let reader = src.reader().await?;
 
         let mut writer = dest.writer().await?;
         writer.write_all(&header_bytes).await?;
 
+        let reader = src.reader().await?;
         Worker::new(&key, Processing::Encryption)?.process(reader, writer, file_size).await?;
 
         crate::ui::show_header_info(header.file_name(), header.file_size(), &header.file_hash());
@@ -42,26 +40,19 @@ impl Processor {
     }
 
     pub async fn decrypt(&self, src: &File, dest: &File) -> Result<()> {
-        if !src.exists() {
-            anyhow::bail!("source file not found: {}", src.path().display());
-        }
-
         let mut reader = src.reader().await?;
-        let writer = dest.writer().await?;
-
         let header = Header::deserialize(reader.get_mut()).await?;
-        if header.file_size() == 0 {
-            anyhow::bail!("cannot decrypt a file with zero size");
-        }
+
+        anyhow::ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
         let key = Derive::new(self.password.as_bytes())?.derive_key(header.salt()?, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
+
         header.verify(&key).context("invalid password or corrupted data")?;
 
+        let writer = dest.writer().await?;
         Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size()).await?;
 
-        if !dest.validate_hash(header.file_hash())? {
-            anyhow::bail!("hash mismatch")
-        }
+        anyhow::ensure!(dest.validate_hash(&header.file_hash())?, "hash mismatch");
 
         crate::ui::show_header_info(header.file_name(), header.file_size(), &header.file_hash());
 
@@ -96,7 +87,7 @@ mod tests {
         let password = "strong_password";
         let processor = Processor::new(password);
 
-        src.validate(true).await.unwrap();
+        src.validate().await.unwrap();
         processor.encrypt(&mut src, &dest_enc).await.unwrap();
 
         assert!(dest_enc.exists());

@@ -20,8 +20,8 @@ impl ChaCha20Poly1305 {
 
         let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
         let ciphertext = self.cipher.encrypt(&nonce, plaintext).map_err(|error| anyhow::anyhow!("chacha20poly1305 encrypt: {error}"))?;
-
         let mut result = Vec::with_capacity(nonce.len() + ciphertext.len());
+
         result.extend_from_slice(&nonce);
         result.extend_from_slice(&ciphertext);
 

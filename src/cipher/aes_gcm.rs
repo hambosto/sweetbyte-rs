@@ -20,8 +20,8 @@ impl AesGcm {
 
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ciphertext = self.cipher.encrypt(&nonce, plaintext).map_err(|error| anyhow::anyhow!("aes-gcm encrypt: {error}"))?;
-
         let mut result = Vec::with_capacity(nonce.len() + ciphertext.len());
+
         result.extend_from_slice(&nonce);
         result.extend_from_slice(&ciphertext);
 

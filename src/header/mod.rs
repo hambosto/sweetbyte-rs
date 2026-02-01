@@ -53,7 +53,6 @@ impl Header {
         let sections = shield.unpack(&mut reader).await?;
         let params: Parameters = wincode::deserialize(&sections.header_data)?;
         let metadata: Metadata = wincode::deserialize(&sections.metadata)?;
-
         params.validate()?;
 
         if metadata.size() == 0 {

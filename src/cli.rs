@@ -48,7 +48,6 @@ impl Cli {
 
     pub async fn execute(self) -> Result<()> {
         let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
-
         match self.command {
             Some(Commands::Encrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Encryption, &prompt).await,
             Some(Commands::Decrypt { input, output, password }) => Self::run_mode(input, output, password, Processing::Decryption, &prompt).await,
@@ -87,9 +86,10 @@ impl Cli {
         crate::ui::show_file_info(&mut files).await?;
 
         let path = prompt.select_file(&files)?;
+
         let mut input = File::new(path.to_string_lossy().into_owned());
 
-        input.validate(true).await?;
+        input.validate().await?;
 
         let output = File::new(input.output_path(mode).to_string_lossy().into_owned());
         if output.exists() && !prompt.confirm_file_overwrite(output.path())? {

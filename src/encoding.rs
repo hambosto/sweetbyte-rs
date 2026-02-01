@@ -20,7 +20,6 @@ impl Encoding {
 
         let shard_size = data.len().div_ceil(self.data_shards);
         let total_shards = self.data_shards + self.parity_shards;
-
         let mut shards: Vec<Vec<u8>> = Vec::with_capacity(total_shards);
 
         for chunk in data.chunks(shard_size) {
@@ -30,7 +29,6 @@ impl Encoding {
         }
 
         shards.resize_with(total_shards, || vec![0u8; shard_size]);
-
         self.encoder.encode(&mut shards)?;
 
         let mut result = Vec::with_capacity(shard_size * total_shards);
@@ -52,9 +50,7 @@ impl Encoding {
         }
 
         let shard_size = encoded.len() / total_shards;
-
         let mut shards: Vec<Option<Vec<u8>>> = encoded.chunks_exact(shard_size).map(|chunk| Some(chunk.to_vec())).collect();
-
         self.encoder.reconstruct(&mut shards)?;
 
         let mut result = Vec::with_capacity(self.data_shards * shard_size);

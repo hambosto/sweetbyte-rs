@@ -21,7 +21,6 @@ impl Writer {
 
         while let Ok(result) = receiver.recv_async().await {
             let ready = self.buffer.add(result);
-
             self.write_batch(&mut writer, &ready, progress).await?;
         }
 
@@ -42,7 +41,6 @@ impl Writer {
             }
 
             writer.write_all(&r.data).await.context("write")?;
-
             if let Some(bar) = progress {
                 bar.add(r.size as u64);
             }
