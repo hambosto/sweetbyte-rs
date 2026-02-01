@@ -1,10 +1,14 @@
 {
   mkShell,
+  stdenvAdapters,
   sweetbyte-rs,
 }:
-mkShell {
-
-  inputsFrom = [
-    sweetbyte-rs
-  ];
-}
+mkShell.override
+  (old: {
+    stdenv = stdenvAdapters.useMoldLinker old.stdenv;
+  })
+  {
+    inputsFrom = [
+      sweetbyte-rs
+    ];
+  }
