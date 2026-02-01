@@ -1,8 +1,6 @@
 use anyhow::{Result, bail};
-use block_padding::array::{
-    Array, ArraySize,
-    typenum::{U16, U32, U64, U128, Unsigned},
-};
+use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
+use block_padding::array::{Array, ArraySize};
 use block_padding::{Padding, Pkcs7};
 
 #[derive(Clone, Copy, Debug, Default)]
