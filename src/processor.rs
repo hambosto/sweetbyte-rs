@@ -52,7 +52,7 @@ impl Processor {
         let writer = dest.writer().await?;
         Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size()).await?;
 
-        anyhow::ensure!(dest.validate_hash(&header.file_hash())?, "hash mismatch");
+        anyhow::ensure!(dest.validate_hash(header.file_hash())?, "hash mismatch");
 
         crate::ui::show_header_info(header.file_name(), header.file_size(), &header.file_hash());
 
