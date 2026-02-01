@@ -18,7 +18,7 @@ impl Processor {
         Self { password: password.into() }
     }
 
-    pub async fn encrypt(&self, src: &mut File, dest: &File) -> Result<()> {
+    pub async fn encrypt(&self, src: &File, dest: &File) -> Result<()> {
         let (filename, file_size, content_hash) = src.file_metadata().await?;
         let metadata = Metadata::new(filename, file_size, content_hash);
 

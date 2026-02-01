@@ -1,5 +1,6 @@
+mod allocator;
+mod app;
 mod cipher;
-mod cli;
 mod compression;
 mod config;
 mod encoding;
@@ -11,8 +12,9 @@ mod types;
 mod ui;
 mod worker;
 
+use crate::app::App;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // dank its ugly. damn.
-    crate::cli::Cli::init().execute().await
+    App::init().execute().await
 }

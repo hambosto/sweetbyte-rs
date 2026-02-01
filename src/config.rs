@@ -16,8 +16,6 @@ pub const DATA_SHARDS: usize = 4;
 
 pub const PARITY_SHARDS: usize = 10;
 
-pub const BLOCK_SIZE: usize = 128;
-
 pub const CHUNK_SIZE: usize = 256 * 1024;
 
 pub const MAGIC_BYTES: u32 = 0xDEAD_BEEF;

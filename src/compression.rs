@@ -1,9 +1,5 @@
-use std::io::{Read, Write};
-
-use anyhow::{Context, Result};
-use flate2::Compression;
-use flate2::read::ZlibDecoder;
-use flate2::write::ZlibEncoder;
+use anyhow::Result;
+use zstd::DEFAULT_COMPRESSION_LEVEL;
 
 #[derive(Default, Clone, Copy)]
 pub enum CompressionLevel {
@@ -19,26 +15,26 @@ impl CompressionLevel {
         let value = match self {
             Self::None => 0,
             Self::Fast => 1,
-            Self::Default => 6,
-            Self::Best => 9,
+            Self::Default => 3,
+            Self::Best => 19,
         };
-        value <= 9
+        value <= 19
     }
 }
 
-impl From<CompressionLevel> for Compression {
+impl From<CompressionLevel> for i32 {
     fn from(level: CompressionLevel) -> Self {
         match level {
-            CompressionLevel::None => Self::none(),
-            CompressionLevel::Fast => Self::fast(),
-            CompressionLevel::Default => Self::default(),
-            CompressionLevel::Best => Self::best(),
+            CompressionLevel::None => 0,
+            CompressionLevel::Fast => 1,
+            CompressionLevel::Default => DEFAULT_COMPRESSION_LEVEL,
+            CompressionLevel::Best => 19,
         }
     }
 }
 
 pub struct Compressor {
-    level: Compression,
+    level: i32,
 }
 
 impl Compressor {
@@ -55,10 +51,7 @@ impl Compressor {
             anyhow::bail!("empty data");
         }
 
-        let mut encoder = ZlibEncoder::new(Vec::new(), self.level);
-        encoder.write_all(data).context("compress")?;
-
-        encoder.finish().context("compress finalize")
+        zstd::stream::encode_all(data, self.level).map_err(|error| anyhow::anyhow!("compression failed: {error}"))
     }
 
     pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
@@ -66,10 +59,6 @@ impl Compressor {
             anyhow::bail!("empty data");
         }
 
-        let mut decoder = ZlibDecoder::new(data);
-        let mut decompressed = Vec::new();
-        decoder.read_to_end(&mut decompressed).context("decompress")?;
-
-        Ok(decompressed)
+        zstd::stream::decode_all(data).map_err(|error| anyhow::anyhow!("decompression failed: {error}"))
     }
 }

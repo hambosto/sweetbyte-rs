@@ -36,12 +36,12 @@ pub enum Commands {
 
 #[derive(Parser)]
 #[command(name = "sweetbyte-rs", version = "26.1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
-pub struct Cli {
+pub struct App {
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-impl Cli {
+impl App {
     pub fn init() -> Self {
         Self::parse()
     }
@@ -56,12 +56,12 @@ impl Cli {
     }
 
     async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
-        let mut input = File::new(input_path);
+        let input = File::new(input_path);
 
         let output = File::new(output_path.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
         let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
 
-        Self::process(processing, &mut input, &output, &password).await?;
+        Self::process(processing, &input, &output, &password).await?;
 
         crate::ui::show_success(processing.mode(), output.path());
 
@@ -72,7 +72,7 @@ impl Cli {
         crate::ui::clear_screen()?;
         crate::ui::print_banner()?;
 
-        let mode = prompt.select_processing_mode()?;
+        let mode = Prompt::select_processing_mode()?;
         let processing = match mode {
             ProcessorMode::Encrypt => Processing::Encryption,
             ProcessorMode::Decrypt => Processing::Decryption,
@@ -85,20 +85,20 @@ impl Cli {
 
         crate::ui::show_file_info(&mut files).await?;
 
-        let path = prompt.select_file(&files)?;
+        let path = Prompt::select_file(&files)?;
 
         let mut input = File::new(path.to_string_lossy().into_owned());
 
         input.validate().await?;
 
         let output = File::new(input.output_path(mode).to_string_lossy().into_owned());
-        if output.exists() && !prompt.confirm_file_overwrite(output.path())? {
+        if output.exists() && !Prompt::confirm_file_overwrite(output.path())? {
             anyhow::bail!("operation canceled");
         }
 
         let password = Self::get_password(prompt, processing)?;
 
-        Self::process(processing, &mut input, &output, &password).await?;
+        Self::process(processing, &input, &output, &password).await?;
 
         crate::ui::show_success(mode, output.path());
 
@@ -107,7 +107,7 @@ impl Cli {
             ProcessorMode::Decrypt => "encrypted",
         };
 
-        if prompt.confirm_file_deletion(input.path(), label)? {
+        if Prompt::confirm_file_deletion(input.path(), label)? {
             input.delete().await?;
             crate::ui::show_source_deleted(input.path());
         }
@@ -115,7 +115,7 @@ impl Cli {
         Ok(())
     }
 
-    async fn process(processing: Processing, input: &mut File, output: &File, password: &str) -> Result<()> {
+    async fn process(processing: Processing, input: &File, output: &File, password: &str) -> Result<()> {
         let processor = Processor::new(password);
 
         let result = match processing {

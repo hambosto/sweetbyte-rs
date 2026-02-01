@@ -68,7 +68,7 @@ SweetByte processes data through a sophisticated pipeline to ensure confidential
 
 ```mermaid
 graph TD
-    A[Data] --> B[Zlib]
+    A[Data] --> B[Zstandard]
     B --> C[PKCS7]
     C --> D[AES-GCM]
     D --> E[XChaCha20]
@@ -79,7 +79,7 @@ graph TD
 #### Encryption Flow
 When encrypting a file, the data passes through the following stages:
 
-1.  **Zlib Compression:** The raw data is compressed to reduce its size.
+1.  **Zstandard Compression:** The raw data is compressed to reduce its size.
 2.  **PKCS7 Padding:** The compressed data is padded to a specific block size (128 bytes), a prerequisite for block ciphers.
 3.  **AES-256-GCM Encryption:** The padded data is encrypted with AES, the industry standard.
 4.  **XChaCha20-Poly1305 Encryption:** The AES-encrypted ciphertext is then encrypted *again* with XChaCha20, adding a second, distinct layer of security.
@@ -118,7 +118,7 @@ graph TD
     end
 
     subgraph Data Processing
-        J[Compression<br/>Zlib]
+        J[Compression<br/>Zstandard]
         K[Padding<br/>PKCS7]
         L[Encoding<br/>Reed-Solomon]
     end
@@ -205,7 +205,7 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 |-------|------|-------------|
 | **Version** | 2 bytes | File format version (currently `0x0002`). |
 | **Algorithm** | 1 byte | Cipher identifier (AES-256-GCM \| XChaCha20-Poly1305). |
-| **Compression** | 1 byte | Compression algorithm (Zlib). |
+| **Compression** | 1 byte | Compression algorithm (Zstandard). |
 | **Encoding** | 1 byte | Error correction algorithm (Reed-Solomon). |
 | **KDF** | 1 byte | Key derivation function (Argon2id). |
 | **KDF Memory** | 4 bytes | Argon2 memory cost (e.g., 64 MB). |
@@ -389,7 +389,7 @@ SweetByte is built with a modular architecture, with each module handling a spec
 |--------|-------------|
 | `cipher` | Dual-algorithm encryption using AES-256-GCM and XChaCha20-Poly1305. Implements `Mac` for HMAC-SHA256. |
 | `cli` | Command-line interface using `clap` and `dialoguer`. Handles `encrypt`, `decrypt`, and `interactive` commands. |
-| `compression` | Zlib compression/decompression using `flate2`. |
+| `compression` | Zstandard compression/decompression using `zstd`. |
 | `config` | Application constants: `MAGIC_BYTES` (`0xDEADBEEF`), `VERSION` (`2`), crypto params (Argon2id, RS shards). |
 | `encoding` | Reed-Solomon error correction using `reed_solomon_erasure` (4 data + 10 parity shards). |
 | `file` | File discovery, validation, and safe path handling. |
