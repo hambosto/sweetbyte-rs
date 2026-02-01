@@ -88,7 +88,7 @@ mod tests {
         let processor = Processor::new(password);
 
         src.validate().await.unwrap();
-        processor.encrypt(&mut src, &dest_enc).await.unwrap();
+        processor.encrypt(&src, &dest_enc).await.unwrap();
 
         assert!(dest_enc.exists());
 
