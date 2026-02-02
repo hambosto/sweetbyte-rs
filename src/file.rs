@@ -28,15 +28,10 @@ impl File {
     }
 
     pub fn hash(&self) -> Result<[u8; 20]> {
-        let path = self.path.clone();
-        let hash = path.hash().context("hash compute")?;
-
-        let mut bytes = [0u8; 20];
-        for i in 0..20 {
-            bytes[i] = u8::from_str_radix(&hash[i * 2..i * 2 + 2], 16).context("hash parse")?;
-        }
-
-        Ok(bytes)
+        hex::decode(self.path.hash().context("hash compute")?)
+            .context("hash parse")?
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("invalid hash length"))
     }
 
     pub async fn size(&mut self) -> Result<u64> {
