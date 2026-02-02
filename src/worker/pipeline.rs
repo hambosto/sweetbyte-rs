@@ -33,8 +33,6 @@ impl Pipeline {
     }
 
     fn encrypt_pipeline(&self, task: &Task) -> TaskResult {
-        let input_size = task.data.len();
-
         let compressed_data = match self.compressor.compress(&task.data) {
             Ok(compressed) => compressed,
             Err(e) => return TaskResult::err(task.index, &e),
@@ -59,6 +57,8 @@ impl Pipeline {
             Ok(encoded) => encoded,
             Err(e) => return TaskResult::err(task.index, &e),
         };
+
+        let input_size = task.data.len();
 
         TaskResult::ok(task.index, encoded_data, input_size)
     }
