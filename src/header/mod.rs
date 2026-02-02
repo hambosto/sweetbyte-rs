@@ -35,11 +35,13 @@ impl Header {
             kdf_parallelism: ARGON_THREADS as u8,
         };
 
-        Self::new_with_parameter(shield, parameters, metadata)
+        Self::with_parameters(shield, parameters, metadata)
     }
 
-    pub fn new_with_parameter(shield: SectionShield, parameters: Parameters, metadata: Metadata) -> Result<Self> {
-        parameters.validate()?;
+    pub fn with_parameters(shield: SectionShield, parameters: Parameters, metadata: Metadata) -> Result<Self> {
+        if !parameters.validate() {
+            anyhow::bail!("invalid parameters");
+        }
 
         if metadata.size() == 0 {
             anyhow::bail!("zero-size file");
@@ -53,7 +55,10 @@ impl Header {
         let sections = shield.unpack(&mut reader).await?;
         let params: Parameters = wincode::deserialize(&sections.header_data)?;
         let metadata: Metadata = wincode::deserialize(&sections.metadata)?;
-        params.validate()?;
+
+        if !params.validate() {
+            anyhow::bail!("invalid parameters");
+        }
 
         if metadata.size() == 0 {
             anyhow::bail!("zero-size file");
@@ -70,7 +75,7 @@ impl Header {
         self.metadata.name()
     }
 
-    pub fn file_size(&self) -> u64 {
+    pub const fn file_size(&self) -> u64 {
         self.metadata.size()
     }
 
@@ -91,7 +96,7 @@ impl Header {
     }
 
     pub fn salt(&self) -> Result<&[u8]> {
-        Ok(&self.sections.as_ref().context("header not deserialized")?.salt)
+        self.sections.as_ref().map(|s| s.salt.as_slice()).context("header not deserialized")
     }
 
     pub fn serialize(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
@@ -111,18 +116,40 @@ impl Header {
         self.shield.pack(&magic, salt, &header_data, &metadata_bytes, &mac)
     }
 
-    pub fn verify(&self, key: &[u8]) -> Result<()> {
+    pub fn verify(&self, key: &[u8]) -> bool {
         if key.is_empty() {
-            anyhow::bail!("empty key");
+            tracing::error!("key is empty");
+            return false;
         }
 
-        let sections = self.sections.as_ref().context("header not loaded")?;
-        let expected_mac = &sections.mac;
-        let magic = &sections.magic;
-        let salt = &sections.salt;
-        let header_data = wincode::serialize(&self.parameters)?;
-        let metadata_bytes = wincode::serialize(&self.metadata)?;
+        let Some(sections) = &self.sections else {
+            tracing::error!("header not deserialized");
+            return false;
+        };
 
-        Mac::new(key)?.verify_parts(expected_mac, &[magic, salt, &header_data, &metadata_bytes])
+        let header_data = match wincode::serialize(&self.parameters) {
+            Ok(header_data) => header_data,
+            Err(error) => {
+                tracing::error!("failed to serialize parameters: {error}");
+                return false;
+            }
+        };
+        let metadata_bytes = match wincode::serialize(&self.metadata) {
+            Ok(metadata_bytes) => metadata_bytes,
+            Err(error) => {
+                tracing::error!("failed to serialize metadata: {error}");
+                return false;
+            }
+        };
+
+        let mac = match Mac::new(key) {
+            Ok(mac) => mac,
+            Err(error) => {
+                tracing::error!("failed to create MAC: {error}");
+                return false;
+            }
+        };
+
+        mac.verify_parts(&sections.mac, &[&sections.magic, &sections.salt, &header_data, &metadata_bytes])
     }
 }

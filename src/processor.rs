@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use tokio::io::AsyncWriteExt;
 
 use crate::cipher::Derive;
@@ -48,7 +48,9 @@ impl Processor {
         }
 
         let key = Derive::new(self.password.as_bytes())?.derive_key(header.salt()?, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
-        header.verify(&key).context("invalid password or corrupted data")?;
+        if !header.verify(&key) {
+            anyhow::bail!("invalid password or corrupted data");
+        }
 
         let writer = dest.writer().await?;
         Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size()).await?;
@@ -90,7 +92,7 @@ mod tests {
         let password = "strong_password";
         let processor = Processor::new(password);
 
-        src.validate().await.unwrap();
+        assert!(src.validate().await);
         processor.encrypt(&src, &dest_enc).await.unwrap();
 
         assert!(dest_enc.exists());

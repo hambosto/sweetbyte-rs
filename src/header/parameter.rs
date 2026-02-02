@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use wincode::{SchemaRead, SchemaWrite};
 
@@ -17,27 +16,32 @@ pub struct Parameters {
 }
 
 impl Parameters {
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> bool {
         if self.version != CURRENT_VERSION {
-            anyhow::bail!("unsupported version: {}", self.version);
+            tracing::error!("invalid version: {}", self.version);
+            return false;
         }
 
         if self.algorithm != (ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305) {
-            anyhow::bail!("unsupported algorithm: {}", self.algorithm);
+            tracing::error!("invalid algorithm: {}", self.algorithm);
+            return false;
         }
 
         if self.compression != COMPRESSION_ZLIB {
-            anyhow::bail!("unsupported compression: {}", self.compression);
+            tracing::error!("invalid compression: {}", self.compression);
+            return false;
         }
 
         if self.encoding != ENCODING_REED_SOLOMON {
-            anyhow::bail!("unsupported encoding: {}", self.encoding);
+            tracing::error!("invalid encoding: {}", self.encoding);
+            return false;
         }
 
         if self.kdf != KDF_ARGON2 {
-            anyhow::bail!("unsupported kdf: {}", self.kdf);
+            tracing::error!("invalid kdf: {}", self.kdf);
+            return false;
         }
 
-        Ok(())
+        true
     }
 }

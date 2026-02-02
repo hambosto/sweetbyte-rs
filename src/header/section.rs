@@ -26,7 +26,7 @@ struct LengthsHeader {
 impl LengthsHeader {
     const SIZE: usize = 20;
 
-    fn as_array(&self) -> [u32; 5] {
+    const fn as_array(&self) -> [u32; 5] {
         [self.magic_len, self.salt_len, self.header_data_len, self.metadata_len, self.mac_len]
     }
 }
@@ -112,7 +112,7 @@ impl SectionShield {
     }
 
     async fn read_and_decode_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<DecodedSections> {
-        let magic = self.read_and_decode(reader, section_lengths[0], "magic").await?;
+        let magic = self.read_and_decode(reader, section_lengths[0]).await?;
 
         if magic != MAGIC_BYTES.to_be_bytes() {
             anyhow::bail!("invalid magic bytes");
@@ -120,14 +120,14 @@ impl SectionShield {
 
         Ok(DecodedSections {
             magic,
-            salt: self.read_and_decode(reader, section_lengths[1], "salt").await?,
-            header_data: self.read_and_decode(reader, section_lengths[2], "header data").await?,
-            metadata: self.read_and_decode(reader, section_lengths[3], "metadata").await?,
-            mac: self.read_and_decode(reader, section_lengths[4], "mac").await?,
+            salt: self.read_and_decode(reader, section_lengths[1]).await?,
+            header_data: self.read_and_decode(reader, section_lengths[2]).await?,
+            metadata: self.read_and_decode(reader, section_lengths[3]).await?,
+            mac: self.read_and_decode(reader, section_lengths[4]).await?,
         })
     }
 
-    async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, _name: &str) -> Result<Vec<u8>> {
+    async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32) -> Result<Vec<u8>> {
         let mut buffer = vec![0u8; size as usize];
         reader.read_exact(&mut buffer).await.context("read")?;
 

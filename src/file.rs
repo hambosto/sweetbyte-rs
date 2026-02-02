@@ -2,9 +2,8 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
-use fast_glob::glob_match;
 use sha_file_hashing::Hashable;
-use tokio::fs;
+use tap::Tap;
 use tokio::io::{BufReader, BufWriter};
 use walkdir::WalkDir;
 
@@ -28,10 +27,10 @@ impl File {
     }
 
     pub fn hash(&self) -> Result<[u8; 20]> {
-        hex::decode(self.path.hash().context("hash compute")?)
-            .context("hash parse")?
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("invalid hash length"))
+        let hash_str = self.path().hash().context("compute hash")?;
+        let hash_bytes = hex::decode(&hash_str).context("parse hash")?;
+
+        hash_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid hash length"))
     }
 
     pub async fn size(&mut self) -> Result<u64> {
@@ -39,14 +38,14 @@ impl File {
             return Ok(size);
         }
 
-        let meta = fs::metadata(&self.path).await.with_context(|| format!("metadata read error: {}", self.path.display()))?;
+        let meta = tokio::fs::metadata(&self.path).await.with_context(|| format!("metadata read error: {}", self.path.display()))?;
         self.size = Some(meta.len());
 
         Ok(meta.len())
     }
 
     pub async fn file_metadata(&self) -> Result<(String, u64, [u8; 20])> {
-        let meta = fs::metadata(&self.path).await.with_context(|| format!("read metadata: {}", self.path.display()))?;
+        let meta = tokio::fs::metadata(&self.path).await.with_context(|| format!("read metadata: {}", self.path.display()))?;
         let filename = self.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "unknown".to_owned());
         let size = meta.len();
         let hash = self.hash()?;
@@ -66,12 +65,12 @@ impl File {
         let path_str = self.path.to_str().unwrap_or("");
 
         EXCLUSION_MATCHERS.iter().any(|pattern| {
-            let full_match = glob_match(pattern, path_str);
+            let full_match = fast_glob::glob_match(pattern, path_str);
             if full_match {
                 return true;
             }
 
-            self.path.components().any(|comp| glob_match(pattern, comp.as_os_str().to_str().unwrap_or("")))
+            self.path.components().any(|comp| fast_glob::glob_match(pattern, comp.as_os_str().to_str().unwrap_or("")))
         })
     }
 
@@ -88,12 +87,8 @@ impl File {
 
     pub fn output_path(&self, mode: ProcessorMode) -> PathBuf {
         match mode {
-            ProcessorMode::Encrypt => {
-                let mut name = self.path.as_os_str().to_os_string();
-                name.push(FILE_EXTENSION);
-                PathBuf::from(name)
-            }
-            ProcessorMode::Decrypt => self.path.to_string_lossy().strip_suffix(FILE_EXTENSION).map_or_else(|| self.path.clone(), PathBuf::from),
+            ProcessorMode::Encrypt => PathBuf::from(self.path.as_os_str().to_os_string().tap_mut(|name| name.push(FILE_EXTENSION))),
+            ProcessorMode::Decrypt => self.path.to_string_lossy().strip_suffix(FILE_EXTENSION).map(PathBuf::from).unwrap_or_else(|| self.path.clone()),
         }
     }
 
@@ -105,18 +100,18 @@ impl File {
         self.path.is_dir()
     }
 
-    pub async fn reader(&self) -> Result<BufReader<fs::File>> {
-        let file = fs::File::open(&self.path).await.with_context(|| format!("open file: {}", self.path.display()))?;
+    pub async fn reader(&self) -> Result<BufReader<tokio::fs::File>> {
+        let file = tokio::fs::File::open(&self.path).await.with_context(|| format!("open file: {}", self.path.display()))?;
 
         Ok(BufReader::new(file))
     }
 
-    pub async fn writer(&self) -> Result<BufWriter<fs::File>> {
+    pub async fn writer(&self) -> Result<BufWriter<tokio::fs::File>> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            fs::create_dir_all(parent).await.with_context(|| format!("create dir: {}", parent.display()))?;
+            tokio::fs::create_dir_all(parent).await.with_context(|| format!("create dir: {}", parent.display()))?;
         }
 
-        let file = fs::OpenOptions::new()
+        let file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
@@ -132,23 +127,26 @@ impl File {
             anyhow::bail!("file not found: {}", self.path.display());
         }
 
-        fs::remove_file(&self.path).await.with_context(|| format!("delete file: {}", self.path.display()))
+        tokio::fs::remove_file(&self.path).await.with_context(|| format!("delete file: {}", self.path.display()))
     }
 
-    pub async fn validate(&mut self) -> Result<()> {
+    pub async fn validate(&mut self) -> bool {
         if !self.exists() {
-            anyhow::bail!("file not found: {}", self.path().display())
+            tracing::error!("file not found: {}", self.path().display());
+            return false;
         }
 
         if self.is_dir() {
-            anyhow::bail!("path is a directory: {}", self.path().display())
+            tracing::error!("path is a directory: {}", self.path().display());
+            return false;
         }
 
-        if self.size().await? == 0 {
-            anyhow::bail!("file is empty: {}", self.path().display())
+        if self.size().await.unwrap_or(0) == 0 {
+            tracing::error!("file is empty: {}", self.path().display());
+            return false;
         }
 
-        Ok(())
+        true
     }
 
     pub fn validate_hash(&self, expected_hash: impl AsRef<str>) -> Result<bool> {

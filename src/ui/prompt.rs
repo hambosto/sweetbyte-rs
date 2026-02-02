@@ -59,7 +59,7 @@ impl Prompt {
         let display_names: Vec<String> = items.iter().map(|item| item.to_string()).collect();
         let selection = Select::new(message, display_names.clone()).with_starting_cursor(0).prompt().context("select from list")?;
 
-        Ok(display_names.iter().position(|r| r == &selection).unwrap())
+        display_names.into_iter().position(|name| name == selection).ok_or_else(|| anyhow::anyhow!("selection not found"))
     }
 
     pub fn confirm_file_overwrite(path: &Path) -> Result<bool> {

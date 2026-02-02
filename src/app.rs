@@ -42,8 +42,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn init() -> Self {
-        Self::parse()
+    pub fn init() -> Result<Self> {
+        let subscriber = tracing_subscriber::fmt().with_file(true).with_line_number(true).finish();
+        tracing::subscriber::set_global_default(subscriber)?;
+        Ok(Self::parse())
     }
 
     pub async fn execute(self) -> Result<()> {
@@ -88,7 +90,9 @@ impl App {
 
         let mut input = File::new(path.to_string_lossy().into_owned());
 
-        input.validate().await?;
+        if !input.validate().await {
+            anyhow::bail!("invalid input file");
+        }
 
         let output = File::new(input.output_path(mode).to_string_lossy().into_owned());
         if output.exists() && !Prompt::confirm_file_overwrite(output.path())? {

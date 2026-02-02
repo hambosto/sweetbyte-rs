@@ -18,7 +18,9 @@ impl Executor {
     pub fn process(&self, tasks: &Receiver<Task>, results: &Sender<TaskResult>) {
         tasks.iter().par_bridge().for_each(|task| {
             let result = self.pipeline.process(&task);
-            let _ = results.send(result);
+            if let Err(error) = results.send(result) {
+                tracing::error!("failed to send task result: {error}");
+            }
         });
     }
 }

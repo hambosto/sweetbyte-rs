@@ -16,5 +16,5 @@ use crate::app::App;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    App::init().execute().await
+    App::init()?.execute().await
 }
