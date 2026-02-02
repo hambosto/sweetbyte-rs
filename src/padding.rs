@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
 use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{Padding, Pkcs7};
@@ -36,14 +36,14 @@ pub struct Pkcs7Padding {
 impl Pkcs7Padding {
     pub fn new(block_size: BlockSize) -> Result<Self> {
         if !block_size.is_valid() {
-            bail!("invalid block size");
+            anyhow::bail!("invalid block size");
         }
         Ok(Self { block_size })
     }
 
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
-            bail!("empty data");
+            anyhow::bail!("empty data");
         }
 
         match self.block_size {
@@ -57,7 +57,7 @@ impl Pkcs7Padding {
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         let block_size: usize = self.block_size.into();
         if data.is_empty() || !data.len().is_multiple_of(block_size) {
-            bail!("invalid padded data length");
+            anyhow::bail!("invalid padded data length");
         }
 
         match self.block_size {
@@ -72,7 +72,7 @@ impl Pkcs7Padding {
         match Pkcs7::pad_detached::<B>(data) {
             block_padding::PaddedData::Pad { blocks, tail_block } => Ok(blocks.iter().chain(std::iter::once(&tail_block)).flat_map(|b| b.as_slice()).copied().collect()),
             block_padding::PaddedData::NoPad { blocks } => Ok(blocks.iter().flat_map(|b| b.as_slice()).copied().collect()),
-            block_padding::PaddedData::Error => bail!("padding error"),
+            block_padding::PaddedData::Error => anyhow::bail!("padding error"),
         }
     }
 

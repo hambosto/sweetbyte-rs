@@ -57,7 +57,6 @@ impl App {
 
     async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
         let input = File::new(input_path);
-
         let output = File::new(output_path.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
         let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
 

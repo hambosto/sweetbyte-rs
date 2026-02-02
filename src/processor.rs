@@ -43,16 +43,19 @@ impl Processor {
         let mut reader = src.reader().await?;
         let header = Header::deserialize(reader.get_mut()).await?;
 
-        anyhow::ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
+        if header.file_size() == 0 {
+            anyhow::bail!("cannot decrypt a file size with zero size")
+        }
 
         let key = Derive::new(self.password.as_bytes())?.derive_key(header.salt()?, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
-
         header.verify(&key).context("invalid password or corrupted data")?;
 
         let writer = dest.writer().await?;
         Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size()).await?;
 
-        anyhow::ensure!(dest.validate_hash(header.file_hash())?, "hash mismatch");
+        if !dest.validate_hash(header.file_hash())? {
+            anyhow::bail!("hash mismatch");
+        }
 
         crate::ui::show_header_info(header.file_name(), header.file_size(), &header.file_hash());
 
