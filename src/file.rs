@@ -152,10 +152,7 @@ impl File {
     }
 
     pub fn validate_hash(&self, expected_hash: impl AsRef<str>) -> Result<bool> {
-        let path = self.path.clone();
-        let expected = expected_hash.as_ref().to_owned();
-
-        path.validate(&expected).context("validate hash")
+        self.path.validate(expected_hash.as_ref()).context("validate hash")
     }
 
     pub fn discover(mode: ProcessorMode) -> Vec<Self> {
