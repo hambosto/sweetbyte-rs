@@ -18,10 +18,10 @@ impl Progress {
     }
 
     pub fn add(&self, delta: u64) {
-        self.progress_bar.inc(delta)
+        self.progress_bar.inc(delta);
     }
 
     pub fn finish(&self) {
-        self.progress_bar.finish()
+        self.progress_bar.finish();
     }
 }

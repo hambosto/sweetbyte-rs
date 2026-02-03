@@ -6,6 +6,7 @@ mod derive;
 mod mac;
 
 pub use aes_gcm::AesGcm;
+pub use algorithm::{Aes256Gcm, XChaCha20Poly1305};
 pub use chacha20poly1305::ChaCha20Poly1305;
 pub use derive::Derive;
 pub use mac::Mac;
@@ -16,8 +17,6 @@ pub mod algorithm {
     pub struct Aes256Gcm;
     pub struct XChaCha20Poly1305;
 }
-
-pub use algorithm::{Aes256Gcm, XChaCha20Poly1305};
 
 pub trait CipherAlgorithm {
     fn encrypt(cipher: &Cipher, plaintext: &[u8]) -> Result<Vec<u8>>;
