@@ -1,16 +1,18 @@
 use anyhow::Result;
-use reed_solomon_erasure::galois_8::ReedSolomon;
+use reed_solomon_simd::{ReedSolomonDecoder, ReedSolomonEncoder};
 
 pub struct Encoding {
-    encoder: ReedSolomon,
-    data_shards: usize,
-    parity_shards: usize,
+    original_count: usize,
+    recovery_count: usize,
 }
 
 impl Encoding {
-    pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
-        let encoder = ReedSolomon::new(data_shards, parity_shards)?;
-        Ok(Self { encoder, data_shards, parity_shards })
+    #[inline]
+    pub fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
+        if !ReedSolomonEncoder::supports(original_count, recovery_count) {
+            anyhow::bail!("unsupported shard count: {original_count} original, {recovery_count} recovery");
+        }
+        Ok(Self { original_count, recovery_count })
     }
 
     pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
@@ -18,45 +20,104 @@ impl Encoding {
             anyhow::bail!("empty input");
         }
 
-        let shard_size = data.len().div_ceil(self.data_shards);
-        let total_shards = self.data_shards + self.parity_shards;
-        let mut shards: Vec<Vec<u8>> = Vec::with_capacity(total_shards);
+        let data_len = data.len();
+        let shard_size = (data_len.div_ceil(self.original_count) + 1) & !1;
+        let total_shards = self.original_count + self.recovery_count;
 
-        for chunk in data.chunks(shard_size) {
-            let mut shard = vec![0u8; shard_size];
-            shard[..chunk.len()].copy_from_slice(chunk);
-            shards.push(shard);
+        let mut encoder = ReedSolomonEncoder::new(self.original_count, self.recovery_count, shard_size)?;
+        let mut result = Vec::with_capacity(4 + (4 + shard_size) * total_shards);
+        result.extend_from_slice(&(data_len as u32).to_le_bytes());
+
+        let mut shard = vec![0u8; shard_size];
+
+        for i in 0..self.original_count {
+            shard.fill(0);
+            let start = i * shard_size;
+            if start < data_len {
+                let end = (start + shard_size).min(data_len);
+                shard[..end - start].copy_from_slice(&data[start..end]);
+            }
+            encoder.add_original_shard(&shard)?;
+            result.extend_from_slice(&crc32fast::hash(&shard).to_le_bytes());
+            result.extend_from_slice(&shard);
         }
 
-        shards.resize_with(total_shards, || vec![0u8; shard_size]);
-        self.encoder.encode(&mut shards)?;
-
-        let mut result = Vec::with_capacity(shard_size * total_shards);
-        for shard in shards {
-            result.extend_from_slice(&shard);
+        for recovery_shard in encoder.encode()?.recovery_iter() {
+            result.extend_from_slice(&crc32fast::hash(recovery_shard).to_le_bytes());
+            result.extend_from_slice(recovery_shard);
         }
 
         Ok(result)
     }
 
     pub fn decode(&self, encoded: &[u8]) -> Result<Vec<u8>> {
-        if encoded.is_empty() {
-            anyhow::bail!("empty encoded data");
+        if encoded.len() < 4 {
+            anyhow::bail!("encoded data too short");
         }
 
-        let total_shards = self.data_shards + self.parity_shards;
-        if !encoded.len().is_multiple_of(total_shards) {
-            anyhow::bail!("invalid encoded length: {} not divisible by shards ({})", encoded.len(), total_shards);
+        let original_len = u32::from_le_bytes(encoded[..4].try_into()?) as usize;
+        let total_shards = self.original_count + self.recovery_count;
+        let encoded_data = &encoded[4..];
+
+        if encoded_data.is_empty() || !encoded_data.len().is_multiple_of(total_shards) {
+            anyhow::bail!("invalid encoded length");
         }
 
-        let shard_size = encoded.len() / total_shards;
-        let mut shards: Vec<Option<Vec<u8>>> = encoded.chunks_exact(shard_size).map(|chunk| Some(chunk.to_vec())).collect();
-        self.encoder.reconstruct(&mut shards)?;
+        let chunk_size = encoded_data.len() / total_shards;
+        if chunk_size <= 4 {
+            anyhow::bail!("shard too small");
+        }
+        let shard_size = chunk_size - 4;
 
-        let mut result = Vec::with_capacity(self.data_shards * shard_size);
-        for shard in shards.iter().take(self.data_shards).flatten() {
+        let mut valid_original = Vec::with_capacity(self.original_count);
+        let mut valid_recovery = Vec::with_capacity(self.recovery_count);
+        let mut corrupted = 0;
+
+        for (i, chunk) in encoded_data.chunks_exact(chunk_size).enumerate() {
+            let (crc, shard) = chunk.split_at(4);
+            let expected_crc = crc32fast::hash(shard).to_le_bytes();
+
+            if crc == expected_crc {
+                if i < self.original_count {
+                    valid_original.push((i, shard));
+                } else {
+                    valid_recovery.push((i - self.original_count, shard));
+                }
+            } else {
+                corrupted += 1;
+            }
+        }
+
+        if valid_original.len() + valid_recovery.len() < self.original_count {
+            anyhow::bail!("unrecoverable: {corrupted} corrupted shards exceeds recovery capacity ({})", self.recovery_count);
+        }
+
+        if valid_original.len() == self.original_count {
+            valid_original.sort_unstable_by_key(|(i, _)| *i);
+            return Ok(valid_original.iter().flat_map(|(_, s)| *s).copied().take(original_len).collect());
+        }
+
+        let mut decoder = ReedSolomonDecoder::new(self.original_count, self.recovery_count, shard_size)?;
+
+        for &(i, s) in &valid_original {
+            decoder.add_original_shard(i, s)?;
+        }
+        for &(i, s) in &valid_recovery {
+            decoder.add_recovery_shard(i, s)?;
+        }
+
+        let restored = decoder.decode()?;
+        let mut result = Vec::with_capacity(original_len);
+
+        for i in 0..self.original_count {
+            let shard = valid_original
+                .iter()
+                .find_map(|&(idx, s)| (idx == i).then_some(s))
+                .or_else(|| restored.restored_original(i))
+                .ok_or_else(|| anyhow::anyhow!("missing shard {i}"))?;
             result.extend_from_slice(shard);
         }
+        result.truncate(original_len);
 
         Ok(result)
     }
