@@ -30,7 +30,7 @@ pub const ALGORITHM_CHACHA20_POLY1305: u8 = 0x02;
 
 pub const HASH_SIZE: usize = 20;
 
-pub const COMPRESSION_ZLIB: u8 = 0x01;
+pub const COMPRESSION_ZSTD: u8 = 0x02;
 
 pub const ENCODING_REED_SOLOMON: u8 = 0x01;
 

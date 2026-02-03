@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use wincode::{SchemaRead, SchemaWrite};
 
-use crate::config::{ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, COMPRESSION_ZLIB, CURRENT_VERSION, ENCODING_REED_SOLOMON, KDF_ARGON2};
+use crate::config::{ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, COMPRESSION_ZSTD, CURRENT_VERSION, ENCODING_REED_SOLOMON, KDF_ARGON2};
 
 #[derive(Serialize, Deserialize, SchemaRead, SchemaWrite)]
 pub struct Parameters {
@@ -27,7 +27,7 @@ impl Parameters {
             return false;
         }
 
-        if self.compression != COMPRESSION_ZLIB {
+        if self.compression != COMPRESSION_ZSTD {
             tracing::error!("invalid compression: {}", self.compression);
             return false;
         }
