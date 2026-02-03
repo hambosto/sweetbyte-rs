@@ -25,7 +25,6 @@ impl Prompt {
 
     fn prompt_password(message: &str, with_confirmation: bool, password_min_length: usize) -> Result<String> {
         let validator = inquire::min_length!(password_min_length);
-
         let mut prompt = Password::new(message).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
 
         if with_confirmation {

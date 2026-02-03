@@ -37,28 +37,25 @@ impl Worker {
         let concurrency = std::thread::available_parallelism().map(|p| p.get()).unwrap_or(4);
         let channel_size = concurrency * 2;
 
-        let (task_sender, task_receiver) = bounded(channel_size);
-        let (result_sender, result_receiver) = bounded(channel_size);
+        let (task_tx, task_rx) = bounded(channel_size);
+        let (result_tx, result_rx) = bounded(channel_size);
 
         let reader = Reader::new(self.mode, CHUNK_SIZE)?;
-        let mut writer = Writer::new(self.mode);
-
-        let reader_handle = tokio::spawn(async move { reader.read_all(input, &task_sender).await });
+        let reader_handle = tokio::spawn(async move { reader.read_all(input, &task_tx).await });
 
         let executor = Executor::new(self.pipeline);
         let executor_handle = tokio::task::spawn_blocking(move || {
-            executor.process(&task_receiver, &result_sender);
+            executor.process(&task_rx, &result_tx);
         });
 
-        let write_result = writer.write_all(output, result_receiver, Some(&progress)).await;
+        let mut writer = Writer::new(self.mode);
+        let write_result = writer.write_all(output, result_rx, Some(&progress)).await.context("write failed");
 
-        let read_result = reader_handle.await.context("reader task")?;
-        executor_handle.await.context("executor task")?;
-
+        reader_handle.await.context("reader panicked")??;
+        executor_handle.await.context("executor panicked")?;
         progress.finish();
 
-        read_result.context("read")?;
-        write_result.context("write")?;
+        write_result?;
 
         Ok(())
     }
