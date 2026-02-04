@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use wincode::{SchemaRead, SchemaWrite};
 
@@ -14,7 +13,7 @@ pub struct DecodedSections {
     pub mac: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, SchemaRead, SchemaWrite)]
+#[derive(SchemaRead, SchemaWrite)]
 struct LengthsHeader {
     magic_len: u32,
     salt_len: u32,
@@ -42,6 +41,7 @@ impl SectionShield {
 
     pub fn pack(&self, magic: &[u8], salt: &[u8], header_data: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
         let raw_sections = [magic, salt, header_data, metadata, mac];
+
         let mut sections = Vec::with_capacity(5);
         for &data in &raw_sections {
             sections.push(self.encode_non_empty(data)?);
@@ -116,7 +116,6 @@ impl SectionShield {
 
     async fn read_and_decode_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<DecodedSections> {
         let magic = self.read_and_decode(reader, section_lengths[0]).await?;
-
         if magic != MAGIC_BYTES.to_be_bytes() {
             anyhow::bail!("invalid magic bytes");
         }

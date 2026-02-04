@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
 use wincode::{SchemaRead, SchemaWrite};
 
 use crate::config::{HASH_SIZE, MAX_FILENAME_LENGTH};
 
-#[derive(Serialize, Deserialize, SchemaRead, SchemaWrite)]
+#[derive(SchemaRead, SchemaWrite)]
 pub struct Metadata {
     name: String,
     size: u64,

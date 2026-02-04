@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
 use wincode::{SchemaRead, SchemaWrite};
 
 use crate::config::{ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, COMPRESSION_ZSTD, CURRENT_VERSION, ENCODING_REED_SOLOMON, KDF_ARGON2};
 
-#[derive(Serialize, Deserialize, SchemaRead, SchemaWrite)]
+#[derive(SchemaRead, SchemaWrite)]
 pub struct Parameters {
     pub kdf_memory: u32,
     pub version: u16,
