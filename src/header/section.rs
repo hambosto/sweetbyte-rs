@@ -42,12 +42,15 @@ impl SectionShield {
 
     pub fn pack(&self, magic: &[u8], salt: &[u8], header_data: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
         let raw_sections = [magic, salt, header_data, metadata, mac];
-        let sections: Vec<Vec<u8>> = raw_sections.iter().map(|&data| self.encode_non_empty(data)).collect::<Result<Vec<Vec<u8>>>>()?;
+        let mut sections = Vec::with_capacity(5);
+        for &data in &raw_sections {
+            sections.push(self.encode_non_empty(data)?);
+        }
 
-        let length_sections: Vec<Vec<u8>> = sections
-            .iter()
-            .map(|section| self.encode_non_empty(&(section.len() as u32).to_be_bytes()))
-            .collect::<Result<Vec<Vec<u8>>>>()?;
+        let mut length_sections = Vec::with_capacity(5);
+        for section in &sections {
+            length_sections.push(self.encode_non_empty(&(section.len() as u32).to_be_bytes())?);
+        }
 
         let lengths_header = LengthsHeader {
             magic_len: length_sections[0].len() as u32,
@@ -93,9 +96,9 @@ impl SectionShield {
     }
 
     async fn read_and_decode_lengths<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &LengthsHeader) -> Result<[u32; 5]> {
-        let mut decoded_lengths = Vec::with_capacity(5);
+        let mut decoded_lengths = [0u32; 5];
 
-        for &size in header.as_array().iter() {
+        for (idx, &size) in header.as_array().iter().enumerate() {
             let mut buffer = vec![0u8; size as usize];
             reader.read_exact(&mut buffer).await.context("read length section")?;
 
@@ -105,10 +108,10 @@ impl SectionShield {
             }
 
             let length = u32::from_be_bytes(decoded[..4].try_into().context("convert length")?);
-            decoded_lengths.push(length);
+            decoded_lengths[idx] = length;
         }
 
-        decoded_lengths.try_into().map_err(|error| anyhow::anyhow!("convert length array: {error:?}"))
+        Ok(decoded_lengths)
     }
 
     async fn read_and_decode_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<DecodedSections> {
