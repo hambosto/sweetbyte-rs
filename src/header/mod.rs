@@ -80,7 +80,7 @@ impl Header {
     }
 
     pub fn file_hash(&self) -> String {
-        self.metadata.hash().iter().map(|b| format!("{b:02x}")).collect()
+        hex::encode(self.metadata.hash())
     }
 
     pub const fn kdf_memory(&self) -> u32 {
