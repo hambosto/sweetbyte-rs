@@ -39,7 +39,6 @@ impl Reader {
             }
 
             let data = if bytes_read == self.chunk_size { std::mem::take(&mut buffer) } else { buffer[..bytes_read].to_vec() };
-
             sender.send_async(Task { data, index }).await.context("send chunk: channel closed")?;
 
             if buffer.is_empty() {

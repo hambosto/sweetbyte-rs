@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default)]
 pub enum CompressionLevel {
     Fast,
     #[default]
@@ -10,24 +10,19 @@ pub enum CompressionLevel {
 }
 
 impl CompressionLevel {
-    pub fn value(self) -> i32 {
-        match self {
-            Self::Fast => 1,
-            Self::Default => 3,
-            Self::Good => 9,
-            Self::Best => 22,
-        }
-    }
-
-    pub fn is_valid(self) -> bool {
-        let value = self.value();
-        (1..=22).contains(&value)
+    pub fn is_valid(&self) -> bool {
+        matches!(self, Self::Fast | Self::Default | Self::Good | Self::Best)
     }
 }
 
 impl From<CompressionLevel> for i32 {
     fn from(level: CompressionLevel) -> Self {
-        level.value()
+        match level {
+            CompressionLevel::Fast => 1,
+            CompressionLevel::Default => 3,
+            CompressionLevel::Good => 9,
+            CompressionLevel::Best => 22,
+        }
     }
 }
 
@@ -38,10 +33,10 @@ pub struct Compressor {
 impl Compressor {
     pub fn new(level: CompressionLevel) -> Result<Self> {
         if !level.is_valid() {
-            anyhow::bail!("invalid compression level: {}", level.value());
+            anyhow::bail!("invalid compression level");
         }
 
-        Ok(Self { level: level.into() })
+        Ok(Self { level: i32::from(level) })
     }
 
     pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
