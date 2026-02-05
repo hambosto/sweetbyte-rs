@@ -70,21 +70,36 @@ impl Pkcs7Padding {
 
     fn pad_with<B: ArraySize>(data: &[u8]) -> Result<Vec<u8>> {
         match Pkcs7::pad_detached::<B>(data) {
-            block_padding::PaddedData::Pad { blocks, tail_block } => Ok(blocks.iter().chain(std::iter::once(&tail_block)).flat_map(|b| b.as_slice()).copied().collect()),
-            block_padding::PaddedData::NoPad { blocks } => Ok(blocks.iter().flat_map(|b| b.as_slice()).copied().collect()),
+            block_padding::PaddedData::Pad { blocks, tail_block } => {
+                let total_len = blocks.len() * B::USIZE + B::USIZE;
+                let mut result = Vec::with_capacity(total_len);
+                for block in blocks {
+                    result.extend_from_slice(block.as_slice());
+                }
+                result.extend_from_slice(tail_block.as_slice());
+                Ok(result)
+            }
+            block_padding::PaddedData::NoPad { blocks } => {
+                let total_len = blocks.len() * B::USIZE;
+                let mut result = Vec::with_capacity(total_len);
+                for block in blocks {
+                    result.extend_from_slice(block.as_slice());
+                }
+                Ok(result)
+            }
             block_padding::PaddedData::Error => anyhow::bail!("padding error"),
         }
     }
 
     fn unpad_with<B: ArraySize + Unsigned>(data: &[u8]) -> Result<Vec<u8>> {
-        let blocks: Vec<Array<u8, B>> = data
-            .chunks_exact(B::USIZE)
-            .map(|chunk| {
-                let mut arr = Array::default();
-                arr.copy_from_slice(chunk);
-                arr
-            })
-            .collect();
+        let num_blocks = data.len() / B::USIZE;
+        let mut blocks = Vec::with_capacity(num_blocks);
+
+        for chunk in data.chunks_exact(B::USIZE) {
+            let mut arr = Array::default();
+            arr.copy_from_slice(chunk);
+            blocks.push(arr);
+        }
 
         Ok(Pkcs7::unpad_blocks::<B>(&blocks)?.to_vec())
     }

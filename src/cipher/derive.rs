@@ -32,7 +32,8 @@ impl Derive {
     }
 
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
-        let mut bytes = vec![0u8; size];
+        let mut bytes = Vec::with_capacity(size);
+        bytes.resize(size, 0u8);
 
         OsRng.try_fill_bytes(&mut bytes).context("generate salt")?;
 

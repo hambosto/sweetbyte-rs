@@ -1,7 +1,5 @@
 imports_granularity = "Module"
 group_imports = "StdExternalCrate"
-format_macro_matchers = true
-format_macro_bodies = true
 fn_params_layout = "Compressed"
 wrap_comments = true
 comment_width = 100
