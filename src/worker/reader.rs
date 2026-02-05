@@ -29,22 +29,17 @@ impl Reader {
     }
 
     async fn read_fixed_chunks<R: AsyncRead + Unpin>(&self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
-        let mut buffer = vec![0u8; self.chunk_size];
         let mut index = 0u64;
 
         loop {
-            let bytes_read = reader.read(&mut buffer).await.context("read chunk")?;
+            let mut buffer = Vec::with_capacity(self.chunk_size);
+            let bytes_read = reader.take(self.chunk_size as u64).read_to_end(&mut buffer).await.context("read chunk")?;
+
             if bytes_read == 0 {
                 break;
             }
 
-            let data = if bytes_read == self.chunk_size { std::mem::take(&mut buffer) } else { buffer[..bytes_read].to_vec() };
-            sender.send_async(Task { data, index }).await.context("send chunk: channel closed")?;
-
-            if buffer.is_empty() {
-                buffer = vec![0u8; self.chunk_size];
-            }
-
+            sender.send_async(Task { data: buffer, index }).await.context("send chunk: channel closed")?;
             index += 1;
         }
 
