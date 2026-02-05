@@ -26,11 +26,15 @@ impl Encoding {
 
         let mut shard = vec![0u8; shard_size];
         for i in 0..self.original_count {
-            shard.fill(0);
             let start = i * shard_size;
-            if start < data.len() {
-                let end = (start + shard_size).min(data.len());
-                shard[..end - start].copy_from_slice(&data[start..end]);
+            let end = (start + shard_size).min(data.len());
+            let written = end.saturating_sub(start);
+
+            if written < shard_size {
+                shard[written..].fill(0);
+            }
+            if written > 0 {
+                shard[..written].copy_from_slice(&data[start..end]);
             }
 
             encoder.add_original_shard(&shard).with_context(|| format!("failed to add original shard {i}"))?;

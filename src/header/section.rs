@@ -48,7 +48,7 @@ impl SectionShield {
 
         for (idx, data) in sections.iter().enumerate() {
             if data.is_empty() {
-                anyhow::bail!("section {} is empty", idx);
+                anyhow::bail!("section {idx} is empty");
             }
         }
 
@@ -104,7 +104,7 @@ impl SectionShield {
 
     async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, section_idx: usize) -> Result<Vec<u8>> {
         if size == 0 {
-            anyhow::bail!("section {} is empty", section_idx);
+            anyhow::bail!("section {section_idx} is empty");
         }
 
         let mut buffer = vec![0u8; size as usize];
@@ -113,6 +113,6 @@ impl SectionShield {
             .await
             .with_context(|| format!("failed to read section {} ({} bytes)", section_idx, size as usize))?;
 
-        self.encoder.decode(&buffer).with_context(|| format!("failed to decode section {}", section_idx))
+        self.encoder.decode(&buffer).with_context(|| format!("failed to decode section {section_idx}"))
     }
 }

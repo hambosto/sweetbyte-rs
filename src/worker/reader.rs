@@ -38,7 +38,14 @@ impl Reader {
                 break;
             }
 
-            sender.send_async(Task { data: buffer[..bytes_read].to_vec(), index }).await.context("send chunk: channel closed")?;
+            let data = if bytes_read == self.chunk_size { std::mem::take(&mut buffer) } else { buffer[..bytes_read].to_vec() };
+
+            sender.send_async(Task { data, index }).await.context("send chunk: channel closed")?;
+
+            if buffer.is_empty() {
+                buffer = vec![0u8; self.chunk_size];
+            }
+
             index += 1;
         }
 
