@@ -50,9 +50,8 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &[u8; ARGON_KEY_LEN]) -> Result<Self> {
-        // looks ugly right? but i love this.
-        let aes_key = &key[..KEY_SIZE].try_into().context("invalid aes key length")?;
-        let chacha_key = &key[KEY_SIZE..].try_into().context("invalid chacha key length")?;
+        let aes_key: &[u8; KEY_SIZE] = key.get(..KEY_SIZE).context("invalid aes key length")?.try_into().context("failed to convert aes key")?;
+        let chacha_key: &[u8; KEY_SIZE] = key.get(KEY_SIZE..).context("invalid chacha key length")?.try_into().context("failed to convert chacha key")?;
 
         Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
     }
