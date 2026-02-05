@@ -25,7 +25,11 @@ struct LengthsHeader {
 impl LengthsHeader {
     const SIZE: usize = 20;
 
-    const fn as_array(&self) -> [u32; 5] {
+    fn from_array(arr: [u32; 5]) -> Self {
+        Self { magic_len: arr[0], salt_len: arr[1], header_data_len: arr[2], metadata_len: arr[3], mac_len: arr[4] }
+    }
+
+    fn as_array(&self) -> [u32; 5] {
         [self.magic_len, self.salt_len, self.header_data_len, self.metadata_len, self.mac_len]
     }
 }
@@ -40,99 +44,75 @@ impl SectionShield {
     }
 
     pub fn pack(&self, magic: &[u8], salt: &[u8], header_data: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
-        let raw_sections = [magic, salt, header_data, metadata, mac];
+        let sections = [magic, salt, header_data, metadata, mac];
 
-        let mut sections = Vec::with_capacity(5);
-        for &data in &raw_sections {
-            sections.push(self.encode_non_empty(data)?);
+        for (idx, data) in sections.iter().enumerate() {
+            if data.is_empty() {
+                anyhow::bail!("section {} is empty", idx);
+            }
         }
 
-        let mut length_sections = Vec::with_capacity(5);
-        for section in &sections {
-            length_sections.push(self.encode_non_empty(&(section.len() as u32).to_be_bytes())?);
+        let mut encoded_sections: [Vec<u8>; 5] = Default::default();
+        let mut lengths = [0u32; 5];
+        for (idx, &data) in sections.iter().enumerate() {
+            encoded_sections[idx] = self.encoder.encode(data).context("encode section")?;
+            lengths[idx] = encoded_sections[idx].len() as u32;
         }
 
-        let lengths_header = LengthsHeader {
-            magic_len: length_sections[0].len() as u32,
-            salt_len: length_sections[1].len() as u32,
-            header_data_len: length_sections[2].len() as u32,
-            metadata_len: length_sections[3].len() as u32,
-            mac_len: length_sections[4].len() as u32,
-        };
+        let lengths_header = LengthsHeader::from_array(lengths);
+        let total_len = LengthsHeader::SIZE + encoded_sections.iter().map(|s| s.len()).sum::<usize>();
+        let mut result = Vec::with_capacity(total_len);
+        result.extend_from_slice(&wincode::serialize(&lengths_header)?);
 
-        let mut result = wincode::serialize(&lengths_header)?;
-        for section in length_sections.iter().chain(sections.iter()) {
+        for section in &encoded_sections {
             result.extend_from_slice(section);
         }
 
         Ok(result)
     }
 
-    fn encode_non_empty(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            anyhow::bail!("empty data");
-        }
-
-        self.encoder.encode(data)
-    }
-
-    fn decode_non_empty(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            anyhow::bail!("empty encoded section");
-        }
-
-        self.encoder.decode(data)
-    }
-
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<DecodedSections> {
         let mut buffer = [0u8; LengthsHeader::SIZE];
-        reader.read_exact(&mut buffer).await.context("read")?;
+        reader.read_exact(&mut buffer).await.context("failed to read lengths header")?;
 
-        let lengths_header: LengthsHeader = wincode::deserialize(&buffer).context("deserialize lengths header")?;
-        let section_lengths = self.read_and_decode_lengths(reader, &lengths_header).await?;
-        let sections = self.read_and_decode_sections(reader, &section_lengths).await?;
+        let lengths_header: LengthsHeader = wincode::deserialize(&buffer).context("failed to deserialize lengths header")?;
+        let decoded_sections = self.read_sections(reader, &lengths_header).await?;
 
-        Ok(sections)
-    }
-
-    async fn read_and_decode_lengths<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &LengthsHeader) -> Result<[u32; 5]> {
-        let mut decoded_lengths = [0u32; 5];
-
-        for (idx, &size) in header.as_array().iter().enumerate() {
-            let mut buffer = vec![0u8; size as usize];
-            reader.read_exact(&mut buffer).await.context("read length section")?;
-
-            let decoded = self.decode_non_empty(&buffer)?;
-            if decoded.len() < 4 {
-                anyhow::bail!("invalid length prefix");
-            }
-
-            let length = u32::from_be_bytes(decoded[..4].try_into().context("convert length")?);
-            decoded_lengths[idx] = length;
+        if decoded_sections.magic != MAGIC_BYTES.to_be_bytes() {
+            anyhow::bail!("invalid magic bytes: expected {:08X?}, got {:08X?}", MAGIC_BYTES.to_be_bytes(), decoded_sections.magic);
         }
 
-        Ok(decoded_lengths)
+        Ok(decoded_sections)
     }
 
-    async fn read_and_decode_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, section_lengths: &[u32; 5]) -> Result<DecodedSections> {
-        let magic = self.read_and_decode(reader, section_lengths[0]).await?;
-        if magic != MAGIC_BYTES.to_be_bytes() {
-            anyhow::bail!("invalid magic bytes");
+    async fn read_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &LengthsHeader) -> Result<DecodedSections> {
+        let lengths = header.as_array();
+
+        let mut sections: [Vec<u8>; 5] = Default::default();
+        for (idx, &length) in lengths.iter().enumerate() {
+            sections[idx] = self.read_and_decode(reader, length, idx).await?;
         }
 
         Ok(DecodedSections {
-            magic,
-            salt: self.read_and_decode(reader, section_lengths[1]).await?,
-            header_data: self.read_and_decode(reader, section_lengths[2]).await?,
-            metadata: self.read_and_decode(reader, section_lengths[3]).await?,
-            mac: self.read_and_decode(reader, section_lengths[4]).await?,
+            magic: std::mem::take(&mut sections[0]),
+            salt: std::mem::take(&mut sections[1]),
+            header_data: std::mem::take(&mut sections[2]),
+            metadata: std::mem::take(&mut sections[3]),
+            mac: std::mem::take(&mut sections[4]),
         })
     }
 
-    async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32) -> Result<Vec<u8>> {
-        let mut buffer = vec![0u8; size as usize];
-        reader.read_exact(&mut buffer).await.context("read")?;
+    async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, section_idx: usize) -> Result<Vec<u8>> {
+        if size == 0 {
+            anyhow::bail!("section {} is empty", section_idx);
+        }
 
-        self.decode_non_empty(&buffer)
+        let mut buffer = vec![0u8; size as usize];
+        reader
+            .read_exact(&mut buffer)
+            .await
+            .with_context(|| format!("failed to read section {} ({} bytes)", section_idx, size as usize))?;
+
+        self.encoder.decode(&buffer).with_context(|| format!("failed to decode section {}", section_idx))
     }
 }
