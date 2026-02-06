@@ -58,8 +58,8 @@ impl App {
     }
 
     async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
-        let input = File::new(input_path);
-        let output = File::new(output_path.unwrap_or_else(|| input.output_path(processing.mode()).to_string_lossy().into_owned()));
+        let input = File::new(&input_path);
+        let output = File::new(output_path.map(std::path::PathBuf::from).unwrap_or_else(|| input.output_path(processing.mode())));
         let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
 
         Self::process(processing, &input, &output, &password).await?;
@@ -88,13 +88,13 @@ impl App {
 
         let path = Prompt::select_file(&files)?;
 
-        let mut input = File::new(path.to_string_lossy().into_owned());
+        let mut input = File::new(&path);
 
         if !input.validate().await {
             anyhow::bail!("invalid input file");
         }
 
-        let output = File::new(input.output_path(mode).to_string_lossy().into_owned());
+        let output = File::new(input.output_path(mode));
         if output.exists() && !Prompt::confirm_file_overwrite(output.path())? {
             anyhow::bail!("operation canceled");
         }
