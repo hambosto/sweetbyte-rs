@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::cipher::{Aes256Gcm, Cipher, XChaCha20Poly1305};
 use crate::compression::{CompressionLevel, Compressor};
-use crate::config::{ARGON_KEY_LEN, DATA_SHARDS, PARITY_SHARDS};
+use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
 use crate::padding::{BlockSize, Pkcs7Padding};
 use crate::types::{Processing, Task, TaskResult};
@@ -16,7 +16,7 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(key: &[u8; ARGON_KEY_LEN], mode: Processing) -> Result<Self> {
+    pub fn new(key: &[u8], mode: Processing) -> Result<Self> {
         let cipher = Cipher::new(key)?;
         let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
         let compressor = Compressor::new(CompressionLevel::Fast)?;

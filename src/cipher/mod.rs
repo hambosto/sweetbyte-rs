@@ -49,9 +49,13 @@ pub struct Cipher {
 }
 
 impl Cipher {
-    pub fn new(key: &[u8; ARGON_KEY_LEN]) -> Result<Self> {
-        let aes_key: &[u8; KEY_SIZE] = key.get(..KEY_SIZE).context("invalid aes key length")?.try_into().context("failed to convert aes key")?;
-        let chacha_key: &[u8; KEY_SIZE] = key.get(KEY_SIZE..).context("invalid chacha key length")?.try_into().context("failed to convert chacha key")?;
+    pub fn new(key: &[u8]) -> Result<Self> {
+        if key.len() != ARGON_KEY_LEN {
+            anyhow::bail!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.len());
+        }
+
+        let aes_key = Self::extract_key(key, 0)?;
+        let chacha_key = Self::extract_key(key, KEY_SIZE)?;
 
         Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
     }
@@ -62,5 +66,12 @@ impl Cipher {
 
     pub fn decrypt<Algo: CipherAlgorithm>(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         Algo::decrypt(self, ciphertext)
+    }
+
+    fn extract_key(key: &[u8], offset: usize) -> Result<&[u8; KEY_SIZE]> {
+        key.get(offset..offset + KEY_SIZE)
+            .context("Invalid key offset or length")?
+            .try_into()
+            .context("Failed to convert to fixed-size key")
     }
 }

@@ -2,10 +2,7 @@ use anyhow::{Context, Result};
 use tokio::io::AsyncRead;
 
 use crate::cipher::Mac;
-use crate::config::{
-    ALGORITHM_AES_256_GCM, ALGORITHM_CHACHA20_POLY1305, ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME, COMPRESSION_ZSTD, CURRENT_VERSION, DATA_SHARDS, ENCODING_REED_SOLOMON, KDF_ARGON2,
-    MAGIC_BYTES, MAX_FILENAME_LENGTH, PARITY_SHARDS,
-};
+use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CURRENT_VERSION, DATA_SHARDS, MAGIC_BYTES, MAX_FILENAME_LENGTH, PARITY_SHARDS};
 use crate::header::metadata::Metadata;
 use crate::header::parameter::Parameters;
 use crate::header::section::{DecodedSections, SectionShield};
@@ -24,16 +21,7 @@ pub struct Header {
 impl Header {
     pub fn new(metadata: Metadata) -> Result<Self> {
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
-        let parameters = Parameters {
-            version: CURRENT_VERSION,
-            algorithm: ALGORITHM_AES_256_GCM | ALGORITHM_CHACHA20_POLY1305,
-            compression: COMPRESSION_ZSTD,
-            encoding: ENCODING_REED_SOLOMON,
-            kdf: KDF_ARGON2,
-            kdf_memory: ARGON_MEMORY,
-            kdf_time: ARGON_TIME as u8,
-            kdf_parallelism: ARGON_THREADS as u8,
-        };
+        let parameters = Parameters { magic: MAGIC_BYTES, version: CURRENT_VERSION };
 
         Self::with_parameters(shield, parameters, metadata)
     }
@@ -53,7 +41,7 @@ impl Header {
     pub async fn deserialize<R: AsyncRead + Unpin>(mut reader: R) -> Result<Self> {
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
         let sections = shield.unpack(&mut reader).await?;
-        let params: Parameters = wincode::deserialize(&sections.header_data)?;
+        let params: Parameters = wincode::deserialize(&sections.parameter)?;
         let metadata: Metadata = wincode::deserialize(&sections.metadata)?;
 
         if !params.validate() {
@@ -83,18 +71,6 @@ impl Header {
         hex::encode(self.metadata.hash())
     }
 
-    pub const fn kdf_memory(&self) -> u32 {
-        self.parameters.kdf_memory
-    }
-
-    pub const fn kdf_time(&self) -> u8 {
-        self.parameters.kdf_time
-    }
-
-    pub const fn kdf_parallelism(&self) -> u8 {
-        self.parameters.kdf_parallelism
-    }
-
     pub fn salt(&self) -> Result<&[u8]> {
         self.sections.as_ref().map(|s| s.salt.as_slice()).context("header not deserialized")
     }
@@ -104,21 +80,20 @@ impl Header {
             anyhow::bail!("invalid salt length");
         }
 
-        if key.is_empty() {
-            anyhow::bail!("empty key");
+        if key.len() != ARGON_KEY_LEN {
+            anyhow::bail!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.len());
         }
 
-        let magic = MAGIC_BYTES.to_be_bytes();
-        let header_data = wincode::serialize(&self.parameters)?;
+        let parameter = wincode::serialize(&self.parameters)?;
         let metadata_bytes = wincode::serialize(&self.metadata)?;
-        let mac = Mac::new(key)?.compute_parts(&[&magic, salt, &header_data, &metadata_bytes])?;
+        let mac = Mac::new(key)?.compute_parts(&[salt, &parameter, &metadata_bytes])?;
 
-        self.shield.pack(&magic, salt, &header_data, &metadata_bytes, &mac)
+        self.shield.pack(salt, &parameter, &metadata_bytes, &mac)
     }
 
     pub fn verify(&self, key: &[u8]) -> bool {
-        if key.is_empty() {
-            tracing::error!("key is empty");
+        if key.len() != ARGON_KEY_LEN {
+            tracing::error!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.len());
             return false;
         }
 
@@ -127,8 +102,8 @@ impl Header {
             return false;
         };
 
-        let header_data = match wincode::serialize(&self.parameters) {
-            Ok(header_data) => header_data,
+        let parameter = match wincode::serialize(&self.parameters) {
+            Ok(parameter) => parameter,
             Err(error) => {
                 tracing::error!("failed to serialize parameters: {error}");
                 return false;
@@ -150,6 +125,6 @@ impl Header {
             }
         };
 
-        mac.verify_parts(&sections.mac, &[&sections.magic, &sections.salt, &header_data, &metadata_bytes])
+        mac.verify_parts(&sections.mac, &[&sections.salt, &parameter, &metadata_bytes])
     }
 }

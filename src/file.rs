@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
-use sha_file_hashing::Hashable;
+use blake3::Hasher;
 use tap::Tap;
-use tokio::io::{BufReader, BufWriter};
+use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
@@ -26,11 +26,18 @@ impl File {
         &self.path
     }
 
-    pub fn hash(&self) -> Result<[u8; 20]> {
-        let hash_str = self.path().hash().context("compute hash")?;
-        let hash_bytes = hex::decode(&hash_str).context("parse hash")?;
-
-        hash_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid hash length"))
+    pub async fn hash(&self) -> Result<Vec<u8>> {
+        let mut reader = self.reader().await?;
+        let mut hasher = Hasher::new();
+        let mut buffer = vec![0u8; 64 * 1024];
+        loop {
+            let bytes_read = reader.read(&mut buffer).await.context("read for hash")?;
+            if bytes_read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..bytes_read]);
+        }
+        Ok(hasher.finalize().as_bytes().to_vec())
     }
 
     pub async fn size(&mut self) -> Result<u64> {
@@ -44,11 +51,11 @@ impl File {
         Ok(meta.len())
     }
 
-    pub async fn file_metadata(&self) -> Result<(String, u64, [u8; 20])> {
+    pub async fn file_metadata(&self) -> Result<(String, u64, Vec<u8>)> {
         let meta = tokio::fs::metadata(&self.path).await.with_context(|| format!("read metadata: {}", self.path.display()))?;
         let filename = self.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "unknown".to_owned());
         let size = meta.len();
-        let hash = self.hash()?;
+        let hash = self.hash().await?;
 
         Ok((filename, size, hash))
     }
@@ -149,8 +156,11 @@ impl File {
         true
     }
 
-    pub fn validate_hash(&self, expected_hash: impl AsRef<str>) -> Result<bool> {
-        self.path.validate(expected_hash.as_ref()).context("validate hash")
+    pub async fn validate_hash(&self, expected_hash: impl AsRef<str>) -> Result<bool> {
+        let expected = expected_hash.as_ref();
+        let actual_hash = self.hash().await?;
+        let actual_hex = hex::encode(actual_hash);
+        Ok(actual_hex == expected)
     }
 
     pub fn discover(mode: ProcessorMode) -> Vec<Self> {

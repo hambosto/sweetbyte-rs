@@ -3,8 +3,6 @@ use hmac::{Hmac, Mac as _};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::config::MAC_SIZE;
-
 pub struct Mac {
     key: Vec<u8>,
 }
@@ -18,25 +16,17 @@ impl Mac {
         Ok(Self { key: key.to_vec() })
     }
 
-    pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<[u8; MAC_SIZE]> {
+    pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
         let mut mac = Hmac::<Sha256>::new_from_slice(&self.key).context("create hmac")?;
 
         for part in parts.iter().copied().filter(|p| !p.is_empty()) {
             mac.update(part);
         }
 
-        Ok(mac.finalize().into_bytes().into())
+        Ok(mac.finalize().into_bytes().to_vec())
     }
 
     pub fn verify_parts(&self, expected: &[u8], parts: &[&[u8]]) -> bool {
-        let expected: [u8; MAC_SIZE] = match expected.try_into() {
-            Ok(expected) => expected,
-            Err(error) => {
-                tracing::error!("invalid expected MAC length: {error}");
-                return false;
-            }
-        };
-
         let computed = match self.compute_parts(parts) {
             Ok(computed) => computed,
             Err(error) => {

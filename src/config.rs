@@ -6,7 +6,7 @@ pub const ARGON_TIME: u32 = 3;
 
 pub const ARGON_MEMORY: u32 = 64 * 1024;
 
-pub const ARGON_THREADS: u32 = 4;
+pub const ARGON_PARALLELISM: u32 = 4;
 
 pub const ARGON_KEY_LEN: usize = 64;
 
@@ -20,21 +20,7 @@ pub const CHUNK_SIZE: usize = 256 * 1024;
 
 pub const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
 
-pub const MAC_SIZE: usize = 32;
-
 pub const CURRENT_VERSION: u16 = 0x0002;
-
-pub const ALGORITHM_AES_256_GCM: u8 = 0x01;
-
-pub const ALGORITHM_CHACHA20_POLY1305: u8 = 0x02;
-
-pub const HASH_SIZE: usize = 20;
-
-pub const COMPRESSION_ZSTD: u8 = 0x02;
-
-pub const ENCODING_REED_SOLOMON: u8 = 0x01;
-
-pub const KDF_ARGON2: u8 = 0x01;
 
 pub const MAX_FILENAME_LENGTH: usize = 256;
 

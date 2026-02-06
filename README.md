@@ -35,7 +35,7 @@ This is a complete **Rust rewrite** of the [original Go implementation](https://
 
 SweetByte was built with three core principles in mind:
 
-- **Security First:** Security is not just a feature; it's the foundation. By layering best-in-class cryptographic primitives like **AES-256**, **XChaCha20**, and **Argon2id**, SweetByte provides defense-in-depth against a wide range of threats.
+- **Security First:** Security is not just a feature; it's the foundation. By layering best-in-class cryptographic primitives like **AES-256-GCM**, **XChaCha20-Poly1305**, **Argon2id**, and **BLAKE3**, SweetByte provides defense-in-depth against a wide range of threats.
 - **Extreme Resilience:** Data corruption can render encrypted files useless. SweetByte tackles this head-on by integrating **Reed-Solomon error correction**, giving your files a fighting chance to survive bit rot, transmission errors, or physical media degradation.
 - **User-Centric Design:** Powerful security tools should be accessible. With both a guided **interactive mode** for ease of use and a powerful **CLI** for automation, SweetByte caters to all workflows without compromising on functionality.
 
@@ -46,7 +46,7 @@ SweetByte was built with three core principles in mind:
 Files encrypted with the Go version **cannot** be decrypted by this tool, and vice-versa. The file format has been significantly improved to include:
 
 1.  **Enhanced Metadata Protection:** A dedicated, Reed-Solomon protected metadata section containing the original filename, file size, and content hash.
-2.  **Stronger Integrity Checks:** Integration of **SHA-1** hashing for content integrity verification, in addition to HMAC-SHA256 for header authentication.
+2.  **Stronger Integrity Checks:** Integration of **BLAKE3** hashing for content integrity verification, in addition to HMAC-SHA256 for header authentication.
 3.  **Format Hardening:** Updated magic bytes (`0xDEADBEEF`) and versioning (`0x0002`) to prevent accidental processing of incompatible files.
 
 ## Core Features
@@ -55,12 +55,13 @@ Files encrypted with the Go version **cannot** be decrypted by this tool, and vi
 - **Strong Key Derivation:** Utilizes **Argon2id**, the winner of the Password Hashing Competition, to protect against brute-force attacks on your password.
 - **Resilient File Format:** Integrates **Reed-Solomon error correction codes**, which add redundancy to the data. This allows the file to be successfully decrypted even if it suffers from partial corruption (up to 10 parity shards per 4 data shards).
 - **Tamper-Proof Header:** Each encrypted file includes a secure header that is authenticated with **HMAC-SHA256** using constant-time comparison to prevent tampering and timing attacks.
-- **Content Integrity:** Calculates and verifies a **SHA-1** hash of the original file content to ensure 100% data integrity after decryption.
+- **Content Integrity:** Calculates and verifies a **BLAKE3** hash of the original file content to ensure 100% data integrity after decryption.
 - **Efficient Streaming:** Processes files in concurrent chunks using a multi-threaded pipeline, ensuring low memory usage and high throughput, even for very large files.
 - **Dual-Mode Operation:**
     - **Interactive Mode:** A user-friendly, wizard-style interface that guides you through every step.
     - **Command-Line (CLI) Mode:** A powerful and scriptable interface for automation and power users.
 - **Secure Deletion:** Offers an option to securely wipe source files after an operation by overwriting them with random data (interactive mode).
+- **High-Performance Memory:** Uses MiMalloc for improved memory allocation performance and security properties.
 
 ## How It Works: The Encryption Pipeline
 
@@ -88,11 +89,11 @@ When encrypting a file, the data passes through the following stages:
 This multi-stage process results in a final file that is not only encrypted but also compressed and fortified against data rot.
 
 #### Decryption Flow
-Decryption is the exact reverse of the encryption pipeline, unwrapping each layer to securely restore the original data. Finally, the **SHA-1** hash of the restored data is verified against the hash stored in the secure header.
+Decryption is the exact reverse of the encryption pipeline, unwrapping each layer to securely restore the original data. Finally, the **BLAKE3** hash of the restored data is verified against the hash stored in the secure header.
 
 ## Architecture
 
-SweetByte is designed with a modular, layered architecture that separates concerns and promotes code reuse. The system follows a producer-consumer pattern with three-stage concurrent processing.
+SweetByte is designed with a modular, layered architecture that separates concerns and promotes code reuse. The system follows a producer-consumer pattern with three-stage concurrent processing powered by Tokio async runtime and Rayon parallel processing.
 
 ```mermaid
 graph TD
@@ -106,28 +107,30 @@ graph TD
     end
 
     subgraph Worker Pipeline
-        D[Reader Thread<br/>Chunk Production]
+        D[Reader Task<br/>Chunk Production]
         E[Executor Pool<br/>Rayon Parallel]
-        F[Writer Thread<br/>Result Ordering]
+        F[Writer Task<br/>Result Ordering]
     end
 
     subgraph Cryptography Layer
         G[Cipher<br/>Dual-Layer Encryption]
         H[Derive<br/>Argon2id Key Derivation]
         I[Header<br/>Secure Header Format]
+        J[MAC<br/>HMAC-SHA256]
     end
 
     subgraph Data Processing
-        J[Compression<br/>Zstandard]
-        K[Padding<br/>PKCS7]
-        L[Encoding<br/>Reed-Solomon]
+        K[Compression<br/>Zstandard]
+        L[Padding<br/>PKCS7]
+        M[Encoding<br/>Reed-Solomon]
     end
 
     subgraph Utilities
-        M[File<br/>Discovery & Operations]
-        N[UI<br/>Prompts & Display]
-        O[Config<br/>Constants]
-        P[Types<br/>Mode & Task Types]
+        N[File<br/>Discovery & Operations]
+        O[UI<br/>Prompts & Display]
+        P[Config<br/>Constants]
+        Q[Types<br/>Mode & Task Types]
+        R[Allocator<br/>MiMalloc]
     end
 
     A --> C
@@ -143,22 +146,24 @@ graph TD
     E --> J
     E --> K
     E --> L
+    E --> M
 
-    C --> M
-    B --> N
-    D --> O
-    C --> P
+    C --> N
+    B --> O
+    D --> P
+    C --> Q
+    R --> C
 ```
 
 ### Processing Pipeline
 
-SweetByte uses a three-thread concurrent architecture:
+SweetByte uses a three-stage concurrent architecture powered by Tokio async runtime and Rayon parallel processing:
 
-1. **Reader Thread** - Reads input file in chunks, sends tasks via channel.
-2. **Executor Pool** - Receives tasks, processes in parallel via Rayon work-stealing.
-3. **Writer Thread** - Receives results, reorders for sequential output, writes to file.
+1. **Reader Stage (Tokio Task)** - Reads input file in chunks asynchronously, sends tasks via bounded flume channel.
+2. **Executor Stage (Blocking Rayon Pool)** - Receives tasks, processes in parallel via `par_bridge()` converting channel iterator to parallel iterator.
+3. **Writer Stage (Tokio Task)** - Receives results via flume channel, reorders for sequential output using HashMap buffer, writes to file.
 
-The Executor uses `par_bridge()` to convert the sequential channel iterator into a parallel iterator, distributing work across available CPU cores.
+The Executor spawns blocking tasks on `tokio::task::spawn_blocking()` for CPU-intensive crypto operations while distributing work across available CPU cores using Rayon's work-stealing scheduler.
 
 ## File Format
 
@@ -196,7 +201,7 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 | **Magic Bytes** | 4 bytes | `0xDEADBEEF` - Identifies the file as a SweetByte v2 encrypted file. |
 | **Salt** | 32 bytes | Unique random salt for Argon2id key derivation. |
 | **HeaderData** | 12 bytes | Serialized encryption and compression parameters (Version, Algorithm, etc.). |
-| **Metadata** | Variable | Contains original filename, file size, and **SHA-1** content hash. |
+| **Metadata** | Variable | Contains original filename, file size, and **BLAKE3** content hash (32 bytes). |
 | **MAC** | 32 bytes | **HMAC-SHA256** for header integrity and authenticity. |
 
 **HeaderData Layout (12 bytes)**
@@ -208,9 +213,9 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 | **Compression** | 1 byte | Compression algorithm (Zstandard). |
 | **Encoding** | 1 byte | Error correction algorithm (Reed-Solomon). |
 | **KDF** | 1 byte | Key derivation function (Argon2id). |
-| **KDF Memory** | 4 bytes | Argon2 memory cost (e.g., 64 MB). |
-| **KDF Time** | 1 byte | Argon2 time cost. |
-| **KDF Parallelism** | 1 byte | Argon2 threads. |
+| **KDF Memory** | 4 bytes | Argon2 memory cost (64 MB = 65536 KB). |
+| **KDF Time** | 1 byte | Argon2 time cost (3 iterations). |
+| **KDF Parallelism** | 1 byte | Argon2 threads (4 lanes). |
 
 #### Cryptographic Parameters
 
@@ -226,13 +231,13 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 | XChaCha20-Poly1305 key | 32 bytes | Modern stream cipher |
 | XChaCha20-Poly1305 nonce | 24 bytes | Extended nonce for higher throughput |
 | HMAC | SHA-256 | 32-byte authentication tag for header |
-| Content Hash | SHA-1 | 20-byte hash for file content integrity |
+| Content Hash | BLAKE3 | 32-byte hash for file content integrity |
 | Reed-Solomon data shards | 4 | Input data split into 4 parts |
 | Reed-Solomon parity shards | 10 | Recovery capacity for 10 corrupted shards |
 
 #### Data Chunks
 
-Following the header, the file contains encrypted data split into chunks. For encryption, chunks are fixed at 256 KB (except the last chunk). For decryption, each chunk is prefixed with a 4-byte big-endian length field.
+Following the header, the file contains encrypted data split into chunks. Chunks are processed in fixed-size segments (default 256 KB, minimum 256 KB enforced). For encryption, chunks are read at the configured size. For decryption, each chunk is prefixed with a 4-byte big-endian length field.
 
 ```
 [ Length (4 bytes, big-endian) ] [ Encrypted & RS-Encoded Data (...) ]
@@ -387,18 +392,19 @@ SweetByte is built with a modular architecture, with each module handling a spec
 
 | Module | Description |
 |--------|-------------|
-| `cipher` | Dual-algorithm encryption using AES-256-GCM and XChaCha20-Poly1305. Implements `Mac` for HMAC-SHA256. |
-| `cli` | Command-line interface using `clap` and `dialoguer`. Handles `encrypt`, `decrypt`, and `interactive` commands. |
-| `compression` | Zstandard compression/decompression using `zstd`. |
-| `config` | Application constants: `MAGIC_BYTES` (`0xDEADBEEF`), `VERSION` (`2`), crypto params (Argon2id, RS shards). |
-| `encoding` | Reed-Solomon error correction using `reed_solomon_erasure` (4 data + 10 parity shards). |
-| `file` | File discovery, validation, and safe path handling. |
-| `header` | Secure header management. Submodules: `parameter`, `metadata` (filename, size, SHA-1 hash), `section`. |
-| `padding` | PKCS7 padding (128-byte blocks). |
-| `processor` | Orchestrates the encryption/decryption workflow, managing key derivation and worker pipelines. |
-| `types` | Core types: `Processing`, `ProcessorMode`, `Task`, `TaskResult`. |
-| `ui` | UI components: Progress bars (`indicatif`), tables (`comfy-table`), and prompts (`dialoguer`). |
-| `worker` | Concurrent pipeline: `Reader` -> `Executor` (Rayon) -> `Writer`. Handles chunk processing. Submodules: `buffer`, `pipeline`. |
+| `allocator` | MiMalloc high-performance global memory allocator. |
+| `app` | CLI application using `clap` for command parsing and `inquire` for interactive prompts. Handles `encrypt`, `decrypt`, and `interactive` commands. |
+| `cipher` | Dual-algorithm encryption combining `aes-gcm` (AES-256-GCM) and `chacha20poly1305` (XChaCha20-Poly1305). Implements `Mac` trait for HMAC-SHA256 header authentication. |
+| `compression` | Zstandard compression/decompression using `zstd` with configurable compression levels. |
+| `config` | Application constants: `MAGIC_BYTES` (`0xDEADBEEF`), `VERSION` (`0x0002`), crypto parameters (Argon2id: 64MB memory, 3 iterations, 4 lanes), chunk size (256KB), RS shards (4 data + 10 parity). |
+| `encoding` | Reed-Solomon error correction using `reed-solomon-simd` with CRC32 checksums for data integrity verification. |
+| `file` | File discovery using `walkdir`, BLAKE3 hashing, path validation, and secure file operations with exclusion patterns. |
+| `header` | Secure header management with Reed-Solomon protected sections. Submodules: `parameter` (magic/version validation), `metadata` (filename, size, BLAKE3 content hash), `section` (length-prefixed encoded sections). |
+| `padding` | PKCS7 padding implementation using `block-padding` with configurable block sizes (128-byte default). |
+| `processor` | Core orchestrator managing key derivation, header creation/validation, and worker pipeline execution. |
+| `types` | Core type definitions: `Processing` (Encryption/Decryption), `ProcessorMode`, `Task`, `TaskResult`. |
+| `ui` | User interface components: `progress` (indicatif progress bars), `prompt` (inquire-based interactive prompts), display utilities with `comfy-table` and `figlet-rs`. |
+| `worker` | Three-stage concurrent pipeline architecture. Submodules: `reader` (chunk producer), `executor` (Rayon parallel processor), `writer` (ordered results writer), `buffer` (reordering buffer), `pipeline` (crypto/compression/encoding pipeline). |
 
 ## Security Considerations
 
@@ -408,6 +414,7 @@ SweetByte is designed with a strong focus on security. However, keep the followi
 - **Secure Environment:** Run SweetByte in a secure environment. Compromised systems can capture passwords.
 - **Source File Deletion:** Secure deletion depends on hardware and filesystem. SSD wear leveling and journaling filesystems may retain data.
 - **Side-Channel Attacks:** Constant-time comparison is used for MAC verification, but this tool is not hardened against all side-channel attacks.
+- **Memory Allocation:** Uses MiMalloc for improved memory performance and security properties.
 
 ## Contributing
 

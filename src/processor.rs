@@ -2,7 +2,7 @@ use anyhow::Result;
 use tokio::io::AsyncWriteExt;
 
 use crate::cipher::Derive;
-use crate::config::{ARGON_MEMORY, ARGON_SALT_LEN, ARGON_THREADS, ARGON_TIME};
+use crate::config::ARGON_SALT_LEN;
 use crate::file::File;
 use crate::header::Header;
 use crate::header::metadata::Metadata;
@@ -23,7 +23,7 @@ impl Processor {
         let metadata = Metadata::new(filename, file_size, content_hash);
 
         let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
-        let key = Derive::new(self.password.as_bytes())?.derive_key(&salt, ARGON_MEMORY, ARGON_TIME, ARGON_THREADS)?;
+        let key = Derive::new(self.password.as_bytes())?.derive_key(&salt)?;
 
         let header = Header::new(metadata)?;
         let header_bytes = header.serialize(&salt, &key)?;
@@ -47,7 +47,7 @@ impl Processor {
             anyhow::bail!("cannot decrypt a file size with zero size")
         }
 
-        let key = Derive::new(self.password.as_bytes())?.derive_key(header.salt()?, header.kdf_memory(), header.kdf_time().into(), header.kdf_parallelism().into())?;
+        let key = Derive::new(self.password.as_bytes())?.derive_key(header.salt()?)?;
         if !header.verify(&key) {
             anyhow::bail!("invalid password or corrupted data");
         }
@@ -55,7 +55,7 @@ impl Processor {
         let writer = dest.writer().await?;
         Worker::new(&key, Processing::Decryption)?.process(reader, writer, header.file_size()).await?;
 
-        if !dest.validate_hash(header.file_hash())? {
+        if !dest.validate_hash(header.file_hash()).await? {
             anyhow::bail!("hash mismatch");
         }
 

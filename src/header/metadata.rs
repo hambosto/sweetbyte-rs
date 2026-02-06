@@ -1,16 +1,16 @@
 use wincode::{SchemaRead, SchemaWrite};
 
-use crate::config::{HASH_SIZE, MAX_FILENAME_LENGTH};
+use crate::config::MAX_FILENAME_LENGTH;
 
 #[derive(SchemaRead, SchemaWrite)]
 pub struct Metadata {
     name: String,
     size: u64,
-    hash: [u8; HASH_SIZE],
+    hash: Vec<u8>,
 }
 
 impl Metadata {
-    pub fn new(filename: impl Into<String>, size: u64, content_hash: [u8; HASH_SIZE]) -> Self {
+    pub fn new(filename: impl Into<String>, size: u64, content_hash: Vec<u8>) -> Self {
         let mut filename = filename.into();
         if filename.len() > MAX_FILENAME_LENGTH {
             filename.truncate(MAX_FILENAME_LENGTH);
@@ -27,7 +27,7 @@ impl Metadata {
         self.size
     }
 
-    pub const fn hash(&self) -> &[u8; HASH_SIZE] {
+    pub fn hash(&self) -> &[u8] {
         &self.hash
     }
 }
