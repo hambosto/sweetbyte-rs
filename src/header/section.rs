@@ -4,6 +4,8 @@ use wincode::{SchemaRead, SchemaWrite};
 
 use crate::encoding::Encoding;
 
+const SECTION_COUNT: usize = 4;
+
 pub struct DecodedSections {
     pub salt: Vec<u8>,
     pub parameter: Vec<u8>,
@@ -12,22 +14,15 @@ pub struct DecodedSections {
 }
 
 #[derive(SchemaRead, SchemaWrite)]
-struct LengthsHeader {
-    salt_len: u32,
-    parameter_len: u32,
-    metadata_len: u32,
-    mac_len: u32,
+struct SectionsLength {
+    lengths: [u32; SECTION_COUNT],
 }
 
-impl LengthsHeader {
-    const SIZE: usize = 16;
+impl SectionsLength {
+    const SIZE: usize = std::mem::size_of::<Self>();
 
-    fn from_array(arr: [u32; 4]) -> Self {
-        Self { salt_len: arr[0], parameter_len: arr[1], metadata_len: arr[2], mac_len: arr[3] }
-    }
-
-    fn as_array(&self) -> [u32; 4] {
-        [self.salt_len, self.parameter_len, self.metadata_len, self.mac_len]
+    fn total_bytes(&self) -> usize {
+        self.lengths.iter().map(|&n| n as usize).sum()
     }
 }
 
@@ -49,18 +44,19 @@ impl SectionShield {
             }
         }
 
-        let mut encoded_sections: [Vec<u8>; 4] = Default::default();
-        let mut lengths = [0u32; 4];
-        for (idx, &data) in sections.iter().enumerate() {
-            encoded_sections[idx] = self.encoder.encode(data).context("encode section")?;
-            lengths[idx] = encoded_sections[idx].len() as u32;
+        let mut encoded_sections = Vec::with_capacity(SECTION_COUNT);
+        let mut lengths = [0u32; SECTION_COUNT];
+
+        for (idx, &section) in sections.iter().enumerate() {
+            let encoded = self.encoder.encode(section).context("encode section")?;
+            lengths[idx] = encoded.len() as u32;
+            encoded_sections.push(encoded);
         }
 
-        let lengths_header = LengthsHeader::from_array(lengths);
-        let total_len = LengthsHeader::SIZE + encoded_sections.iter().map(|s| s.len()).sum::<usize>();
-        let mut result = Vec::with_capacity(total_len);
-        result.extend_from_slice(&wincode::serialize(&lengths_header)?);
+        let sections_length = SectionsLength { lengths };
+        let mut result = Vec::with_capacity(SectionsLength::SIZE + sections_length.total_bytes());
 
+        result.extend_from_slice(&wincode::serialize(&sections_length)?);
         for section in &encoded_sections {
             result.extend_from_slice(section);
         }
@@ -69,24 +65,28 @@ impl SectionShield {
     }
 
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<DecodedSections> {
-        let mut buffer = [0u8; LengthsHeader::SIZE];
-        reader.read_exact(&mut buffer).await.context("failed to read lengths header")?;
+        let mut buffer = [0u8; SectionsLength::SIZE];
+        reader.read_exact(&mut buffer).await.context("failed to read sections length")?;
 
-        let lengths_header: LengthsHeader = wincode::deserialize(&buffer).context("failed to deserialize lengths header")?;
-        let decoded_sections = self.read_sections(reader, &lengths_header).await?;
+        let header: SectionsLength = wincode::deserialize(&buffer).context("failed to deserialize sections length")?;
+        let decoded_sections = self.read_sections(reader, &header).await?;
 
         Ok(decoded_sections)
     }
 
-    async fn read_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &LengthsHeader) -> Result<DecodedSections> {
-        let lengths = header.as_array();
-
-        let mut sections: [Vec<u8>; 4] = Default::default();
-        for (idx, &length) in lengths.iter().enumerate() {
-            sections[idx] = self.read_and_decode(reader, length, idx).await?;
+    async fn read_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &SectionsLength) -> Result<DecodedSections> {
+        let mut sections = Vec::with_capacity(SECTION_COUNT);
+        for (idx, &length) in header.lengths.iter().enumerate() {
+            sections.push(self.read_and_decode(reader, length, idx).await?);
         }
+        let mut decoded_sections = sections.into_iter();
 
-        Ok(DecodedSections { salt: std::mem::take(&mut sections[0]), parameter: std::mem::take(&mut sections[1]), metadata: std::mem::take(&mut sections[2]), mac: std::mem::take(&mut sections[3]) })
+        Ok(DecodedSections {
+            salt: decoded_sections.next().context("missing salt section")?,
+            parameter: decoded_sections.next().context("missing parameter section")?,
+            metadata: decoded_sections.next().context("missing metadata section")?,
+            mac: decoded_sections.next().context("missing mac section")?,
+        })
     }
 
     async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, section_idx: usize) -> Result<Vec<u8>> {
