@@ -182,15 +182,15 @@ The header is designed for extreme resilience to withstand data corruption. It u
 
 The header layout is:
 
-`[ Lengths Header (20 bytes) ] [ Encoded Length Prefixes (variable) ] [ Encoded Data Sections (variable) ]`
+`[ Lengths Header (16 bytes) ] [ Encoded Length Prefixes (variable) ] [ Encoded Data Sections (variable) ]`
 
-**1. Lengths Header (20 bytes)**
+**1. Lengths Header (16 bytes)**
 
-This is the only fixed-size part of the header. It provides the exact encoded size of each of the **five** main sections (Magic, Salt, HeaderData, Metadata, and MAC) using big-endian u32 values.
+This is the only fixed-size part of the header. It provides the exact encoded size of each of the **four** main sections (Salt, Parameter, Metadata, and MAC) using big-endian u32 values.
 
 **2. Encoded Length Prefixes (Variable Size)**
 
-Following the lengths header are five Reed-Solomon encoded blocks. Each block encodes the length of its corresponding data section, allowing recovery from corruption.
+Following the lengths header are four Reed-Solomon encoded blocks. Each block encodes the length of its corresponding data section, allowing recovery from corruption.
 
 **3. Encoded Data Sections (Variable Size)**
 
@@ -198,29 +198,26 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 
 | Section | Raw Size | Description |
 |---------|----------|-------------|
-| **Magic Bytes** | 4 bytes | `0xDEADBEEF` - Identifies the file as a SweetByte v2 encrypted file. |
 | **Salt** | 32 bytes | Unique random salt for Argon2id key derivation. |
-| **HeaderData** | 12 bytes | Serialized encryption and compression parameters (Version, Algorithm, etc.). |
+| **Parameter** | 6 bytes | Serialized `Parameters` struct containing Magic Bytes (`0xDEADBEEF`) and Version (`0x0002`). |
 | **Metadata** | Variable | Contains original filename, file size, and **BLAKE3** content hash (32 bytes). |
 | **MAC** | 32 bytes | **HMAC-SHA256** for header integrity and authenticity. |
 
-**HeaderData Layout (12 bytes)**
+**Parameter Layout (~6 bytes)**
 
 | Field | Size | Description |
 |-------|------|-------------|
+| **Magic** | 4 bytes | `0xDEADBEEF` - Identifies the file as a SweetByte v2 encrypted file. |
 | **Version** | 2 bytes | File format version (currently `0x0002`). |
-| **Algorithm** | 1 byte | Cipher identifier (AES-256-GCM \| XChaCha20-Poly1305). |
-| **Compression** | 1 byte | Compression algorithm (Zstandard). |
-| **Encoding** | 1 byte | Error correction algorithm (Reed-Solomon). |
-| **KDF** | 1 byte | Key derivation function (Argon2id). |
-| **KDF Memory** | 4 bytes | Argon2 memory cost (64 MB = 65536 KB). |
-| **KDF Time** | 1 byte | Argon2 time cost (3 iterations). |
-| **KDF Parallelism** | 1 byte | Argon2 threads (4 lanes). |
 
 #### Cryptographic Parameters
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
+| Cipher Chain | AES-256-GCM → XChaCha20-Poly1305 | Dual-layer encryption |
+| Compression | Zstandard | Fast compression level |
+| Error Correction | Reed-Solomon (4 data + 10 parity) | Resilience against corruption |
+| Key Derivation | Argon2id | Password-based key derivation |
 | Argon2id time cost | 3 iterations | Balances security vs. usability |
 | Argon2id memory | 64 MB | Resists GPU/ASIC attacks |
 | Argon2id parallelism | 4 lanes | Efficient multi-threaded hashing |
@@ -232,8 +229,6 @@ Each section is individually Reed-Solomon encoded with 4 data shards and 10 pari
 | XChaCha20-Poly1305 nonce | 24 bytes | Extended nonce for higher throughput |
 | HMAC | SHA-256 | 32-byte authentication tag for header |
 | Content Hash | BLAKE3 | 32-byte hash for file content integrity |
-| Reed-Solomon data shards | 4 | Input data split into 4 parts |
-| Reed-Solomon parity shards | 10 | Recovery capacity for 10 corrupted shards |
 
 #### Data Chunks
 
@@ -396,7 +391,7 @@ SweetByte is built with a modular architecture, with each module handling a spec
 | `app` | CLI application using `clap` for command parsing and `inquire` for interactive prompts. Handles `encrypt`, `decrypt`, and `interactive` commands. |
 | `cipher` | Dual-algorithm encryption combining `aes-gcm` (AES-256-GCM) and `chacha20poly1305` (XChaCha20-Poly1305). Implements `Mac` trait for HMAC-SHA256 header authentication. |
 | `compression` | Zstandard compression/decompression using `zstd` with configurable compression levels. |
-| `config` | Application constants: `MAGIC_BYTES` (`0xDEADBEEF`), `VERSION` (`0x0002`), crypto parameters (Argon2id: 64MB memory, 3 iterations, 4 lanes), chunk size (256KB), RS shards (4 data + 10 parity). |
+| `config` | Application constants: `MAGIC_BYTES` (`0xDEADBEEF`), `VERSION` (`0x0002`), Argon2id parameters (64MB memory, 3 iterations, 4 lanes), chunk size (256KB), RS shards (4 data + 10 parity). |
 | `encoding` | Reed-Solomon error correction using `reed-solomon-simd` with CRC32 checksums for data integrity verification. |
 | `file` | File discovery using `walkdir`, BLAKE3 hashing, path validation, and secure file operations with exclusion patterns. |
 | `header` | Secure header management with Reed-Solomon protected sections. Submodules: `parameter` (magic/version validation), `metadata` (filename, size, BLAKE3 content hash), `section` (length-prefixed encoded sections). |
