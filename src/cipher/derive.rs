@@ -2,7 +2,8 @@ use anyhow::{Context, Result};
 use argon2::Algorithm::Argon2id;
 use argon2::Version::V0x13;
 use argon2::{Argon2, Params};
-use rand::rand_core::{OsRng, TryRngCore};
+use rand::TryRng;
+use rand::rngs::SysRng;
 
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_PARALLELISM, ARGON_TIME};
 
@@ -34,7 +35,7 @@ impl Derive {
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
         let mut bytes = vec![0; size];
 
-        OsRng.try_fill_bytes(&mut bytes).context("generate salt")?;
+        SysRng.try_fill_bytes(&mut bytes).context("generate salt")?;
 
         Ok(bytes)
     }
