@@ -6,16 +6,16 @@ use crate::config::ARGON_SALT_LEN;
 use crate::file::File;
 use crate::header::Header;
 use crate::header::metadata::Metadata;
-use crate::secret::Secret;
+use crate::secret::SecretString;
 use crate::types::Processing;
 use crate::worker::Worker;
 
 pub struct Processor {
-    password: Secret,
+    password: SecretString,
 }
 
 impl Processor {
-    pub fn new(password: Secret) -> Self {
+    pub fn new(password: SecretString) -> Self {
         Self { password }
     }
 
@@ -90,7 +90,7 @@ mod tests {
         let dest_enc = File::new(&enc_filename);
         let dest_dec = File::new(&dec_filename);
 
-        let password = Secret::new("strong_password");
+        let password = SecretString::new("strong_password".to_owned());
         let processor = Processor::new(password);
 
         assert!(src.validate().await);

@@ -73,7 +73,7 @@ impl Header {
     }
 
     pub fn salt(&self) -> Result<&[u8]> {
-        self.sections.as_ref().map(|s| s.salt.expose_secret()).context("header not deserialized")
+        self.sections.as_ref().map(|s| s.salt.expose_secret().as_slice()).context("header not deserialized")
     }
 
     pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {

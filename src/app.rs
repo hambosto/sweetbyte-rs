@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
 use crate::processor::Processor;
-use crate::secret::Secret;
+use crate::secret::SecretString;
 use crate::types::{Processing, ProcessorMode};
 use crate::ui::prompt::Prompt;
 
@@ -61,7 +61,7 @@ impl App {
     async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
         let input = File::new(&input_path);
         let output = File::new(output_path.map(std::path::PathBuf::from).unwrap_or_else(|| input.output_path(processing.mode())));
-        let password: Secret = match password.map(Secret::from_string) {
+        let password: SecretString = match password.as_deref().map(SecretString::from_str) {
             Some(password) => password,
             None => Self::get_password(prompt, processing)?,
         };
@@ -122,7 +122,7 @@ impl App {
         Ok(())
     }
 
-    async fn process(processing: Processing, input: &File, output: &File, password: Secret) -> Result<()> {
+    async fn process(processing: Processing, input: &File, output: &File, password: SecretString) -> Result<()> {
         let processor = Processor::new(password);
 
         let result = match processing {
@@ -133,10 +133,10 @@ impl App {
         result.with_context(|| format!("{} failed: {}", processing, input.path().display()))
     }
 
-    fn get_password(prompt: &Prompt, processing: Processing) -> Result<Secret> {
+    fn get_password(prompt: &Prompt, processing: Processing) -> Result<SecretString> {
         match processing {
-            Processing::Encryption => Ok(Secret::new(&prompt.prompt_encryption_password()?)),
-            Processing::Decryption => Ok(Secret::new(&prompt.prompt_decryption_password()?)),
+            Processing::Encryption => Ok(SecretString::new(prompt.prompt_encryption_password()?)),
+            Processing::Decryption => Ok(SecretString::new(prompt.prompt_decryption_password()?)),
         }
     }
 }

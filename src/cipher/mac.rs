@@ -15,7 +15,7 @@ impl Mac {
             anyhow::bail!("empty mac key");
         }
 
-        Ok(Self { key: SecretBytes::new(key) })
+        Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }
 
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {

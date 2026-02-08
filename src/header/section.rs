@@ -79,10 +79,10 @@ impl SectionShield {
         let [salt, parameter, metadata, mac] = header.lengths;
 
         Ok(DecodedSections {
-            salt: SecretBytes::from_vec(self.read_and_decode(reader, salt, 0).await?),
+            salt: SecretBytes::from_slice(&self.read_and_decode(reader, salt, 0).await?),
             parameter: self.read_and_decode(reader, parameter, 1).await?,
             metadata: self.read_and_decode(reader, metadata, 2).await?,
-            mac: SecretBytes::from_vec(self.read_and_decode(reader, mac, 3).await?),
+            mac: SecretBytes::from_slice(&self.read_and_decode(reader, mac, 3).await?),
         })
     }
 

@@ -18,7 +18,7 @@ impl Derive {
             anyhow::bail!("empty key");
         }
 
-        Ok(Self { key: SecretBytes::new(key) })
+        Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }
 
     pub fn derive_key(&self, salt: &[u8]) -> Result<SecretBytes> {
@@ -30,7 +30,7 @@ impl Derive {
             .hash_password_into(self.key.expose_secret(), salt, &mut derived_key)
             .map_err(|error| anyhow::anyhow!("derive argon2 key: {error}"))?;
 
-        Ok(SecretBytes::from_vec(derived_key))
+        Ok(SecretBytes::from_slice(&derived_key))
     }
 
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {

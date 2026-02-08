@@ -1,55 +1,37 @@
-use secrecy::{ExposeSecret, SecretBox, SecretString};
+use secrecy::zeroize::Zeroize;
+use secrecy::{ExposeSecret, SecretBox};
 
-pub struct SecretBytes {
-    inner: SecretBox<Vec<u8>>,
+pub struct Secret<T: Zeroize> {
+    inner: SecretBox<T>,
 }
 
-impl SecretBytes {
-    pub fn new(data: &[u8]) -> Self {
-        Self { inner: SecretBox::new(Box::new(data.to_vec())) }
-    }
-
-    pub fn from_vec(data: Vec<u8>) -> Self {
+impl<T: Zeroize> Secret<T> {
+    pub fn new(data: T) -> Self {
         Self { inner: SecretBox::new(Box::new(data)) }
     }
 
-    pub fn expose_secret(&self) -> &[u8] {
+    pub fn expose_secret(&self) -> &T {
         self.inner.expose_secret()
     }
 }
 
-impl From<SecretBox<Vec<u8>>> for SecretBytes {
-    fn from(secret: SecretBox<Vec<u8>>) -> Self {
+impl<T: Zeroize> From<SecretBox<T>> for Secret<T> {
+    fn from(secret: SecretBox<T>) -> Self {
         Self { inner: secret }
     }
 }
 
-impl std::fmt::Debug for SecretBytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SecretBytes([... {} bytes ...])", self.inner.expose_secret().len())
+pub type SecretBytes = Secret<Vec<u8>>;
+pub type SecretString = Secret<String>;
+
+impl SecretBytes {
+    pub fn from_slice(data: &[u8]) -> Self {
+        Self::new(data.to_vec())
     }
 }
 
-pub struct Secret {
-    inner: SecretString,
-}
-
-impl Secret {
-    pub fn new(password: &str) -> Self {
-        Self { inner: SecretString::from(password.to_owned()) }
-    }
-
-    pub fn from_string(password: String) -> Self {
-        Self { inner: SecretString::from(password) }
-    }
-
-    pub fn expose_secret(&self) -> &str {
-        self.inner.expose_secret()
-    }
-}
-
-impl From<SecretString> for Secret {
-    fn from(secret: SecretString) -> Self {
-        Self { inner: secret }
+impl SecretString {
+    pub fn from_str(s: &str) -> Self {
+        Self::new(s.to_owned())
     }
 }
