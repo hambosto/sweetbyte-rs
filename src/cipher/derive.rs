@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use argon2::Algorithm::Argon2id;
 use argon2::Version::V0x13;
 use argon2::{Argon2, Params};
-use rand::rngs::SysRng;
 use rand::TryRng;
+use rand::rngs::SysRng;
 
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_PARALLELISM, ARGON_TIME};
 use crate::secret::SecretBytes;
