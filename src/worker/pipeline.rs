@@ -1,10 +1,11 @@
 use anyhow::Result;
 
-use crate::cipher::{Aes256Gcm, Cipher, XChaCha20Poly1305};
+use crate::cipher::{Cipher, CipherAlgorithm};
 use crate::compression::{CompressionLevel, Compressor};
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
 use crate::padding::{BlockSize, Pkcs7Padding};
+use crate::secret::SecretBytes;
 use crate::types::{Processing, Task, TaskResult};
 
 pub struct Pipeline {
@@ -16,7 +17,7 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(key: &[u8], mode: Processing) -> Result<Self> {
+    pub fn new(key: &SecretBytes, mode: Processing) -> Result<Self> {
         let cipher = Cipher::new(key)?;
         let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
         let compressor = Compressor::new(CompressionLevel::Fast)?;
@@ -43,12 +44,12 @@ impl Pipeline {
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        let aes_encrypted = match self.cipher.encrypt::<Aes256Gcm>(&padded_data) {
+        let aes_encrypted = match self.cipher.encrypt(CipherAlgorithm::Aes256Gcm, &padded_data) {
             Ok(aes_encrypted) => aes_encrypted,
             Err(e) => return TaskResult::err(task.index, &e),
         };
 
-        let chacha_encrypted = match self.cipher.encrypt::<XChaCha20Poly1305>(&aes_encrypted) {
+        let chacha_encrypted = match self.cipher.encrypt(CipherAlgorithm::XChaCha20Poly1305, &aes_encrypted) {
             Ok(chacha_encrypted) => chacha_encrypted,
             Err(e) => return TaskResult::err(task.index, &e),
         };
@@ -69,12 +70,12 @@ impl Pipeline {
             Err(e) => return TaskResult::err(task.index, &e.context("decode")),
         };
 
-        let chacha_decrypted = match self.cipher.decrypt::<XChaCha20Poly1305>(&decoded_data) {
+        let chacha_decrypted = match self.cipher.decrypt(CipherAlgorithm::XChaCha20Poly1305, &decoded_data) {
             Ok(chacha_decrypted) => chacha_decrypted,
             Err(e) => return TaskResult::err(task.index, &e.context("chacha20poly1305 decrypt")),
         };
 
-        let aes_decrypted = match self.cipher.decrypt::<Aes256Gcm>(&chacha_decrypted) {
+        let aes_decrypted = match self.cipher.decrypt(CipherAlgorithm::Aes256Gcm, &chacha_decrypted) {
             Ok(aes_decrypted) => aes_decrypted,
             Err(e) => {
                 return TaskResult::err(task.index, &e.context("aes256gcm decrypt"));

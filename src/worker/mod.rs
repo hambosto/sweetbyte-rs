@@ -3,6 +3,7 @@ use flume::bounded;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::config::CHUNK_SIZE;
+use crate::secret::SecretBytes;
 use crate::types::Processing;
 use crate::ui::progress::Progress;
 use crate::worker::executor::Executor;
@@ -22,7 +23,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(key: &[u8], mode: Processing) -> Result<Self> {
+    pub fn new(key: &SecretBytes, mode: Processing) -> Result<Self> {
         let pipeline = Pipeline::new(key, mode)?;
         Ok(Self { pipeline, mode })
     }

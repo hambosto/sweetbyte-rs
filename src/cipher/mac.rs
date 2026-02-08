@@ -3,8 +3,10 @@ use hmac::{Hmac, Mac as _};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
+use crate::secret::SecretBytes;
+
 pub struct Mac {
-    key: Vec<u8>,
+    key: SecretBytes,
 }
 
 impl Mac {
@@ -13,11 +15,11 @@ impl Mac {
             anyhow::bail!("empty mac key");
         }
 
-        Ok(Self { key: key.to_vec() })
+        Ok(Self { key: SecretBytes::new(key) })
     }
 
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
-        let mut mac = Hmac::<Sha256>::new_from_slice(&self.key).context("create hmac")?;
+        let mut mac = Hmac::<Sha256>::new_from_slice(self.key.expose_secret()).context("create hmac")?;
 
         for part in parts.iter().copied().filter(|p| !p.is_empty()) {
             mac.update(part);

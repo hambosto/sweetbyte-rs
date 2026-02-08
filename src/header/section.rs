@@ -3,14 +3,15 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use wincode::{SchemaRead, SchemaWrite};
 
 use crate::encoding::Encoding;
+use crate::secret::SecretBytes;
 
 const SECTION_COUNT: usize = 4;
 
 pub struct DecodedSections {
-    pub salt: Vec<u8>,
+    pub salt: SecretBytes,
     pub parameter: Vec<u8>,
     pub metadata: Vec<u8>,
-    pub mac: Vec<u8>,
+    pub mac: SecretBytes,
 }
 
 #[derive(SchemaRead, SchemaWrite)]
@@ -78,10 +79,10 @@ impl SectionShield {
         let [salt, parameter, metadata, mac] = header.lengths;
 
         Ok(DecodedSections {
-            salt: self.read_and_decode(reader, salt, 0).await?,
+            salt: SecretBytes::from_vec(self.read_and_decode(reader, salt, 0).await?),
             parameter: self.read_and_decode(reader, parameter, 1).await?,
             metadata: self.read_and_decode(reader, metadata, 2).await?,
-            mac: self.read_and_decode(reader, mac, 3).await?,
+            mac: SecretBytes::from_vec(self.read_and_decode(reader, mac, 3).await?),
         })
     }
 

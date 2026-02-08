@@ -6,6 +6,7 @@ use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CURRENT_VERSION, DATA_SHARDS,
 use crate::header::metadata::Metadata;
 use crate::header::parameter::Parameters;
 use crate::header::section::{DecodedSections, SectionShield};
+use crate::secret::SecretBytes;
 
 pub mod metadata;
 pub mod parameter;
@@ -72,28 +73,28 @@ impl Header {
     }
 
     pub fn salt(&self) -> Result<&[u8]> {
-        self.sections.as_ref().map(|s| s.salt.as_slice()).context("header not deserialized")
+        self.sections.as_ref().map(|s| s.salt.expose_secret()).context("header not deserialized")
     }
 
-    pub fn serialize(&self, salt: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+    pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {
         if salt.len() != ARGON_SALT_LEN {
             anyhow::bail!("invalid salt length");
         }
 
-        if key.len() != ARGON_KEY_LEN {
-            anyhow::bail!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.len());
+        if key.expose_secret().len() != ARGON_KEY_LEN {
+            anyhow::bail!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.expose_secret().len());
         }
 
         let parameter = wincode::serialize(&self.parameters)?;
         let metadata_bytes = wincode::serialize(&self.metadata)?;
-        let mac = Mac::new(key)?.compute_parts(&[salt, &parameter, &metadata_bytes])?;
+        let mac = Mac::new(key.expose_secret())?.compute_parts(&[salt, &parameter, &metadata_bytes])?;
 
         self.shield.pack(salt, &parameter, &metadata_bytes, &mac)
     }
 
-    pub fn verify(&self, key: &[u8]) -> bool {
-        if key.len() != ARGON_KEY_LEN {
-            tracing::error!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.len());
+    pub fn verify(&self, key: &SecretBytes) -> bool {
+        if key.expose_secret().len() != ARGON_KEY_LEN {
+            tracing::error!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.expose_secret().len());
             return false;
         }
 
@@ -117,7 +118,7 @@ impl Header {
             }
         };
 
-        let mac = match Mac::new(key) {
+        let mac = match Mac::new(key.expose_secret()) {
             Ok(mac) => mac,
             Err(error) => {
                 tracing::error!("failed to create MAC: {error}");
@@ -125,6 +126,6 @@ impl Header {
             }
         };
 
-        mac.verify_parts(&sections.mac, &[&sections.salt, &parameter, &metadata_bytes])
+        mac.verify_parts(sections.mac.expose_secret(), &[sections.salt.expose_secret(), &parameter, &metadata_bytes])
     }
 }
