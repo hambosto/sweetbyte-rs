@@ -94,7 +94,7 @@ impl App {
         let mut input = File::new(&path);
 
         if !input.validate().await {
-            anyhow::bail!("invalid input file");
+            anyhow::bail!("invalid input file: {}", path.display());
         }
 
         let output = File::new(input.output_path(mode));
