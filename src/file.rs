@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
 use blake3::Hasher;
@@ -9,8 +8,6 @@ use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::types::ProcessorMode;
-
-static EXCLUSION_MATCHERS: LazyLock<Vec<String>> = LazyLock::new(|| EXCLUDED_PATTERNS.iter().map(|s| (*s).to_owned()).collect());
 
 pub struct File {
     path: PathBuf,
@@ -71,7 +68,7 @@ impl File {
     pub fn is_excluded(&self) -> bool {
         let path_str = self.path.to_str().unwrap_or("");
 
-        EXCLUSION_MATCHERS.iter().any(|pattern| {
+        EXCLUDED_PATTERNS.iter().any(|pattern| {
             let full_match = fast_glob::glob_match(pattern, path_str);
             if full_match {
                 return true;

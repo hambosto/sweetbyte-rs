@@ -1,40 +1,31 @@
-use std::fmt::{Display, Formatter, Result};
+use secrecy::{ExposeSecret, SecretString};
+use strum::{Display, EnumIter, IntoStaticStr};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Display, EnumIter, IntoStaticStr)]
 pub enum ProcessorMode {
+    #[strum(to_string = "Encrypt")]
     Encrypt,
+    #[strum(to_string = "Decrypt")]
     Decrypt,
 }
 
 impl ProcessorMode {
-    pub const ALL: &'static [Self] = &[Self::Encrypt, Self::Decrypt];
-
     pub fn label(self) -> &'static str {
-        match self {
-            Self::Encrypt => "Encrypt",
-            Self::Decrypt => "Decrypt",
-        }
+        self.into()
     }
 }
 
-impl Display for ProcessorMode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str(self.label())
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Display, IntoStaticStr)]
 pub enum Processing {
+    #[strum(to_string = "Encrypting...")]
     Encryption,
+    #[strum(to_string = "Decrypting...")]
     Decryption,
 }
 
 impl Processing {
     pub fn label(self) -> &'static str {
-        match self {
-            Self::Encryption => "Encrypting...",
-            Self::Decryption => "Decrypting...",
-        }
+        self.into()
     }
 
     pub fn mode(self) -> ProcessorMode {
@@ -45,9 +36,27 @@ impl Processing {
     }
 }
 
-impl Display for Processing {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str(self.label())
+pub struct Password {
+    inner: SecretString,
+}
+
+impl Password {
+    pub fn new(password: &str) -> Self {
+        Self { inner: SecretString::from(password.to_owned()) }
+    }
+
+    pub fn from_string(password: String) -> Self {
+        Self { inner: SecretString::from(password) }
+    }
+
+    pub fn expose_secret(&self) -> &str {
+        self.inner.expose_secret()
+    }
+}
+
+impl From<SecretString> for Password {
+    fn from(secret: SecretString) -> Self {
+        Self { inner: secret }
     }
 }
 

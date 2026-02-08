@@ -1108,6 +1108,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1202,6 +1211,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1234,7 +1264,9 @@ dependencies = [
  "rand",
  "rayon",
  "reed-solomon-simd",
+ "secrecy",
  "sha2",
+ "strum",
  "subtle",
  "tap",
  "tempfile",
@@ -1561,9 +1593,9 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "wincode"
-version = "0.3.1"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f27315388539620cef3386d77b05305dbfb7fccbd32eead533a7a3779313532"
+checksum = "cd358c35ea3fbf8590e8b9d9e7fe6450701c520c8b58c320aea0b8b75f8d9866"
 dependencies = [
  "pastey",
  "proc-macro2",
@@ -1574,9 +1606,9 @@ dependencies = [
 
 [[package]]
 name = "wincode-derive"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d89833c7743abd1a831b7eb0fdfd7210bd8bedc297435e9426aad9b63d7c7f77"
+checksum = "6505f603ab2302ff300837c3c96e5b1c6e4b65a66b756e3eb07376c935ff1907"
 dependencies = [
  "darling",
  "proc-macro2",

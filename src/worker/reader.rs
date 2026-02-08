@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use flume::Sender;
-use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::types::{Processing, Task};
 
@@ -20,7 +20,7 @@ impl Reader {
     }
 
     pub async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
-        let mut reader = BufReader::new(input);
+        let mut reader = tokio::io::BufReader::new(input);
 
         match self.mode {
             Processing::Encryption => self.read_fixed_chunks(&mut reader, sender).await,

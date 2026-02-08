@@ -6,16 +6,16 @@ use crate::config::ARGON_SALT_LEN;
 use crate::file::File;
 use crate::header::Header;
 use crate::header::metadata::Metadata;
-use crate::types::Processing;
+use crate::types::{Password, Processing};
 use crate::worker::Worker;
 
 pub struct Processor {
-    password: String,
+    password: Password,
 }
 
 impl Processor {
-    pub fn new(password: impl Into<String>) -> Self {
-        Self { password: password.into() }
+    pub fn new(password: Password) -> Self {
+        Self { password }
     }
 
     pub async fn encrypt(&self, src: &File, dest: &File) -> Result<()> {
@@ -23,7 +23,7 @@ impl Processor {
         let metadata = Metadata::new(filename, file_size, content_hash);
 
         let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
-        let key = Derive::new(self.password.as_bytes())?.derive_key(&salt)?;
+        let key = Derive::new(self.password.expose_secret().as_bytes())?.derive_key(&salt)?;
 
         let header = Header::new(metadata)?;
         let header_bytes = header.serialize(&salt, &key)?;
@@ -47,7 +47,7 @@ impl Processor {
             anyhow::bail!("cannot decrypt a file size with zero size")
         }
 
-        let key = Derive::new(self.password.as_bytes())?.derive_key(header.salt()?)?;
+        let key = Derive::new(self.password.expose_secret().as_bytes())?.derive_key(header.salt()?)?;
         if !header.verify(&key) {
             anyhow::bail!("invalid password or corrupted data");
         }
@@ -89,7 +89,7 @@ mod tests {
         let dest_enc = File::new(&enc_filename);
         let dest_dec = File::new(&dec_filename);
 
-        let password = "strong_password";
+        let password = Password::new("strong_password");
         let processor = Processor::new(password);
 
         assert!(src.validate().await);

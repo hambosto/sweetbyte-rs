@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use flume::Receiver;
-use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::types::{Processing, TaskResult};
 use crate::ui::progress::Progress;
@@ -17,7 +17,7 @@ impl Writer {
     }
 
     pub async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, receiver: Receiver<TaskResult>, progress: Option<&Progress>) -> Result<()> {
-        let mut writer = BufWriter::new(output);
+        let mut writer = tokio::io::BufWriter::new(output);
 
         while let Ok(result) = receiver.recv_async().await {
             let ready = self.buffer.add(result);

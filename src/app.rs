@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
 use crate::processor::Processor;
-use crate::types::{Processing, ProcessorMode};
+use crate::types::{Password, Processing, ProcessorMode};
 use crate::ui::prompt::Prompt;
 
 #[derive(Subcommand)]
@@ -60,9 +60,12 @@ impl App {
     async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
         let input = File::new(&input_path);
         let output = File::new(output_path.map(std::path::PathBuf::from).unwrap_or_else(|| input.output_path(processing.mode())));
-        let password = password.map(Ok).unwrap_or_else(|| Self::get_password(prompt, processing))?;
+        let password: Password = match password.map(Password::from_string) {
+            Some(password) => password,
+            None => Self::get_password(prompt, processing)?,
+        };
 
-        Self::process(processing, &input, &output, &password).await?;
+        Self::process(processing, &input, &output, password).await?;
 
         crate::ui::show_success(processing.mode(), output.path());
 
@@ -101,7 +104,7 @@ impl App {
 
         let password = Self::get_password(prompt, processing)?;
 
-        Self::process(processing, &input, &output, &password).await?;
+        Self::process(processing, &input, &output, password).await?;
 
         crate::ui::show_success(mode, output.path());
 
@@ -118,7 +121,7 @@ impl App {
         Ok(())
     }
 
-    async fn process(processing: Processing, input: &File, output: &File, password: &str) -> Result<()> {
+    async fn process(processing: Processing, input: &File, output: &File, password: Password) -> Result<()> {
         let processor = Processor::new(password);
 
         let result = match processing {
@@ -129,10 +132,10 @@ impl App {
         result.with_context(|| format!("{} failed: {}", processing, input.path().display()))
     }
 
-    fn get_password(prompt: &Prompt, processing: Processing) -> Result<String> {
+    fn get_password(prompt: &Prompt, processing: Processing) -> Result<Password> {
         match processing {
-            Processing::Encryption => prompt.prompt_encryption_password(),
-            Processing::Decryption => prompt.prompt_decryption_password(),
+            Processing::Encryption => Ok(Password::new(&prompt.prompt_encryption_password()?)),
+            Processing::Decryption => Ok(Password::new(&prompt.prompt_decryption_password()?)),
         }
     }
 }

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use inquire::{Confirm, Password, PasswordDisplayMode, Select};
+use strum::IntoEnumIterator;
 
 use crate::file::File;
 use crate::types::ProcessorMode;
@@ -37,7 +38,7 @@ impl Prompt {
     }
 
     pub fn select_processing_mode() -> Result<ProcessorMode> {
-        let modes = ProcessorMode::ALL;
+        let modes: Vec<ProcessorMode> = ProcessorMode::iter().collect();
         let display_names: Vec<&str> = modes.iter().map(|m| m.label()).collect();
 
         Self::select_from_list("Select operation", &display_names).map(|idx| modes[idx])
