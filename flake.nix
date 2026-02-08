@@ -19,47 +19,57 @@
       ...
     }:
     let
-      withOverlay = pkgs: pkgs.extend (import rust-overlay);
-      eachSystem =
-        fn:
-        nixpkgs.lib.genAttrs (import systems) (system: fn (withOverlay nixpkgs.legacyPackages.${system}));
+      applyOverlays = pkgs: pkgs.extend rust-overlay.overlays.default;
+      forAllSystems = nixpkgs.lib.genAttrs (import systems);
+      pkgsFor = system: applyOverlays nixpkgs.legacyPackages.${system};
+      mkRustToolchain =
+        pkgs:
+        pkgs.rust-bin.stable.latest.default.override {
+          extensions = [
+            "rust-src"
+            "rust-analyzer"
+            "clippy"
+            "rustfmt"
+          ];
+        };
+
+      mkRustPlatform =
+        pkgs: toolchain:
+        pkgs.makeRustPlatform {
+          cargo = toolchain;
+          rustc = toolchain;
+        };
     in
     {
       overlays.default = final: prev: {
         sweetbyte-rs = final.callPackage ./nix/package.nix {
-          rustPlatform = final.makeRustPlatform {
-            cargo = final.rust-bin.stable.latest.default;
-            rustc = final.rust-bin.stable.latest.default;
-          };
+          rustPlatform = mkRustPlatform final final.rust-bin.stable.latest.default;
         };
       };
 
-      packages = eachSystem (
-        pkgs:
+      packages = forAllSystems (
+        system:
         let
-          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-            extensions = [
-              "rust-src"
-              "rust-analyzer"
-              "clippy"
-              "rustfmt"
-            ];
-          };
+          pkgs = pkgsFor system;
+          toolchain = mkRustToolchain pkgs;
         in
         {
           default = pkgs.callPackage ./nix/package.nix {
-            rustPlatform = pkgs.makeRustPlatform {
-              cargo = rustToolchain;
-              rustc = rustToolchain;
-            };
+            rustPlatform = mkRustPlatform pkgs toolchain;
           };
         }
       );
 
-      devShells = eachSystem (pkgs: {
-        default = pkgs.callPackage ./nix/shell.nix {
-          sweetbyte-rs = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-        };
-      });
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = pkgs.callPackage ./nix/shell.nix {
+            sweetbyte-rs = self.packages.${system}.default;
+          };
+        }
+      );
     };
 }
