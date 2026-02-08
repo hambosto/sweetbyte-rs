@@ -75,17 +75,13 @@ impl SectionShield {
     }
 
     async fn read_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &SectionsLength) -> Result<DecodedSections> {
-        let mut sections = Vec::with_capacity(SECTION_COUNT);
-        for (idx, &length) in header.lengths.iter().enumerate() {
-            sections.push(self.read_and_decode(reader, length, idx).await?);
-        }
-        let mut decoded_sections = sections.into_iter();
+        let [salt, parameter, metadata, mac] = header.lengths;
 
         Ok(DecodedSections {
-            salt: decoded_sections.next().context("missing salt section")?,
-            parameter: decoded_sections.next().context("missing parameter section")?,
-            metadata: decoded_sections.next().context("missing metadata section")?,
-            mac: decoded_sections.next().context("missing mac section")?,
+            salt: self.read_and_decode(reader, salt, 0).await?,
+            parameter: self.read_and_decode(reader, parameter, 1).await?,
+            metadata: self.read_and_decode(reader, metadata, 2).await?,
+            mac: self.read_and_decode(reader, mac, 3).await?,
         })
     }
 
