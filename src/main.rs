@@ -8,6 +8,7 @@ mod file;
 mod header;
 mod padding;
 mod processor;
+mod secret;
 mod types;
 mod ui;
 mod worker;

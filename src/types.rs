@@ -1,4 +1,3 @@
-use secrecy::{ExposeSecret, SecretString};
 use strum::{Display, EnumIter, IntoStaticStr};
 
 #[derive(Clone, Copy, Display, EnumIter, IntoStaticStr)]
@@ -33,30 +32,6 @@ impl Processing {
             Self::Encryption => ProcessorMode::Encrypt,
             Self::Decryption => ProcessorMode::Decrypt,
         }
-    }
-}
-
-pub struct Password {
-    inner: SecretString,
-}
-
-impl Password {
-    pub fn new(password: &str) -> Self {
-        Self { inner: SecretString::from(password.to_owned()) }
-    }
-
-    pub fn from_string(password: String) -> Self {
-        Self { inner: SecretString::from(password) }
-    }
-
-    pub fn expose_secret(&self) -> &str {
-        self.inner.expose_secret()
-    }
-}
-
-impl From<SecretString> for Password {
-    fn from(secret: SecretString) -> Self {
-        Self { inner: secret }
     }
 }
 
