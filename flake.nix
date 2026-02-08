@@ -1,5 +1,4 @@
 {
-
   description = "A very small, very simple, yet very secure encryption tool written in rust.";
 
   inputs = {
@@ -23,6 +22,15 @@
         nixpkgs.lib.genAttrs (import systems) (system: fn (withOverlay nixpkgs.legacyPackages.${system}));
     in
     {
+      overlays.default = final: prev: {
+        sweetbyte-rs = final.callPackage ./nix/package.nix {
+          rustPlatform = final.makeRustPlatform {
+            cargo = final.rust-bin.stable.latest.default;
+            rustc = final.rust-bin.stable.latest.default;
+          };
+        };
+      };
+
       packages = eachSystem (
         pkgs:
         let
