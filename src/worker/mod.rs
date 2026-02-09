@@ -35,7 +35,7 @@ impl Worker {
     {
         let progress = Progress::new(total_size, self.mode.label())?;
 
-        let concurrency = std::thread::available_parallelism().map(|p| p.get()).unwrap_or(4);
+        let concurrency = if let Ok(cores) = std::thread::available_parallelism() { cores.get() } else { 4 };
         let channel_size = concurrency * 2;
 
         let (task_tx, task_rx) = bounded(channel_size);

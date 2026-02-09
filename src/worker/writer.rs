@@ -37,7 +37,7 @@ impl Writer {
             }
 
             if matches!(self.mode, Processing::Encryption) {
-                writer.write_all(&(r.data.len() as u32).to_be_bytes()).await.context("write")?;
+                writer.write_all(&u32::try_from(r.data.len())?.to_be_bytes()).await.context("write")?;
             }
 
             writer.write_all(&r.data).await.context("write")?;

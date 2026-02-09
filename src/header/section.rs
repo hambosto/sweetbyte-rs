@@ -50,7 +50,7 @@ impl SectionShield {
 
         for (idx, &section) in sections.iter().enumerate() {
             let encoded = self.encoder.encode(section).context("encode section")?;
-            lengths[idx] = encoded.len() as u32;
+            lengths[idx] = u32::try_from(encoded.len())?;
             encoded_sections.push(encoded);
         }
 

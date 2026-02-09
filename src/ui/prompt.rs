@@ -56,7 +56,7 @@ impl Prompt {
     }
 
     fn select_from_list<T: ToString>(message: &str, items: &[T]) -> Result<usize> {
-        let display_names: Vec<String> = items.iter().map(|item| item.to_string()).collect();
+        let display_names: Vec<String> = items.iter().map(ToString::to_string).collect();
         let selection = Select::new(message, display_names.clone()).with_starting_cursor(0).prompt().context("select from list")?;
 
         display_names.into_iter().position(|name| name == selection).ok_or_else(|| anyhow::anyhow!("selection not found"))
@@ -73,7 +73,7 @@ impl Prompt {
     }
 
     fn get_display_name(path: &Path) -> String {
-        path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string())
+        if let Some(name) = path.file_name() { name.to_string_lossy().into_owned() } else { path.display().to_string() }
     }
 
     fn confirm(prompt: &str) -> Result<bool> {

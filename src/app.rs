@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
@@ -60,7 +61,8 @@ impl App {
 
     async fn run_mode(input_path: String, output_path: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<()> {
         let input = File::new(&input_path);
-        let output = File::new(output_path.map(std::path::PathBuf::from).unwrap_or_else(|| input.output_path(processing.mode())));
+        let output_path = if let Some(path) = output_path { PathBuf::from(path) } else { input.output_path(processing.mode()) };
+        let output = File::new(output_path);
         let password: SecretString = match password.as_deref().map(SecretString::from_str) {
             Some(password) => password,
             None => Self::get_password(prompt, processing)?,

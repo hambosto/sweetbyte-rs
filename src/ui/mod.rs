@@ -53,14 +53,14 @@ pub fn show_success(mode: ProcessorMode, path: &Path) {
         ProcessorMode::Decrypt => "decrypted",
     };
 
-    let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
+    let filename = if let Some(name) = path.file_name() { name.to_string_lossy() } else { path.display().to_string().into() };
 
     println!();
     println!("{} {}", console::style("✔").green().bright(), console::style(format!("File {action} successfully: {filename}")).white().bright());
 }
 
 pub fn show_source_deleted(path: &Path) {
-    let filename = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| path.display().to_string().into());
+    let filename = if let Some(name) = path.file_name() { name.to_string_lossy() } else { path.display().to_string().into() };
 
     println!("{} {}", console::style("✔").green().bright(), console::style(format!("Source file deleted: {filename}")).white().bright());
 }

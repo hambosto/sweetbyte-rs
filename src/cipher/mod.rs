@@ -35,14 +35,14 @@ impl Cipher {
         Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
     }
 
-    pub fn encrypt(&self, algo: CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
+    pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.encrypt(plaintext),
             CipherAlgorithm::XChaCha20Poly1305 => self.chacha.encrypt(plaintext),
         }
     }
 
-    pub fn decrypt(&self, algo: CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
+    pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.decrypt(ciphertext),
             CipherAlgorithm::XChaCha20Poly1305 => self.chacha.decrypt(ciphertext),

@@ -21,7 +21,7 @@ impl Encoding {
 
         let mut encoder = ReedSolomonEncoder::new(self.original_count, self.recovery_count, shard_size).context("create encoder")?;
         let mut result = Vec::with_capacity(4 + (4 + shard_size) * total_shards);
-        result.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        result.extend_from_slice(&u32::try_from(data.len())?.to_le_bytes());
 
         let mut shard = vec![0u8; shard_size];
         for i in 0..self.original_count {
@@ -41,8 +41,8 @@ impl Encoding {
             result.extend_from_slice(&shard);
         }
 
-        let encoded = encoder.encode().context("encode")?;
-        for recovery_shard in encoded.recovery_iter() {
+        let encoded_shards = encoder.encode().context("encode")?;
+        for recovery_shard in encoded_shards.recovery_iter() {
             result.extend_from_slice(&crc32fast::hash(recovery_shard).to_le_bytes());
             result.extend_from_slice(recovery_shard);
         }

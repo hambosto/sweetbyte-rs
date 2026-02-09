@@ -50,7 +50,7 @@ impl File {
 
     pub async fn file_metadata(&self) -> Result<(String, u64, Vec<u8>)> {
         let meta = tokio::fs::metadata(&self.path).await.with_context(|| format!("read metadata: {}", self.path.display()))?;
-        let filename = self.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "unknown".to_owned());
+        let filename = if let Some(name) = self.path.file_name() { name.to_string_lossy().to_string() } else { "unknown".to_owned() };
         let size = meta.len();
         let hash = self.hash().await?;
 
@@ -92,7 +92,13 @@ impl File {
     pub fn output_path(&self, mode: ProcessorMode) -> PathBuf {
         match mode {
             ProcessorMode::Encrypt => PathBuf::from(self.path.as_os_str().to_os_string().tap_mut(|name| name.push(FILE_EXTENSION))),
-            ProcessorMode::Decrypt => self.path.to_string_lossy().strip_suffix(FILE_EXTENSION).map(PathBuf::from).unwrap_or_else(|| self.path.clone()),
+            ProcessorMode::Decrypt => {
+                if let Some(stripped) = self.path.to_string_lossy().strip_suffix(FILE_EXTENSION) {
+                    PathBuf::from(stripped)
+                } else {
+                    self.path.clone()
+                }
+            }
         }
     }
 
@@ -163,7 +169,7 @@ impl File {
     pub fn discover(mode: ProcessorMode) -> Vec<Self> {
         WalkDir::new(".")
             .into_iter()
-            .filter_map(|entry| entry.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|entry| entry.file_type().is_file())
             .map(|entry| Self::new(entry.into_path()))
             .filter(|file| file.is_eligible(mode))
