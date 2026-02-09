@@ -1,6 +1,7 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 
 use crate::config::PASSWORD_MIN_LENGTH;
 use crate::file::File;
