@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
 use flume::bounded;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -34,9 +36,7 @@ impl Worker {
         W: AsyncWrite + Unpin + Send,
     {
         let progress = Progress::new(total_size, self.mode.label())?;
-
-        let concurrency = if let Ok(cores) = std::thread::available_parallelism() { cores.get() } else { 4 };
-        let channel_size = concurrency * 2;
+        let channel_size = if let Ok(cores) = std::thread::available_parallelism() { cores.get() } else { 4 };
 
         let (task_tx, task_rx) = bounded(channel_size);
         let (result_tx, result_rx) = bounded(channel_size);
@@ -44,10 +44,8 @@ impl Worker {
         let reader = Reader::new(self.mode, CHUNK_SIZE)?;
         let reader_handle = tokio::spawn(async move { reader.read_all(input, &task_tx).await });
 
-        let executor = Executor::new(self.pipeline);
-        let executor_handle = tokio::task::spawn_blocking(move || {
-            executor.process(&task_rx, &result_tx);
-        });
+        let executor = Executor::new(Arc::new(self.pipeline));
+        let executor_handle = tokio::task::spawn_blocking(move || executor.process(&task_rx, &result_tx));
 
         let mut writer = Writer::new(self.mode);
         let write_result = writer.write_all(output, result_rx, Some(&progress)).await.context("write failed");

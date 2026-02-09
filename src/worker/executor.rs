@@ -11,8 +11,8 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(pipeline: Pipeline) -> Self {
-        Self { pipeline: Arc::new(pipeline) }
+    pub fn new(pipeline: Arc<Pipeline>) -> Self {
+        Self { pipeline }
     }
 
     pub fn process(&self, tasks: &Receiver<Task>, results: &Sender<TaskResult>) {
