@@ -29,11 +29,11 @@ impl Buffer {
             return Vec::new();
         }
 
-        let mut results: Vec<(u64, TaskResult)> = self.buffer.drain().collect();
-        results.sort_unstable_by_key(|(idx, _)| *idx);
+        let mut results: Vec<TaskResult> = self.buffer.drain().map(|(_, v)| v).collect();
+        results.sort_unstable_by_key(|r| r.index);
 
         self.next_idx = 0;
 
-        results.into_iter().map(|(_, result)| result).collect()
+        results
     }
 }

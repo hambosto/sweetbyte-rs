@@ -2,10 +2,8 @@ use anyhow::{Context, Result};
 use flume::Sender;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
+use crate::config::CHUNK_SIZE;
 use crate::types::{Processing, Task};
-
-pub const MIN_CHUNK_SIZE: usize = 256 * 1024;
-
 pub struct Reader {
     mode: Processing,
     chunk_size: usize,
@@ -13,8 +11,8 @@ pub struct Reader {
 
 impl Reader {
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
-        if chunk_size < MIN_CHUNK_SIZE {
-            anyhow::bail!("chunk size must be at least {MIN_CHUNK_SIZE} bytes, got {chunk_size}")
+        if chunk_size < CHUNK_SIZE {
+            anyhow::bail!("chunk size must be at least {CHUNK_SIZE} bytes, got {chunk_size}")
         }
         Ok(Self { mode, chunk_size })
     }

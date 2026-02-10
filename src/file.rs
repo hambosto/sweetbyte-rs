@@ -50,7 +50,7 @@ impl File {
 
     pub async fn file_metadata(&self) -> Result<(String, u64, Vec<u8>)> {
         let meta = tokio::fs::metadata(&self.path).await.with_context(|| format!("read metadata: {}", self.path.display()))?;
-        let filename = if let Some(name) = self.path.file_name() { name.to_string_lossy().to_string() } else { "unknown".to_owned() };
+        let filename = self.path.file_name().map_or_else(|| "unknown".to_owned(), |n| n.to_string_lossy().into_owned());
         let size = meta.len();
         let hash = self.hash().await?;
 
