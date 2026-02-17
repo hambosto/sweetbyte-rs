@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use flume::bounded;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::config::CHUNK_SIZE;
@@ -38,8 +37,8 @@ impl Worker {
         let progress = Progress::new(total_size, self.mode.label())?;
         let channel_size = if let Ok(cores) = std::thread::available_parallelism() { cores.get() } else { 4 };
 
-        let (task_tx, task_rx) = bounded(channel_size);
-        let (result_tx, result_rx) = bounded(channel_size);
+        let (task_tx, task_rx) = flume::bounded(channel_size);
+        let (result_tx, result_rx) = flume::bounded(channel_size);
 
         let reader = Reader::new(self.mode, CHUNK_SIZE)?;
         let reader_handle = tokio::spawn(async move { reader.read_all(input, &task_tx).await });
