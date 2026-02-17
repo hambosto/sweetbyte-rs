@@ -19,7 +19,7 @@ impl Executor {
         tasks.iter().par_bridge().for_each(|task| {
             let result = self.pipeline.process(&task);
             if let Err(error) = results.send(result) {
-                tracing::warn!("failed to send task result: {error}");
+                tracing::error!("failed to send task result: {error}");
             }
         });
     }
