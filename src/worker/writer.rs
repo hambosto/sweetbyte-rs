@@ -3,7 +3,7 @@ use flume::Receiver;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::types::{Processing, TaskResult};
-use crate::ui::Progress;
+use crate::ui::progress::Progress;
 use crate::worker::buffer::Buffer;
 
 pub struct Writer {

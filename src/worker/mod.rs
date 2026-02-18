@@ -6,7 +6,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use crate::config::CHUNK_SIZE;
 use crate::secret::SecretBytes;
 use crate::types::Processing;
-use crate::ui::Progress;
+use crate::ui::progress::Progress;
 use crate::worker::executor::Executor;
 use crate::worker::pipeline::Pipeline;
 use crate::worker::reader::Reader;

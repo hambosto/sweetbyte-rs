@@ -7,10 +7,12 @@ use tokio::io::AsyncWriteExt;
 use crate::cipher::Derive;
 use crate::config::{ARGON_SALT_LEN, PASSWORD_MIN_LENGTH};
 use crate::file::File;
-use crate::header::{Header, metadata::Metadata};
+use crate::header::Header;
+use crate::header::metadata::Metadata;
 use crate::secret::SecretString;
 use crate::types::{Processing, ProcessorMode};
-use crate::ui::{self, Prompt};
+use crate::ui::display::Display;
+use crate::ui::prompt::Prompt;
 use crate::worker::Worker;
 
 #[derive(Subcommand)]
@@ -54,29 +56,31 @@ impl App {
         Ok(Self::parse())
     }
 
-    pub async fn execute(self) -> Result<()> {
+    pub async fn execute(mut self) -> Result<()> {
         let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
-        match self.command {
-            Some(Command::Encrypt { ref input, ref output, ref password }) => self.cli(input, output.as_ref(), password.as_ref(), Processing::Encryption, &prompt).await,
-            Some(Command::Decrypt { ref input, ref output, ref password }) => self.cli(input, output.as_ref(), password.as_ref(), Processing::Decryption, &prompt).await,
-            Some(Command::Interactive) | None => self.interactive(&prompt).await,
+        let display = Display::default();
+
+        match self.command.take() {
+            Some(Command::Encrypt { input, output, password }) => self.run_cli(&input, output, password, Processing::Encryption, &prompt, &display).await,
+            Some(Command::Decrypt { input, output, password }) => self.run_cli(&input, output, password, Processing::Decryption, &prompt, &display).await,
+            Some(Command::Interactive) | None => self.interactive(&prompt, &display).await,
         }
     }
 
-    async fn cli(&self, input: &str, output: Option<&String>, password: Option<&String>, processing: Processing, prompt: &Prompt) -> Result<()> {
+    async fn run_cli(&self, input: &str, output: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt, display: &Display) -> Result<()> {
         let src = File::new(input);
-        let dest = File::new(output.map_or_else(|| src.output_path(processing.mode()), PathBuf::from));
-        let secret = password.map_or_else(|| Self::password(prompt, processing), |p| Ok(SecretString::from_str(p)))?;
+        let dest = File::new(output.map_or_else(|| src.output_path(processing.mode()), |s| PathBuf::from(s)));
+        let secret = password.map_or_else(|| Self::password(prompt, processing), |p| Ok(SecretString::from_str(&p)))?;
 
         let info = self.process(&src, &dest, &secret, processing).await?;
-        ui::success(processing.mode(), dest.path());
-        ui::header(&info.name, info.size, &info.hash);
+        display.success(processing.mode(), dest.path());
+        display.header(&info.name, info.size, &info.hash);
         Ok(())
     }
 
-    async fn interactive(&self, prompt: &Prompt) -> Result<()> {
-        ui::clear()?;
-        ui::banner()?;
+    async fn interactive(&self, prompt: &Prompt, display: &Display) -> Result<()> {
+        display.clear()?;
+        display.banner()?;
 
         let mode = Prompt::mode()?;
         let processing = Processing::from(mode);
@@ -86,7 +90,7 @@ impl App {
             return Err(anyhow!("no eligible files found"));
         }
 
-        ui::files(&mut files).await?;
+        display.files(&mut files).await?;
 
         let path = Prompt::file(&files)?;
         let mut src = File::new(&path);
@@ -103,8 +107,8 @@ impl App {
         let secret = Self::password(prompt, processing)?;
         let info = self.process(&src, &dest, &secret, processing).await?;
 
-        ui::success(mode, dest.path());
-        ui::header(&info.name, info.size, &info.hash);
+        display.success(mode, dest.path());
+        display.header(&info.name, info.size, &info.hash);
 
         let label = match mode {
             ProcessorMode::Encrypt => "original",
@@ -112,7 +116,7 @@ impl App {
         };
         if Prompt::delete(src.path(), label)? {
             src.delete().await?;
-            ui::deleted(src.path());
+            display.deleted(src.path());
         }
 
         Ok(())
