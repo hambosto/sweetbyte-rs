@@ -69,7 +69,7 @@ impl App {
 
     async fn run_cli(&self, input: &str, output: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt, display: &Display) -> Result<()> {
         let src = File::new(input);
-        let dest = File::new(output.map_or_else(|| src.output_path(processing.mode()), |s| PathBuf::from(s)));
+        let dest = File::new(output.map_or_else(|| src.output_path(processing.mode()), PathBuf::from));
         let secret = password.map_or_else(|| Self::password(prompt, processing), |p| Ok(SecretString::from_str(&p)))?;
 
         let info = self.process(&src, &dest, &secret, processing).await?;
@@ -79,8 +79,8 @@ impl App {
     }
 
     async fn interactive(&self, prompt: &Prompt, display: &Display) -> Result<()> {
-        display.clear()?;
-        display.banner()?;
+        Display::clear()?;
+        Display::banner()?;
 
         let mode = Prompt::mode()?;
         let processing = Processing::from(mode);

@@ -21,7 +21,7 @@ impl Display {
         Self { name_max_len, icon }
     }
 
-    fn filename(&self, path: &Path) -> String {
+    fn filename(path: &Path) -> String {
         path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
     }
 
@@ -37,13 +37,13 @@ impl Display {
         println!("{} {}", self.icon(), console::style(text).white().bright());
     }
 
-    fn table(&self) -> Table {
+    fn table() -> Table {
         let mut t = Table::new();
         t.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
         t
     }
 
-    fn action_label(&self, mode: ProcessorMode) -> &'static str {
+    fn action_label(mode: ProcessorMode) -> &'static str {
         match mode {
             ProcessorMode::Encrypt => "encrypted",
             ProcessorMode::Decrypt => "decrypted",
@@ -61,11 +61,11 @@ impl Display {
         println!();
 
         let header = ["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White));
-        let mut t = self.table();
+        let mut t = Self::table();
         t.set_header(header);
 
         for (i, file) in items.iter_mut().enumerate() {
-            let name = self.truncate(&self.filename(file.path()));
+            let name = self.truncate(&Self::filename(file.path()));
             let (status, color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
 
             t.add_row([Cell::new(i + 1), Cell::new(name).fg(Color::Green), Cell::new(ByteSize(file.size().await?).to_string()), Cell::new(status).fg(color)]);
@@ -77,14 +77,14 @@ impl Display {
 
     pub fn success(&self, mode: ProcessorMode, path: &Path) {
         println!();
-        self.msg(format!("File {} successfully: {}", self.action_label(mode), self.filename(path)));
+        self.msg(format!("File {} successfully: {}", Self::action_label(mode), Self::filename(path)));
     }
 
     pub fn deleted(&self, path: &Path) {
-        self.msg(format!("Source file deleted: {}", self.filename(path)));
+        self.msg(format!("Source file deleted: {}", Self::filename(path)));
     }
 
-    pub fn clear(&self) -> Result<()> {
+    pub fn clear() -> Result<()> {
         console::Term::stdout().clear_screen().context("clear screen")
     }
 
@@ -92,7 +92,7 @@ impl Display {
         println!();
         println!("{} {}", self.icon(), console::style("Header Information:").bold());
 
-        let mut t = self.table();
+        let mut t = Self::table();
         t.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(name).fg(Color::White)]);
         t.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
         t.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hash).fg(Color::White)]);
@@ -100,7 +100,7 @@ impl Display {
         println!("{t}");
     }
 
-    pub fn banner(&self) -> Result<()> {
+    pub fn banner() -> Result<()> {
         let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow::anyhow!("load font: {e}"))?;
         let fig = font.convert(APP_NAME).context("render banner")?;
         println!("{}", console::style(fig).green().bright());
