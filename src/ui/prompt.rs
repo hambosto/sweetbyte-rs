@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use inquire::{Confirm, Password, PasswordDisplayMode, Select};
 use strum::IntoEnumIterator;
 
@@ -8,75 +8,70 @@ use crate::file::File;
 use crate::types::ProcessorMode;
 
 pub struct Prompt {
-    password_min_length: usize,
+    min_len: usize,
 }
 
 impl Prompt {
-    pub fn new(password_min_length: usize) -> Self {
-        Self { password_min_length }
+    pub fn new(min_len: usize) -> Self {
+        Self { min_len }
     }
 
-    pub fn prompt_encryption_password(&self) -> Result<String> {
-        Self::prompt_password("Enter encryption password", true, self.password_min_length)
+    pub fn encrypt_password(&self) -> Result<String> {
+        self.password("Enter encryption password", true)
     }
 
-    pub fn prompt_decryption_password(&self) -> Result<String> {
-        Self::prompt_password("Enter decryption password", false, self.password_min_length)
+    pub fn decrypt_password(&self) -> Result<String> {
+        self.password("Enter decryption password", false)
     }
 
-    fn prompt_password(message: &str, with_confirmation: bool, password_min_length: usize) -> Result<String> {
-        let validator = inquire::min_length!(password_min_length);
-        let mut prompt = Password::new(message).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
+    fn password(&self, msg: &str, confirm: bool) -> Result<String> {
+        let validator = inquire::min_length!(self.min_len);
+        let mut p = Password::new(msg).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
 
-        if with_confirmation {
-            prompt = prompt.with_custom_confirmation_message("Confirm password").with_custom_confirmation_error_message("passwords mismatch");
+        if confirm {
+            p = p.with_custom_confirmation_message("Confirm password").with_custom_confirmation_error_message("passwords mismatch");
         } else {
-            prompt = prompt.without_confirmation();
+            p = p.without_confirmation();
         }
 
-        prompt.prompt().context("input password")
+        p.prompt().context("input password")
     }
 
-    pub fn select_processing_mode() -> Result<ProcessorMode> {
-        let modes: Vec<ProcessorMode> = ProcessorMode::iter().collect();
-        let display_names: Vec<&str> = modes.iter().map(|m| m.label()).collect();
-
-        Self::select_from_list("Select operation", &display_names).map(|idx| modes[idx])
+    pub fn mode() -> Result<ProcessorMode> {
+        let modes: Vec<_> = ProcessorMode::iter().collect();
+        let labels: Vec<_> = modes.iter().map(|m| m.label()).collect();
+        select("Select operation", &labels).map(|i| modes[i])
     }
 
-    pub fn select_file(files: &[File]) -> Result<PathBuf> {
+    pub fn file(files: &[File]) -> Result<PathBuf> {
         if files.is_empty() {
-            anyhow::bail!("no files available for selection");
+            return Err(anyhow!("no files available"));
         }
 
-        let display_names: Vec<String> = files.iter().map(|f| Self::get_display_name(f.path())).collect();
-        let idx = Self::select_from_list("Select file", &display_names)?;
-
-        Ok(files[idx].path().to_path_buf())
+        let labels: Vec<_> = files.iter().map(|f| filename(f.path())).collect();
+        select("Select file", &labels).map(|i| files[i].path().to_path_buf())
     }
 
-    fn select_from_list<T: ToString>(message: &str, items: &[T]) -> Result<usize> {
-        let display_names: Vec<String> = items.iter().map(ToString::to_string).collect();
-        let selection = Select::new(message, display_names.clone()).with_starting_cursor(0).prompt().context("select from list")?;
-
-        display_names.into_iter().position(|name| name == selection).ok_or_else(|| anyhow::anyhow!("selection not found"))
+    pub fn overwrite(path: &Path) -> Result<bool> {
+        confirm(&format!("Output file {} already exists. Overwrite?", filename(path)))
     }
 
-    pub fn confirm_file_overwrite(path: &Path) -> Result<bool> {
-        let filename = Self::get_display_name(path);
-        Self::confirm(&format!("Output file {filename} already exists. Overwrite?"))
+    pub fn delete(path: &Path, kind: &str) -> Result<bool> {
+        confirm(&format!("Delete {} file {}?", kind, filename(path)))
     }
+}
 
-    pub fn confirm_file_deletion(path: &Path, file_type: &str) -> Result<bool> {
-        let filename = Self::get_display_name(path);
-        Self::confirm(&format!("Delete {file_type} file {filename}?"))
-    }
+fn filename(path: &Path) -> String {
+    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+}
 
-    fn get_display_name(path: &Path) -> String {
-        if let Some(name) = path.file_name() { name.to_string_lossy().into_owned() } else { path.display().to_string() }
-    }
+fn select(msg: &str, items: &[impl ToString]) -> Result<usize> {
+    let labels: Vec<_> = items.iter().map(ToString::to_string).collect();
+    let choice = Select::new(msg, labels.clone()).with_starting_cursor(0).prompt().context("selection")?;
 
-    fn confirm(prompt: &str) -> Result<bool> {
-        Confirm::new(prompt).with_default(false).prompt().context("confirm")
-    }
+    labels.into_iter().position(|l| l == choice).ok_or_else(|| anyhow!("invalid selection"))
+}
+
+fn confirm(msg: &str) -> Result<bool> {
+    Confirm::new(msg).with_default(false).prompt().context("confirmation")
 }

@@ -1,3 +1,6 @@
+mod progress;
+mod prompt;
+
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -5,87 +8,93 @@ use bytesize::ByteSize;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
-use console::Term;
 use figlet_rs::FIGfont;
 
 use crate::config::APP_NAME;
 use crate::file::File;
 use crate::types::ProcessorMode;
 
-pub mod progress;
-pub mod prompt;
+pub use progress::Progress;
+pub use prompt::Prompt;
 
-pub async fn show_file_info(files: &mut [File]) -> Result<()> {
-    if files.is_empty() {
+fn filename(path: &Path) -> String {
+    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+}
+
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() > max_len { format!("{}...", &s[..max_len.saturating_sub(3)]) } else { s.to_owned() }
+}
+
+fn icon() -> console::StyledObject<&'static str> {
+    console::style("✔").green().bright()
+}
+
+fn msg(text: impl std::fmt::Display) {
+    println!("{} {}", icon(), console::style(text).white().bright());
+}
+
+fn table() -> Table {
+    let mut t = Table::new();
+    t.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
+    t
+}
+
+pub async fn files(items: &mut [File]) -> Result<()> {
+    if items.is_empty() {
         println!("{}", console::style("No files found").yellow().bright());
         return Ok(());
     }
 
     println!();
-    println!("{} {}", console::style("✔").green().bright(), console::style(format!("Found {} file(s):", files.len())).white().bright());
+    msg(format!("Found {} file(s):", items.len()));
     println!();
 
-    let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec![Cell::new("No").fg(Color::White), Cell::new("Name").fg(Color::White), Cell::new("Size").fg(Color::White), Cell::new("Status").fg(Color::White)]);
+    let header = ["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White));
+    let mut t = table();
+    t.set_header(header);
 
-    for (i, file) in files.iter_mut().enumerate() {
-        let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-        let display_name = if filename.len() > 25 { format!("{}...", &filename[..22]) } else { filename.to_owned() };
-        let (status_text, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
-        let size = file.size().await?;
+    for (i, file) in items.iter_mut().enumerate() {
+        let name = truncate(&filename(file.path()), 25);
+        let (status, color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
 
-        table.add_row(vec![Cell::new(i + 1), Cell::new(&display_name).fg(Color::Green), Cell::new(ByteSize(size).to_string()), Cell::new(status_text).fg(status_color)]);
+        t.add_row([Cell::new(i + 1), Cell::new(name).fg(Color::Green), Cell::new(ByteSize(file.size().await?).to_string()), Cell::new(status).fg(color)]);
     }
 
-    println!("{table}");
-    println!();
-
+    println!("{t}\n");
     Ok(())
 }
 
-pub fn show_success(mode: ProcessorMode, path: &Path) {
+pub fn success(mode: ProcessorMode, path: &Path) {
     let action = match mode {
         ProcessorMode::Encrypt => "encrypted",
         ProcessorMode::Decrypt => "decrypted",
     };
-
-    let filename = if let Some(name) = path.file_name() { name.to_string_lossy() } else { path.display().to_string().into() };
-
     println!();
-    println!("{} {}", console::style("✔").green().bright(), console::style(format!("File {action} successfully: {filename}")).white().bright());
+    msg(format!("File {action} successfully: {}", filename(path)));
 }
 
-pub fn show_source_deleted(path: &Path) {
-    let filename = if let Some(name) = path.file_name() { name.to_string_lossy() } else { path.display().to_string().into() };
-
-    println!("{} {}", console::style("✔").green().bright(), console::style(format!("Source file deleted: {filename}")).white().bright());
+pub fn deleted(path: &Path) {
+    msg(format!("Source file deleted: {}", filename(path)));
 }
 
-pub fn clear_screen() -> Result<()> {
-    Term::stdout().clear_screen().context("clear screen")?;
-
-    Ok(())
+pub fn clear() -> Result<()> {
+    console::Term::stdout().clear_screen().context("clear screen")
 }
 
-pub fn show_header_info(filename: &str, size: u64, hash: &str) {
+pub fn header(name: &str, size: u64, hash: &str) {
     println!();
-    println!("{} {}", console::style("✔").green().bright(), console::style("Header Information:").bold());
+    println!("{} {}", icon(), console::style("Header Information:").bold());
 
-    let mut table = Table::new();
-    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
-    table.add_row(vec![Cell::new("Original Filename").fg(Color::Green), Cell::new(filename).fg(Color::White)]);
-    table.add_row(vec![Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
-    table.add_row(vec![Cell::new("Original Hash").fg(Color::Green), Cell::new(hash).fg(Color::White)]);
+    let mut t = table();
+    t.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(name).fg(Color::White)]);
+    t.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
+    t.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hash).fg(Color::White)]);
 
-    print!("{table}");
+    println!("{t}");
 }
 
-pub fn print_banner() -> Result<()> {
-    let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|error| anyhow::anyhow!("load font: {error}"))?;
+pub fn banner() -> Result<()> {
+    let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow::anyhow!("load font: {e}"))?;
     let fig = font.convert(APP_NAME).context("render banner")?;
     println!("{}", console::style(fig).green().bright());
     Ok(())

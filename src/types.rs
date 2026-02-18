@@ -35,6 +35,15 @@ impl Processing {
     }
 }
 
+impl From<ProcessorMode> for Processing {
+    fn from(mode: ProcessorMode) -> Self {
+        match mode {
+            ProcessorMode::Encrypt => Self::Encryption,
+            ProcessorMode::Decrypt => Self::Decryption,
+        }
+    }
+}
+
 pub struct Task {
     pub data: Vec<u8>,
     pub index: u64,
