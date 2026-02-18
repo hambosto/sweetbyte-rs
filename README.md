@@ -135,43 +135,43 @@ CRC32 validates each shard before decoding. Corrupted shards get reconstructed f
 
 ```
 src/
-├── main.rs          # Entry point, tokio runtime
-├── app.rs           # CLI parsing, encrypt/decrypt orchestration
-├── config.rs        # All constants in one place
-├── types.rs         # Processing, ProcessorMode, Task, TaskResult
-├── secret.rs        # Wrapper around secrecy crate
-├── allocator.rs     # MiMalloc as global allocator
+├── main.rs                 # Entry point, tokio runtime
+├── app.rs                  # CLI parsing, encrypt/decrypt orchestration
+├── config.rs               # All constants in one place
+├── types.rs                # Processing, ProcessorMode, Task, TaskResult
+├── secret.rs               # Wrapper around secrecy crate
+├── allocator.rs            # MiMalloc as global allocator
 │
 ├── cipher/
-│   ├── mod.rs       # Cipher struct holding both algorithms
-│   ├── aes_gcm.rs   # AES-256-GCM wrapper
-│   ├── chacha20poly1305.rs
-│   ├── derive.rs    # Argon2id key derivation
-│   └── mac.rs       # HMAC-SHA256 with constant-time comparison
+│   ├── mod.rs              # Cipher struct holding both algorithms
+│   ├── aes_gcm.rs          # AES-256-GCM wrapper
+│   ├── chacha20poly1305.rs # XChaCha20-Poly130 wrapper
+│   ├── derive.rs           # Argon2id key derivation
+│   └── mac.rs              # HMAC-SHA256 with constant-time comparison
 │
 ├── header/
-│   ├── mod.rs       # Header struct, serialize/deserialize
-│   ├── metadata.rs  # Filename, size, BLAKE3 hash
-│   ├── parameter.rs # Magic bytes and version validation
-│   └── section.rs   # Packs/unpacks RS-encoded sections
+│   ├── mod.rs              # Header struct, serialize/deserialize
+│   ├── metadata.rs         # Filename, size, BLAKE3 hash
+│   ├── parameter.rs        # Magic bytes and version validation
+│   └── section.rs          # Packs/unpacks RS-encoded sections
 │
 ├── worker/
-│   ├── mod.rs       # Worker, sets up the pipeline
-│   ├── reader.rs    # Produces tasks from input file
-│   ├── executor.rs  # Parallel task processing
-│   ├── writer.rs    # Consumes results, writes output
-│   ├── buffer.rs    # Reordering buffer for out-of-order results
-│   └── pipeline.rs  # The actual encrypt/decrypt stages
+│   ├── mod.rs              # Worker, sets up the pipeline
+│   ├── reader.rs           # Produces tasks from input file
+│   ├── executor.rs         # Parallel task processing
+│   ├── writer.rs           # Consumes results, writes output
+│   ├── buffer.rs           # Reordering buffer for out-of-order results
+│   └── pipeline.rs         # The actual encrypt/decrypt stages
 │
 ├── ui/
-│   ├── display.rs   # Tables, banner, success messages
-│   ├── prompt.rs    # Interactive prompts via inquire
-│   └── progress.rs  # Progress bar via indicatif
+│   ├── display.rs          # Tables, banner, success messages
+│   ├── prompt.rs           # Interactive prompts via inquire
+│   └── progress.rs         # Progress bar via indicatif
 │
-├── file.rs          # File discovery (walkdir), BLAKE3 hashing
-├── encoding.rs      # Reed-Solomon with CRC32 per-shard validation
-├── compression.rs   # zstd wrapper
-└── padding.rs       # PKCS7 wrapper
+├── file.rs                 # File discovery (walkdir), BLAKE3 hashing
+├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
+├── compression.rs          # zstd wrapper
+└── padding.rs              # PKCS7 wrapper
 ```
 
 ## Security notes
