@@ -77,8 +77,8 @@ impl Encoding {
             }
         }
 
-        let decoded = decoder.decode()?;
-        let recovered_map: HashMap<usize, &[u8]> = decoded.restored_original_iter().collect();
+        let decode_result = decoder.decode()?;
+        let recovered_map: HashMap<usize, &[u8]> = decode_result.restored_original_iter().collect();
 
         let mut result = Vec::with_capacity(data_len);
         for (shard_idx, shard) in shards.into_iter().enumerate() {
