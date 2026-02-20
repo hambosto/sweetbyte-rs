@@ -19,7 +19,7 @@ blake3             = { version = "1.8.3", default-features = false }
 block-padding      = "0.4.2"
 bytesize           = { version = "2.3.1", default-features = false }
 chacha20poly1305   = "0.10.1"
-clap               = { version = "4.5.58", default-features = false, features = ["derive", "std"] }
+clap               = { version = "4.5.60", default-features = false, features = ["derive", "std"] }
 comfy-table        = "7.2.2"
 console            = { version = "0.16.2", default-features = false }
 crc32fast          = { version = "1.5.0", default-features = false }
