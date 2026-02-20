@@ -77,12 +77,12 @@ impl Encoding {
             }
         }
 
-        let decode_result = decoder.decode()?;
-        let recovered_map: HashMap<usize, &[u8]> = decode_result.restored_original_iter().collect();
+        let decoded_result = decoder.decode()?;
+        let restored_map: HashMap<usize, &[u8]> = decoded_result.restored_original_iter().collect();
 
         let mut result = Vec::with_capacity(data_len);
         for (shard_idx, shard) in shards.into_iter().enumerate() {
-            let shard = shard.or_else(|| recovered_map.get(&shard_idx).copied()).ok_or_else(|| anyhow::anyhow!("missing shard {shard_idx}"))?;
+            let shard = shard.or_else(|| restored_map.get(&shard_idx).copied()).ok_or_else(|| anyhow::anyhow!("missing shard {shard_idx}"))?;
             result.extend_from_slice(shard);
         }
         result.truncate(data_len);
