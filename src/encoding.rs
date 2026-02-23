@@ -1,7 +1,7 @@
 use anyhow::Result;
 use reed_solomon_simd::{ReedSolomonDecoder, ReedSolomonEncoder};
 
-const HEADER_SIZE: usize = 4;
+const LEN_SIZE: usize = 4;
 const CRC_SIZE: usize = 4;
 
 pub struct Encoding {
@@ -33,7 +33,7 @@ impl Encoding {
             shards.push(shard);
         }
 
-        let mut result = Vec::with_capacity(HEADER_SIZE + (CRC_SIZE + shard_size) * (self.original_count + self.recovery_count));
+        let mut result = Vec::with_capacity(LEN_SIZE + (CRC_SIZE + shard_size) * (self.original_count + self.recovery_count));
         result.extend_from_slice(&u32::try_from(data.len())?.to_le_bytes());
 
         for shard in &shards {
@@ -51,14 +51,14 @@ impl Encoding {
     }
 
     pub fn decode(&self, encoded_data: &[u8]) -> Result<Vec<u8>> {
-        let original_size = u32::from_le_bytes(encoded_data[..HEADER_SIZE].try_into()?) as usize;
-        let chunk_size = (encoded_data.len() - HEADER_SIZE) / (self.original_count + self.recovery_count);
+        let original_size = u32::from_le_bytes(encoded_data[..LEN_SIZE].try_into()?) as usize;
+        let chunk_size = (encoded_data.len() - LEN_SIZE) / (self.original_count + self.recovery_count);
         let shard_size = chunk_size - CRC_SIZE;
 
         let mut decoder = ReedSolomonDecoder::new(self.original_count, self.recovery_count, shard_size)?;
         let mut shards: Vec<Option<&[u8]>> = vec![None; self.original_count];
 
-        for (idx, chunk) in encoded_data[HEADER_SIZE..].chunks_exact(chunk_size).enumerate() {
+        for (idx, chunk) in encoded_data[LEN_SIZE..].chunks_exact(chunk_size).enumerate() {
             let (crc, data) = chunk.split_at(CRC_SIZE);
             if crc == crc32fast::hash(data).to_le_bytes() {
                 if idx < self.original_count {
@@ -70,14 +70,13 @@ impl Encoding {
             }
         }
 
-        let decoded_result = decoder.decode()?;
-
+        let restored = decoder.decode()?;
         let mut result = Vec::with_capacity(original_size);
         for (idx, shard) in shards.into_iter().enumerate() {
             if let Some(s) = shard {
                 result.extend_from_slice(s);
             } else {
-                let restored = decoded_result.restored_original(idx).ok_or_else(|| anyhow::anyhow!("missing shard {idx}"))?;
+                let restored = restored.restored_original(idx).ok_or_else(|| anyhow::anyhow!("missing shard {idx}"))?;
                 result.extend_from_slice(restored);
             }
         }

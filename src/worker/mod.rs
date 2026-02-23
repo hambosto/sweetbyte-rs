@@ -49,7 +49,7 @@ impl Worker {
         let mut writer = Writer::new(self.mode);
         let write_result = writer.write_all(output, result_rx, Some(&progress)).await.context("write failed");
 
-        reader_handle.await.context("reader panicked")??;
+        reader_handle.await?.context("reader panicked")?;
         executor_handle.await.context("executor panicked")?;
         progress.finish();
 
