@@ -13,7 +13,7 @@ repository = "https://github.com/hambosto/sweetbyte-rs"
 
 [dependencies]
 aes-gcm            = { version = "0.10.3", default-features = false, features = ["aes", "rand_core"] }
-anyhow             = "1.0.101"
+anyhow             = "1.0.102"
 argon2             = { version = "0.5.3", default-features = false, features = ["alloc"] }
 blake3             = { version = "1.8.3", default-features = false }
 block-padding      = "0.4.2"
