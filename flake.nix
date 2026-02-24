@@ -10,11 +10,6 @@
     };
   };
 
-  nixConfig = {
-    extra-substituters = [ "https://cache.garnix.io" ];
-    extra-trusted-public-keys = [ "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=" ];
-  };
-
   outputs =
     {
       nixpkgs,
@@ -24,22 +19,26 @@
       ...
     }:
     let
-      forAllSystems = nixpkgs.lib.genAttrs (import systems);
+      forAllSystems = f: nixpkgs.lib.genAttrs (import systems) f;
 
       pkgsFor = system: nixpkgs.legacyPackages.${system}.extend rust-overlay.overlays.default;
 
-      mkPackage =
-        pkgs: rustChannel:
-        pkgs.callPackage ./nix/package.nix {
-          rustPlatform = pkgs.makeRustPlatform {
-            cargo = rustChannel;
-            rustc = rustChannel;
-          };
+      mkRustPlatform =
+        pkgs:
+        let
+          toolchain = pkgs.rust-bin.nightly.latest.default;
+        in
+        pkgs.makeRustPlatform {
+          cargo = toolchain;
+          rustc = toolchain;
         };
+
     in
     {
-      overlays.default = final: _: {
-        sweetbyte-rs = mkPackage final final.rust-bin.stable.latest.default;
+      overlays.default = final: prev: {
+        sweetbyte-rs = final.callPackage ./nix/package.nix {
+          rustPlatform = mkRustPlatform final;
+        };
       };
 
       packages = forAllSystems (
@@ -48,14 +47,22 @@
           pkgs = pkgsFor system;
         in
         {
-          default = mkPackage pkgs pkgs.rust-bin.nightly.latest.default;
+          default = pkgs.callPackage ./nix/package.nix {
+            rustPlatform = mkRustPlatform pkgs;
+          };
         }
       );
 
-      devShells = forAllSystems (system: {
-        default = (pkgsFor system).callPackage ./nix/shell.nix {
-          sweetbyte-rs = self.packages.${system}.default;
-        };
-      });
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = pkgs.callPackage ./nix/shell.nix {
+            sweetbyte-rs = self.packages.${system}.default;
+          };
+        }
+      );
     };
 }
