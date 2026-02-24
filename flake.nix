@@ -4,10 +4,13 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     systems.url = "github:nix-systems/default";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    garnix-lib.url = "github:garnix-io/garnix-lib";
+  };
+
+  nixConfig = {
+    extra-substituters = [ "https://cache.garnix.io" ];
+    extra-trusted-public-keys = [ "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=" ];
   };
 
   outputs =
@@ -15,61 +18,54 @@
       nixpkgs,
       systems,
       rust-overlay,
+      garnix-lib,
       self,
       ...
     }:
     let
-      applyOverlays = pkgs: pkgs.extend rust-overlay.overlays.default;
       forAllSystems = nixpkgs.lib.genAttrs (import systems);
-      pkgsFor = system: applyOverlays nixpkgs.legacyPackages.${system};
-      mkRustToolchain =
-        pkgs:
-        pkgs.rust-bin.stable.latest.default.override {
-          extensions = [
-            "rust-src"
-            "rust-analyzer"
-            "clippy"
-            "rustfmt"
-          ];
-        };
 
-      mkRustPlatform =
-        pkgs: toolchain:
-        pkgs.makeRustPlatform {
-          cargo = toolchain;
-          rustc = toolchain;
-        };
-    in
-    {
-      overlays.default = final: prev: {
-        sweetbyte-rs = final.callPackage ./nix/package.nix {
-          rustPlatform = mkRustPlatform final final.rust-bin.stable.latest.default;
-        };
-      };
+      pkgsFor = system: nixpkgs.legacyPackages.${system}.extend rust-overlay.overlays.default;
 
-      packages = forAllSystems (
-        system:
-        let
-          pkgs = pkgsFor system;
-          toolchain = mkRustToolchain pkgs;
-        in
-        {
-          default = pkgs.callPackage ./nix/package.nix {
-            rustPlatform = mkRustPlatform pkgs toolchain;
+      mkPackage =
+        pkgs: rustChannel:
+        pkgs.callPackage ./nix/package.nix {
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = rustChannel;
+            rustc = rustChannel;
           };
-        }
-      );
+        };
 
-      devShells = forAllSystems (
-        system:
-        let
-          pkgs = pkgsFor system;
-        in
-        {
-          default = pkgs.callPackage ./nix/shell.nix {
+      flakeOutputs = {
+        overlays.default = final: _: {
+          sweetbyte-rs = mkPackage final final.rust-bin.stable.latest.default;
+        };
+
+        packages = forAllSystems (
+          system:
+          let
+            pkgs = pkgsFor system;
+          in
+          {
+            default = mkPackage pkgs pkgs.rust-bin.nightly.latest.default;
+          }
+        );
+
+        devShells = forAllSystems (system: {
+          default = (pkgsFor system).callPackage ./nix/shell.nix {
             sweetbyte-rs = self.packages.${system}.default;
           };
-        }
-      );
-    };
+        });
+      };
+
+      garnixOutputs = garnix-lib.lib.mkModules {
+        modules = [ ];
+        config =
+          { ... }:
+          {
+            garnix.deployBranch = "main";
+          };
+      };
+    in
+    flakeOutputs // garnixOutputs;
 }
