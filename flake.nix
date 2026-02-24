@@ -4,8 +4,10 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     systems.url = "github:nix-systems/default";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    garnix-lib.url = "github:garnix-io/garnix-lib";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
@@ -18,7 +20,6 @@
       nixpkgs,
       systems,
       rust-overlay,
-      garnix-lib,
       self,
       ...
     }:
@@ -35,37 +36,26 @@
             rustc = rustChannel;
           };
         };
-
-      flakeOutputs = {
-        overlays.default = final: _: {
-          sweetbyte-rs = mkPackage final final.rust-bin.stable.latest.default;
-        };
-
-        packages = forAllSystems (
-          system:
-          let
-            pkgs = pkgsFor system;
-          in
-          {
-            default = mkPackage pkgs pkgs.rust-bin.nightly.latest.default;
-          }
-        );
-
-        devShells = forAllSystems (system: {
-          default = (pkgsFor system).callPackage ./nix/shell.nix {
-            sweetbyte-rs = self.packages.${system}.default;
-          };
-        });
-      };
-
-      garnixOutputs = garnix-lib.lib.mkModules {
-        modules = [ ];
-        config =
-          { ... }:
-          {
-            garnix.deployBranch = "main";
-          };
-      };
     in
-    flakeOutputs // garnixOutputs;
+    {
+      overlays.default = final: _: {
+        sweetbyte-rs = mkPackage final final.rust-bin.stable.latest.default;
+      };
+
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = mkPackage pkgs pkgs.rust-bin.nightly.latest.default;
+        }
+      );
+
+      devShells = forAllSystems (system: {
+        default = (pkgsFor system).callPackage ./nix/shell.nix {
+          sweetbyte-rs = self.packages.${system}.default;
+        };
+      });
+    };
 }
