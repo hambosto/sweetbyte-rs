@@ -72,7 +72,7 @@ impl Display {
         }
 
         println!("{table}");
-        println!("\n");
+        println!();
         Ok(())
     }
 
