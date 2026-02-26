@@ -30,7 +30,7 @@ hashbrown          = { version = "0.16.1", default-features = false, features = 
 hex                = { version = "0.4.3", default-features = false, features = ["alloc"] }
 hmac               = "0.12.1"
 indicatif          = { version = "0.18.4", default-features = false }
-inquire            = { version = "0.9.3", default-features = false, features = ["crossterm", "macros"] }
+inquire            = { version = "0.9.4", default-features = false, features = ["crossterm", "macros"] }
 mimalloc           = { version = "0.1.48", default-features = false, features = ["v3"] }
 rand               = { version = "0.10.0", default-features = false, features = ["sys_rng"] }
 rayon              = "1.11.0"
