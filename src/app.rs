@@ -164,7 +164,7 @@ impl App {
             return Err(anyhow!("hash mismatch"));
         }
 
-        Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash().to_vec()) })
+        Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
 
     fn password(prompt: &Prompt, processing: Processing) -> Result<SecretString> {
