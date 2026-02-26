@@ -46,7 +46,7 @@ pub struct App {
 pub struct HeaderInfo {
     name: String,
     size: u64,
-    hash: Vec<u8>,
+    hash: String,
 }
 
 impl App {
@@ -142,7 +142,7 @@ impl App {
 
         Worker::new(&key, Processing::Encryption)?.process(src.reader().await?, writer, size).await?;
 
-        Ok(HeaderInfo { name, size, hash: header.file_hash().to_vec() })
+        Ok(HeaderInfo { name, size, hash: hex::encode(header.file_hash()) })
     }
 
     async fn decrypt(&self, src: &File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
@@ -164,7 +164,7 @@ impl App {
             return Err(anyhow!("hash mismatch"));
         }
 
-        Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: header.file_hash().to_vec() })
+        Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash().to_vec()) })
     }
 
     fn password(prompt: &Prompt, processing: Processing) -> Result<SecretString> {

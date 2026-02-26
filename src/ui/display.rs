@@ -89,14 +89,14 @@ impl Display {
         console::Term::stdout().clear_screen().context("clear screen")
     }
 
-    pub fn header(&self, name: &str, size: u64, hash: &[u8]) {
+    pub fn header(&self, name: &str, size: u64, hash: &str) {
         println!();
         println!("{} {}", self.icon(), console::style("Header Information:").bold());
 
         let mut table = Self::table();
         table.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(name).fg(Color::White)]);
         table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
-        table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hex::encode(hash)).fg(Color::White)]);
+        table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hash).fg(Color::White)]);
 
         println!("{table}");
     }
