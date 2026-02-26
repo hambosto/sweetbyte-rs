@@ -46,7 +46,7 @@ pub struct App {
 pub struct HeaderInfo {
     name: String,
     size: u64,
-    hash: String,
+    hash: Vec<u8>,
 }
 
 impl App {
@@ -114,6 +114,7 @@ impl App {
             ProcessorMode::Encrypt => "original",
             ProcessorMode::Decrypt => "encrypted",
         };
+
         if Prompt::delete(src.path(), label)? {
             src.delete().await?;
             display.deleted(src.path());
@@ -134,14 +135,14 @@ impl App {
         let (name, size, hash) = src.file_metadata().await?;
         let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
         let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(&salt)?;
-        let header = Header::new(Metadata::new(name.clone(), size, hash))?;
+        let header = Header::new(Metadata::new(name.clone(), size, hash)?)?;
 
         let mut writer = dest.writer().await?;
         writer.write_all(&header.serialize(&salt, &key)?).await?;
 
         Worker::new(&key, Processing::Encryption)?.process(src.reader().await?, writer, size).await?;
 
-        Ok(HeaderInfo { name, size, hash: header.file_hash() })
+        Ok(HeaderInfo { name, size, hash: header.file_hash().to_vec() })
     }
 
     async fn decrypt(&self, src: &File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
@@ -163,15 +164,16 @@ impl App {
             return Err(anyhow!("hash mismatch"));
         }
 
-        Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: header.file_hash() })
+        Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: header.file_hash().to_vec() })
     }
 
     fn password(prompt: &Prompt, processing: Processing) -> Result<SecretString> {
-        let pw = match processing {
+        let password = match processing {
             Processing::Encryption => prompt.encrypt_password()?,
             Processing::Decryption => prompt.decrypt_password()?,
         };
-        Ok(SecretString::new(pw))
+
+        Ok(SecretString::new(password))
     }
 }
 

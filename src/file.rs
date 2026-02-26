@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use blake3::Hasher;
-use tap::Tap;
+use subtle::ConstantTimeEq;
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use walkdir::WalkDir;
 
@@ -34,6 +34,7 @@ impl File {
             }
             hasher.update(&buffer[..bytes_read]);
         }
+
         Ok(hasher.finalize().as_bytes().to_vec())
     }
 
@@ -91,7 +92,13 @@ impl File {
 
     pub fn output_path(&self, mode: ProcessorMode) -> PathBuf {
         match mode {
-            ProcessorMode::Encrypt => PathBuf::from(self.path.as_os_str().to_os_string().tap_mut(|name| name.push(FILE_EXTENSION))),
+            ProcessorMode::Encrypt => {
+                if let Some(name) = self.path.to_str() {
+                    PathBuf::from(format!("{name}{FILE_EXTENSION}"))
+                } else {
+                    self.path.clone()
+                }
+            }
             ProcessorMode::Decrypt => {
                 if let Some(stripped) = self.path.to_string_lossy().strip_suffix(FILE_EXTENSION) {
                     PathBuf::from(stripped)
@@ -159,11 +166,11 @@ impl File {
         true
     }
 
-    pub async fn validate_hash(&self, expected_hash: impl AsRef<str>) -> Result<bool> {
-        let expected = expected_hash.as_ref();
-        let actual_hash = self.hash().await?;
-        let actual_hex = hex::encode(actual_hash);
-        Ok(actual_hex == expected)
+    pub async fn validate_hash(&self, expected_hash: &[u8]) -> Result<bool> {
+        let file_hash = self.hash().await?;
+        let result = bool::from(file_hash.as_slice().ct_eq(expected_hash));
+
+        Ok(result)
     }
 
     pub fn discover(mode: ProcessorMode) -> Vec<Self> {

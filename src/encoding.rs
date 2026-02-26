@@ -1,5 +1,6 @@
 use anyhow::Result;
 use reed_solomon_simd::{ReedSolomonDecoder, ReedSolomonEncoder};
+use subtle::ConstantTimeEq;
 
 const LEN_SIZE: usize = 4;
 const CRC_SIZE: usize = 4;
@@ -60,7 +61,8 @@ impl Encoding {
 
         for (idx, chunk) in encoded_data[LEN_SIZE..].chunks_exact(chunk_size).enumerate() {
             let (crc, data) = chunk.split_at(CRC_SIZE);
-            if crc == crc32fast::hash(data).to_le_bytes() {
+            let expected_crc = crc32fast::hash(data).to_le_bytes();
+            if bool::from(crc.ct_eq(&expected_crc)) {
                 if idx < self.original_count {
                     decoder.add_original_shard(idx, data)?;
                     shards[idx] = Some(data);

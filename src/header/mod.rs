@@ -68,8 +68,8 @@ impl Header {
         self.metadata.size()
     }
 
-    pub fn file_hash(&self) -> String {
-        hex::encode(self.metadata.hash())
+    pub fn file_hash(&self) -> &[u8] {
+        self.metadata.hash()
     }
 
     pub fn salt(&self) -> Result<&[u8]> {

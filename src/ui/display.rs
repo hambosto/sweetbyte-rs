@@ -38,9 +38,9 @@ impl Display {
     }
 
     fn table() -> Table {
-        let mut t = Table::new();
-        t.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
-        t
+        let mut table = Table::new();
+        table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
+        table
     }
 
     fn action_label(mode: ProcessorMode) -> &'static str {
@@ -61,17 +61,18 @@ impl Display {
         println!();
 
         let header = ["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White));
-        let mut t = Self::table();
-        t.set_header(header);
+        let mut table = Self::table();
+        table.set_header(header);
 
         for (i, file) in items.iter_mut().enumerate() {
             let name = self.truncate(&Self::filename(file.path()));
             let (status, color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
 
-            t.add_row([Cell::new(i + 1), Cell::new(name).fg(Color::Green), Cell::new(ByteSize(file.size().await?).to_string()), Cell::new(status).fg(color)]);
+            table.add_row([Cell::new(i + 1), Cell::new(name).fg(Color::Green), Cell::new(ByteSize(file.size().await?).to_string()), Cell::new(status).fg(color)]);
         }
 
-        println!("{t}\n");
+        println!("{table}");
+        println!("\n");
         Ok(())
     }
 
@@ -88,16 +89,16 @@ impl Display {
         console::Term::stdout().clear_screen().context("clear screen")
     }
 
-    pub fn header(&self, name: &str, size: u64, hash: &str) {
+    pub fn header(&self, name: &str, size: u64, hash: &[u8]) {
         println!();
         println!("{} {}", self.icon(), console::style("Header Information:").bold());
 
-        let mut t = Self::table();
-        t.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(name).fg(Color::White)]);
-        t.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
-        t.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hash).fg(Color::White)]);
+        let mut table = Self::table();
+        table.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(name).fg(Color::White)]);
+        table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
+        table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hex::encode(hash)).fg(Color::White)]);
 
-        println!("{t}");
+        println!("{table}");
     }
 
     pub fn banner() -> Result<()> {
