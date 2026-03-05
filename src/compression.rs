@@ -32,20 +32,20 @@ pub struct Compressor {
 
 impl Compressor {
     pub fn new(level: CompressionLevel) -> Result<Self> {
-        anyhow::ensure!(level.is_valid(), "invalid compression level");
+        anyhow::ensure!(level.is_valid(), "Invalid compression level");
 
         Ok(Self { level: i32::from(level) })
     }
 
     pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!data.is_empty(), "cannot compress empty data");
+        anyhow::ensure!(!data.is_empty(), "Cannot compress empty data");
 
-        zstd::stream::encode_all(data, self.level).map_err(|error| anyhow::anyhow!("compression failed: {error}"))
+        zstd::stream::encode_all(data, self.level).map_err(|error| anyhow::anyhow!("Compression failed: {error}"))
     }
 
     pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!data.is_empty(), "cannot decompress empty data");
+        anyhow::ensure!(!data.is_empty(), "Cannot decompress empty data");
 
-        zstd::stream::decode_all(data).map_err(|error| anyhow::anyhow!("decompression failed: {error}"))
+        zstd::stream::decode_all(data).map_err(|error| anyhow::anyhow!("Decompression failed: {error}"))
     }
 }

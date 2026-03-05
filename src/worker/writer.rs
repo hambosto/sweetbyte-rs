@@ -27,20 +27,20 @@ impl Writer {
         let remaining = self.buffer.flush();
         self.write_batch(&mut writer, &remaining, progress).await?;
 
-        writer.flush().await.context("flush")
+        writer.flush().await.context("Failed to flush writer")
     }
 
     async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: Option<&Progress>) -> Result<()> {
         for r in results {
             if let Some(error) = &r.error {
-                anyhow::bail!("task {} error: {}", r.index, error)
+                anyhow::bail!("Processing error in chunk {}: {}", r.index, error)
             }
 
             if matches!(self.mode, Processing::Encryption) {
-                writer.write_all(&u32::try_from(r.data.len())?.to_be_bytes()).await.context("write")?;
+                writer.write_all(&u32::try_from(r.data.len())?.to_be_bytes()).await.context("Failed to write chunk length")?;
             }
 
-            writer.write_all(&r.data).await.context("write")?;
+            writer.write_all(&r.data).await.context("Failed to write chunk data")?;
             if let Some(bar) = progress {
                 bar.add(r.size as u64);
             }

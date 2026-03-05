@@ -36,7 +36,7 @@ impl Prompt {
             password = password.without_confirmation();
         }
 
-        password.prompt().context("input password")
+        password.prompt().context("Failed to read password")
     }
 
     pub fn mode() -> Result<ProcessorMode> {
@@ -46,7 +46,7 @@ impl Prompt {
     }
 
     pub fn file(files: &[File]) -> Result<PathBuf> {
-        anyhow::ensure!(!files.is_empty(), "no files availabe");
+        anyhow::ensure!(!files.is_empty(), "No files available");
 
         let labels: Vec<String> = files.iter().map(|f| filename(f.path())).collect();
         select("Select file", &labels).map(|i| files[i].path().to_path_buf())
@@ -67,11 +67,11 @@ fn filename(path: &Path) -> String {
 
 fn select(msg: &str, items: &[impl ToString]) -> Result<usize> {
     let labels: Vec<String> = items.iter().map(ToString::to_string).collect();
-    let choice = Select::new(msg, labels.clone()).with_starting_cursor(0).prompt().context("selection")?;
+    let choice = Select::new(msg, labels.clone()).with_starting_cursor(0).prompt().context("Failed to read user selection")?;
 
-    labels.into_iter().position(|l| l == choice).ok_or_else(|| anyhow!("invalid selection"))
+    labels.into_iter().position(|l| l == choice).ok_or_else(|| anyhow!("Invalid user selection"))
 }
 
 fn confirm(msg: &str) -> Result<bool> {
-    Confirm::new(msg).with_default(false).prompt().context("confirmation")
+    Confirm::new(msg).with_default(false).prompt().context("Failed to read user confirmation")
 }

@@ -47,10 +47,10 @@ impl Worker {
         let executor_handle = tokio::task::spawn_blocking(move || executor.process(&task_rx, &result_tx));
 
         let mut writer = Writer::new(self.mode);
-        let write_result = writer.write_all(output, result_rx, Some(&progress)).await.context("write failed");
+        let write_result = writer.write_all(output, result_rx, Some(&progress)).await.context("Failed to write output");
 
-        reader_handle.await?.context("reader panicked")?;
-        executor_handle.await.context("executor panicked")?;
+        reader_handle.await?.context("Reader thread panicked unexpectedly")?;
+        executor_handle.await.context("Processing thread panicked unexpectedly")?;
         progress.finish();
 
         write_result?;

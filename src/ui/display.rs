@@ -86,7 +86,7 @@ impl Display {
     }
 
     pub fn clear() -> Result<()> {
-        console::Term::stdout().clear_screen().context("clear screen")
+        console::Term::stdout().clear_screen().context("Failed to clear terminal")
     }
 
     pub fn header(&self, name: &str, size: u64, hash: &str) {
@@ -102,8 +102,8 @@ impl Display {
     }
 
     pub fn banner() -> Result<()> {
-        let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow::anyhow!("load font: {e}"))?;
-        let fig = font.convert(APP_NAME).context("render banner")?;
+        let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|error| anyhow::anyhow!("Failed to load font: {error}"))?;
+        let fig = font.convert(APP_NAME).context("Failed to render banner")?;
         println!("{}", console::style(fig).green().bright());
         Ok(())
     }

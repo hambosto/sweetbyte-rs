@@ -14,19 +14,19 @@ pub struct Derive {
 
 impl Derive {
     pub fn new(key: &[u8]) -> Result<Self> {
-        anyhow::ensure!(!key.is_empty(), "empty kdf key");
+        anyhow::ensure!(!key.is_empty(), "Cannot use empty key for derivation");
 
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }
 
     pub fn derive_key(&self, salt: &[u8]) -> Result<SecretBytes> {
-        let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_PARALLELISM, Some(ARGON_KEY_LEN)).map_err(|error| anyhow::anyhow!("invalid argon2 params: {error}"))?;
+        let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_PARALLELISM, Some(ARGON_KEY_LEN)).map_err(|error| anyhow::anyhow!("Invalid Argon2 parameters: {error}"))?;
         let argon2 = Argon2::new(Argon2id, V0x13, params);
         let mut derived_key = vec![0u8; ARGON_KEY_LEN];
 
         argon2
             .hash_password_into(self.key.expose_secret(), salt, &mut derived_key)
-            .map_err(|error| anyhow::anyhow!("derive argon2 key: {error}"))?;
+            .map_err(|error| anyhow::anyhow!("Argon2 key derivation failed: {error}"))?;
 
         Ok(SecretBytes::from_slice(&derived_key))
     }
@@ -34,7 +34,7 @@ impl Derive {
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
         let mut bytes = vec![0; size];
 
-        SysRng.try_fill_bytes(&mut bytes).context("generate salt")?;
+        SysRng.try_fill_bytes(&mut bytes).context("Failed to generate cryptographic salt")?;
 
         Ok(bytes)
     }

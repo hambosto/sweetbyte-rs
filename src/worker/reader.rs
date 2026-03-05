@@ -11,7 +11,7 @@ pub struct Reader {
 
 impl Reader {
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
-        anyhow::ensure!(chunk_size >= CHUNK_SIZE, "chunk size must be at least {CHUNK_SIZE} bytes, got {chunk_size}");
+        anyhow::ensure!(chunk_size >= CHUNK_SIZE, "Invalid chunk size: minimum {CHUNK_SIZE} bytes required, got {chunk_size}");
 
         Ok(Self { mode, chunk_size })
     }
@@ -30,13 +30,13 @@ impl Reader {
 
         loop {
             let mut buffer = Vec::with_capacity(self.chunk_size);
-            let bytes_read = reader.take(self.chunk_size as u64).read_to_end(&mut buffer).await.context("read chunk")?;
+            let bytes_read = reader.take(self.chunk_size as u64).read_to_end(&mut buffer).await.context("Failed to read chunk from input")?;
 
             if bytes_read == 0 {
                 break;
             }
 
-            sender.send_async(Task { data: buffer, index }).await.context("send chunk: channel closed")?;
+            sender.send_async(Task { data: buffer, index }).await.context("Failed to send chunk to worker")?;
             index += 1;
         }
 
@@ -58,8 +58,8 @@ impl Reader {
             }
 
             let mut data = vec![0u8; chunk_len];
-            reader.read_exact(&mut data).await.context("read chunk data")?;
-            sender.send_async(Task { data, index }).await.context("send chunk: channel closed")?;
+            reader.read_exact(&mut data).await.context("Failed to read chunk data")?;
+            sender.send_async(Task { data, index }).await.context("Failed to send chunk to worker")?;
             index += 1;
         }
 

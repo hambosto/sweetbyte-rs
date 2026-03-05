@@ -11,12 +11,12 @@ pub struct Parameters {
 impl Parameters {
     pub fn validate(&self) -> bool {
         if self.magic != MAGIC_BYTES {
-            tracing::error!("invalid magic: {:08X}", self.magic);
+            tracing::error!("Invalid file header magic bytes: {:08X}", self.magic);
             return false;
         }
 
         if self.version != CURRENT_VERSION {
-            tracing::error!("invalid version: {}", self.version);
+            tracing::error!("Invalid file header version: {} (expected {})", self.version, CURRENT_VERSION);
             return false;
         }
 

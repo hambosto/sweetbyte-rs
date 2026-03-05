@@ -40,14 +40,14 @@ impl SectionShield {
         let sections = [salt, parameter, metadata, mac];
 
         for (idx, data) in sections.iter().enumerate() {
-            anyhow::ensure!(!data.is_empty(), "section {idx} is empty");
+            anyhow::ensure!(!data.is_empty(), "Header section {idx} is empty");
         }
 
         let mut encoded_sections = Vec::with_capacity(SECTION_COUNT);
         let mut lengths = [0u32; SECTION_COUNT];
 
         for (idx, &section) in sections.iter().enumerate() {
-            let encoded = self.encoder.encode(section).context("encode section")?;
+            let encoded = self.encoder.encode(section).context(format!("Failed to encode section {idx}"))?;
             lengths[idx] = u32::try_from(encoded.len())?;
             encoded_sections.push(encoded);
         }
@@ -65,9 +65,9 @@ impl SectionShield {
 
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<DecodedSections> {
         let mut buffer = [0u8; SectionsLength::SIZE];
-        reader.read_exact(&mut buffer).await.context("failed to read sections length")?;
+        reader.read_exact(&mut buffer).await.context("Failed to read sections length")?;
 
-        let header: SectionsLength = wincode::deserialize(&buffer).context("failed to deserialize sections length")?;
+        let header: SectionsLength = wincode::deserialize(&buffer).context("Failed to deserialize sections length")?;
         let decoded_sections = self.read_sections(reader, &header).await?;
 
         Ok(decoded_sections)
@@ -86,15 +86,15 @@ impl SectionShield {
 
     async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, section_idx: usize) -> Result<Vec<u8>> {
         if size == 0 {
-            anyhow::bail!("section {section_idx} is empty");
+            anyhow::bail!("Header section {section_idx} is empty");
         }
 
         let mut buffer = vec![0u8; size as usize];
         reader
             .read_exact(&mut buffer)
             .await
-            .with_context(|| format!("failed to read section {} ({} bytes)", section_idx, size as usize))?;
+            .with_context(|| format!("Failed to read section {} ({} bytes)", section_idx, size as usize))?;
 
-        self.encoder.decode(&buffer).with_context(|| format!("failed to decode section {section_idx}"))
+        self.encoder.decode(&buffer).with_context(|| format!("Failed to decode section {section_idx}"))
     }
 }

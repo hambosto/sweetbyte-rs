@@ -28,7 +28,7 @@ impl File {
         let mut hasher = Hasher::new();
         let mut buffer = vec![0u8; 64 * 1024];
         loop {
-            let bytes_read = reader.read(&mut buffer).await.context("read for hash")?;
+            let bytes_read = reader.read(&mut buffer).await.context("Failed to read file for hash")?;
             if bytes_read == 0 {
                 break;
             }
@@ -43,14 +43,18 @@ impl File {
             return Ok(size);
         }
 
-        let meta = tokio::fs::metadata(&self.path).await.with_context(|| format!("metadata read error: {}", self.path.display()))?;
+        let meta = tokio::fs::metadata(&self.path)
+            .await
+            .with_context(|| format!("Failed to read file metadata: {}", self.path.display()))?;
         self.size = Some(meta.len());
 
         Ok(meta.len())
     }
 
     pub async fn file_metadata(&self) -> Result<(String, u64, Vec<u8>)> {
-        let meta = tokio::fs::metadata(&self.path).await.with_context(|| format!("read metadata: {}", self.path.display()))?;
+        let meta = tokio::fs::metadata(&self.path)
+            .await
+            .with_context(|| format!("Failed to read file metadata: {}", self.path.display()))?;
         let filename = self.path.file_name().map_or_else(|| "unknown".to_owned(), |n| n.to_string_lossy().into_owned());
         let size = meta.len();
         let hash = self.hash().await?;
@@ -118,14 +122,14 @@ impl File {
     }
 
     pub async fn reader(&self) -> Result<BufReader<tokio::fs::File>> {
-        let file = tokio::fs::File::open(&self.path).await.with_context(|| format!("open file: {}", self.path.display()))?;
+        let file = tokio::fs::File::open(&self.path).await.with_context(|| format!("Failed to open file: {}", self.path.display()))?;
 
         Ok(BufReader::new(file))
     }
 
     pub async fn writer(&self) -> Result<BufWriter<tokio::fs::File>> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            tokio::fs::create_dir_all(parent).await.with_context(|| format!("create dir: {}", parent.display()))?;
+            tokio::fs::create_dir_all(parent).await.with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
 
         let file = tokio::fs::OpenOptions::new()
@@ -134,30 +138,30 @@ impl File {
             .truncate(true)
             .open(&self.path)
             .await
-            .with_context(|| format!("create file: {}", self.path.display()))?;
+            .with_context(|| format!("Failed to create file: {}", self.path.display()))?;
 
         Ok(BufWriter::new(file))
     }
 
     pub async fn delete(&self) -> Result<()> {
-        anyhow::ensure!(self.exists(), "file not found: {}", self.path.display());
+        anyhow::ensure!(self.exists(), "File not found: {}", self.path.display());
 
-        tokio::fs::remove_file(&self.path).await.with_context(|| format!("delete file: {}", self.path.display()))
+        tokio::fs::remove_file(&self.path).await.context("Failed to delete file")
     }
 
     pub async fn validate(&mut self) -> bool {
         if !self.exists() {
-            tracing::error!("file not found: {}", self.path().display());
+            tracing::error!("File not found: {}", self.path().display());
             return false;
         }
 
         if self.is_dir() {
-            tracing::error!("path is a directory: {}", self.path().display());
+            tracing::error!("Path is a directory: {}", self.path().display());
             return false;
         }
 
         if self.size().await.unwrap_or(0) == 0 {
-            tracing::error!("file is empty: {}", self.path().display());
+            tracing::error!("File is empty: {}", self.path().display());
             return false;
         }
 

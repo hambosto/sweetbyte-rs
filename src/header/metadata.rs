@@ -13,7 +13,7 @@ pub struct Metadata {
 impl Metadata {
     pub fn new(filename: impl Into<String>, size: u64, content_hash: Vec<u8>) -> Result<Self> {
         let filename = filename.into();
-        anyhow::ensure!(filename.len() <= MAX_FILENAME_LENGTH, "filename exceeds max length");
+        anyhow::ensure!(filename.len() <= MAX_FILENAME_LENGTH, "Filename exceeds maximum allowed length ({MAX_FILENAME_LENGTH} characters)");
 
         Ok(Self { name: filename, size, hash: content_hash })
     }

@@ -28,8 +28,8 @@ impl Header {
     }
 
     pub fn with_parameters(shield: SectionShield, parameters: Parameters, metadata: Metadata) -> Result<Self> {
-        anyhow::ensure!(parameters.validate(), "invalid parameters");
-        anyhow::ensure!(metadata.size() > 0, "zero-size file");
+        anyhow::ensure!(parameters.validate(), "Invalid header parameters");
+        anyhow::ensure!(metadata.size() > 0, "Cannot process zero-size file");
 
         Ok(Self { shield, parameters, metadata, sections: None })
     }
@@ -40,9 +40,9 @@ impl Header {
         let params: Parameters = wincode::deserialize(&sections.parameter)?;
         let metadata: Metadata = wincode::deserialize(&sections.metadata)?;
 
-        anyhow::ensure!(params.validate(), "invalid parameters");
-        anyhow::ensure!(metadata.size() > 0, "zero-size file");
-        anyhow::ensure!(metadata.name().len() <= MAX_FILENAME_LENGTH, "filename exceeds max length");
+        anyhow::ensure!(params.validate(), "Invalid header parameters");
+        anyhow::ensure!(metadata.size() > 0, "Cannot process zero-size file");
+        anyhow::ensure!(metadata.name().len() <= MAX_FILENAME_LENGTH, "Filename exceeds maximum allowed length ({MAX_FILENAME_LENGTH} bytes)");
 
         Ok(Self { shield, parameters: params, metadata, sections: Some(sections) })
     }
@@ -60,12 +60,12 @@ impl Header {
     }
 
     pub fn salt(&self) -> Result<&[u8]> {
-        self.sections.as_ref().map(|s| s.salt.expose_secret().as_slice()).context("header not deserialized")
+        self.sections.as_ref().map(|s| s.salt.expose_secret().as_slice()).context("Header has not been deserialized")
     }
 
     pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {
-        anyhow::ensure!(salt.len() == ARGON_SALT_LEN, "invalid salt length");
-        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "invalid key length");
+        anyhow::ensure!(salt.len() == ARGON_SALT_LEN, "Invalid salt length: expected {} bytes, got {}", ARGON_SALT_LEN, salt.len());
+        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "Invalid key length: expected {} bytes, got {}", ARGON_KEY_LEN, key.expose_secret().len());
 
         let parameter = wincode::serialize(&self.parameters)?;
         let metadata_bytes = wincode::serialize(&self.metadata)?;
@@ -76,27 +76,27 @@ impl Header {
 
     pub fn verify(&self, key: &SecretBytes) -> bool {
         if key.expose_secret().len() != ARGON_KEY_LEN {
-            tracing::error!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.expose_secret().len());
+            tracing::error!("Invalid key length: expected {} bytes, got {}", ARGON_KEY_LEN, key.expose_secret().len());
             return false;
         }
 
         let Some(sections) = &self.sections else {
-            tracing::error!("header not deserialized");
+            tracing::error!("Header has not been deserialized");
             return false;
         };
 
         let Ok(parameter_bytes) = wincode::serialize(&self.parameters) else {
-            tracing::error!("failed to serialize parameters");
+            tracing::error!("Failed to serialize header parameters");
             return false;
         };
 
         let Ok(metadata_bytes) = wincode::serialize(&self.metadata) else {
-            tracing::error!("failed to serialize metadata");
+            tracing::error!("Failed to serialize header metadata");
             return false;
         };
 
         let Ok(signer) = Signer::new(key.expose_secret()) else {
-            tracing::error!("failed to create signer");
+            tracing::error!("Failed to create cryptographic signer");
             return false;
         };
 
