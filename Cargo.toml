@@ -12,39 +12,39 @@ homepage = "https://github.com/hambosto/sweetbyte-rs"
 repository = "https://github.com/hambosto/sweetbyte-rs"
 
 [dependencies]
-aes-gcm            = { version = "0.10.3", default-features = false, features = ["aes", "rand_core"] }
+aes-gcm            = { version = "0.10.3", features = ["zeroize"] }
 anyhow             = "1.0.102"
-argon2             = { version = "0.5.3", default-features = false, features = ["alloc"] }
-blake3             = { version = "1.8.3", default-features = false }
+argon2             = { version = "0.5.3", features = ["zeroize"] }
+blake3             = { version = "1.8.3", features = ["zeroize"] }
 block-padding      = "0.4.2"
-bytesize           = { version = "2.3.1", default-features = false }
+bytesize           = "2.3.1"
 chacha20poly1305   = "0.10.1"
-clap               = { version = "4.5.60", default-features = false, features = ["derive", "std"] }
+clap               = { version = "4.5.60", features = ["derive"] }
 comfy-table        = "7.2.2"
-console            = { version = "0.16.2", default-features = false }
-crc32fast          = { version = "1.5.0", default-features = false }
+console            = "0.16.2"
+crc32fast          = "1.5.0"
 fast-glob          = "1.0.1"
 figlet-rs          = "0.1.5"
-flume              = { version = "0.12.0", default-features = false, features = ["async"] }
-hashbrown          = { version = "0.16.1", default-features = false, features = ["default-hasher"] }
-hex                = { version = "0.4.3", default-features = false, features = ["alloc"] }
+flume              = "0.12.0"
+hashbrown          = "0.16.1"
+hex                = "0.4.3"
 hmac               = "0.12.1"
-indicatif          = { version = "0.18.4", default-features = false }
-inquire            = { version = "0.9.4", default-features = false, features = ["crossterm", "macros"] }
-mimalloc           = { version = "0.1.48", default-features = false, features = ["v3"] }
-rand               = { version = "0.10.0", default-features = false, features = ["sys_rng"] }
+indicatif          = "0.18.4"
+inquire            = "0.9.4"
+mimalloc           = { version = "0.1.48", features = ["v3"] }
+rand               = "0.10.0"
 rayon              = "1.11.0"
-reed-solomon-simd  = { version = "3.1.0", default-features = false }
-secrecy            = "0.10.3"
+reed-solomon-simd  = "3.1.0"
 sha2               = "0.10.9"
-strum              = { version = "0.28.0", default-features = false, features = ["derive"] }
-subtle             = { version = "2.6.1", default-features = false, features = ["std"] }
-tokio              = { version = "1.50.0", default-features = false, features = ["fs", "io-std", "io-util", "macros", "rt-multi-thread"] }
-tracing            = { version = "0.1.44", default-features = false, features = ["tracing-attributes"] }
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["ansi"] }
+strum              = { version = "0.28.0", features = ["derive"] }
+subtle             = "2.6.1"
+tokio              = { version = "1.50.0", features = ["full"] }
+tracing            = "0.1.44"
+tracing-subscriber = "0.3.22"
 walkdir            = "2.5.0"
-wincode            = { version = "0.4.5", default-features = false, features = ["alloc", "derive"] }
-zstd               = { version = "0.13.3", default-features = false, features = ["thin"] }
+wincode            = { version = "0.4.5", features = ["derive"] }
+zeroize            = "1.8.2"
+zstd               = { version = "0.13.3", features = ["thin"] }
 
 [profile.release]
 opt-level = 3
