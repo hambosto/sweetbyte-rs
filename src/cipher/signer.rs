@@ -13,9 +13,7 @@ pub struct Signer {
 
 impl Signer {
     pub fn new(key: &[u8]) -> Result<Self> {
-        if key.is_empty() {
-            anyhow::bail!("empty mac key");
-        }
+        anyhow::ensure!(!key.is_empty(), "empty kdf key");
 
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }

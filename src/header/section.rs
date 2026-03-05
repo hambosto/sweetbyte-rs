@@ -40,9 +40,7 @@ impl SectionShield {
         let sections = [salt, parameter, metadata, mac];
 
         for (idx, data) in sections.iter().enumerate() {
-            if data.is_empty() {
-                anyhow::bail!("section {idx} is empty");
-            }
+            anyhow::ensure!(!data.is_empty(), "section {idx} is empty");
         }
 
         let mut encoded_sections = Vec::with_capacity(SECTION_COUNT);

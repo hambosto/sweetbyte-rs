@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 mod aes_gcm;
 mod chacha20poly1305;
@@ -25,12 +25,8 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        if key.expose_secret().len() != ARGON_KEY_LEN {
-            anyhow::bail!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.expose_secret().len());
-        }
-
-        let aes_key = Self::extract_key(key.expose_secret(), 0)?;
-        let chacha_key = Self::extract_key(key.expose_secret(), KEY_SIZE)?;
+        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.expose_secret().len());
+        let (aes_key, chacha_key) = key.expose_secret().split_at(KEY_SIZE);
 
         Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
     }
@@ -47,12 +43,5 @@ impl Cipher {
             CipherAlgorithm::Aes256Gcm => self.aes.decrypt(ciphertext),
             CipherAlgorithm::XChaCha20Poly1305 => self.chacha.decrypt(ciphertext),
         }
-    }
-
-    fn extract_key(key: &[u8], offset: usize) -> Result<&[u8; KEY_SIZE]> {
-        key.get(offset..offset + KEY_SIZE)
-            .context("Invalid key offset or length")?
-            .try_into()
-            .context("Failed to convert to fixed-size key")
     }
 }

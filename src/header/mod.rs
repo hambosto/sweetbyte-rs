@@ -28,13 +28,8 @@ impl Header {
     }
 
     pub fn with_parameters(shield: SectionShield, parameters: Parameters, metadata: Metadata) -> Result<Self> {
-        if !parameters.validate() {
-            anyhow::bail!("invalid parameters");
-        }
-
-        if metadata.size() == 0 {
-            anyhow::bail!("zero-size file");
-        }
+        anyhow::ensure!(parameters.validate(), "invalid parameters");
+        anyhow::ensure!(metadata.size() > 0, "zero-size file");
 
         Ok(Self { shield, parameters, metadata, sections: None })
     }
@@ -45,17 +40,9 @@ impl Header {
         let params: Parameters = wincode::deserialize(&sections.parameter)?;
         let metadata: Metadata = wincode::deserialize(&sections.metadata)?;
 
-        if !params.validate() {
-            anyhow::bail!("invalid parameters");
-        }
-
-        if metadata.size() == 0 {
-            anyhow::bail!("zero-size file");
-        }
-
-        if metadata.name().len() > MAX_FILENAME_LENGTH {
-            anyhow::bail!("filename exceeds max length")
-        }
+        anyhow::ensure!(params.validate(), "invalid parameters");
+        anyhow::ensure!(metadata.size() > 0, "zero-size file");
+        anyhow::ensure!(metadata.name().len() <= MAX_FILENAME_LENGTH, "filename exceeds max length");
 
         Ok(Self { shield, parameters: params, metadata, sections: Some(sections) })
     }
@@ -77,13 +64,8 @@ impl Header {
     }
 
     pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {
-        if salt.len() != ARGON_SALT_LEN {
-            anyhow::bail!("invalid salt length");
-        }
-
-        if key.expose_secret().len() != ARGON_KEY_LEN {
-            anyhow::bail!("invalid key length: expected {}, got {}", ARGON_KEY_LEN, key.expose_secret().len());
-        }
+        anyhow::ensure!(salt.len() == ARGON_SALT_LEN, "invalid salt length");
+        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "invalid key length");
 
         let parameter = wincode::serialize(&self.parameters)?;
         let metadata_bytes = wincode::serialize(&self.metadata)?;
@@ -103,29 +85,21 @@ impl Header {
             return false;
         };
 
-        let parameter = match wincode::serialize(&self.parameters) {
-            Ok(parameter) => parameter,
-            Err(error) => {
-                tracing::error!("failed to serialize parameters: {error}");
-                return false;
-            }
-        };
-        let metadata_bytes = match wincode::serialize(&self.metadata) {
-            Ok(metadata_bytes) => metadata_bytes,
-            Err(error) => {
-                tracing::error!("failed to serialize metadata: {error}");
-                return false;
-            }
+        let Ok(parameter_bytes) = wincode::serialize(&self.parameters) else {
+            tracing::error!("failed to serialize parameters");
+            return false;
         };
 
-        let mac = match Signer::new(key.expose_secret()) {
-            Ok(mac) => mac,
-            Err(error) => {
-                tracing::error!("failed to create MAC: {error}");
-                return false;
-            }
+        let Ok(metadata_bytes) = wincode::serialize(&self.metadata) else {
+            tracing::error!("failed to serialize metadata");
+            return false;
         };
 
-        mac.verify_parts(sections.mac.expose_secret(), &[sections.salt.expose_secret(), &parameter, &metadata_bytes])
+        let Ok(signer) = Signer::new(key.expose_secret()) else {
+            tracing::error!("failed to create signer");
+            return false;
+        };
+
+        signer.verify_parts(sections.mac.expose_secret(), &[sections.salt.expose_secret(), &parameter_bytes, &metadata_bytes])
     }
 }

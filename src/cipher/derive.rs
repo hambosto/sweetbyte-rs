@@ -14,9 +14,7 @@ pub struct Derive {
 
 impl Derive {
     pub fn new(key: &[u8]) -> Result<Self> {
-        if key.is_empty() {
-            anyhow::bail!("empty key");
-        }
+        anyhow::ensure!(!key.is_empty(), "empty kdf key");
 
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }

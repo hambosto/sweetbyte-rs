@@ -140,9 +140,7 @@ impl File {
     }
 
     pub async fn delete(&self) -> Result<()> {
-        if !self.exists() {
-            anyhow::bail!("file not found: {}", self.path.display());
-        }
+        anyhow::ensure!(self.exists(), "file not found: {}", self.path.display());
 
         tokio::fs::remove_file(&self.path).await.with_context(|| format!("delete file: {}", self.path.display()))
     }

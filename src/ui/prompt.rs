@@ -26,29 +26,29 @@ impl Prompt {
 
     fn password(&self, msg: &str, confirm: bool) -> Result<String> {
         let validator = inquire::min_length!(self.min_len);
-        let mut p = Password::new(msg).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
+        let mut password = Password::new(msg).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
 
         if confirm {
-            p = p.with_custom_confirmation_message("Confirm password").with_custom_confirmation_error_message("passwords mismatch");
+            password = password
+                .with_custom_confirmation_message("Confirm password")
+                .with_custom_confirmation_error_message("passwords mismatch");
         } else {
-            p = p.without_confirmation();
+            password = password.without_confirmation();
         }
 
-        p.prompt().context("input password")
+        password.prompt().context("input password")
     }
 
     pub fn mode() -> Result<ProcessorMode> {
-        let modes: Vec<_> = ProcessorMode::iter().collect();
-        let labels: Vec<_> = modes.iter().map(|m| m.label()).collect();
+        let modes: Vec<ProcessorMode> = ProcessorMode::iter().collect();
+        let labels: Vec<&str> = modes.iter().map(|m| m.label()).collect();
         select("Select operation", &labels).map(|i| modes[i])
     }
 
     pub fn file(files: &[File]) -> Result<PathBuf> {
-        if files.is_empty() {
-            return Err(anyhow!("no files available"));
-        }
+        anyhow::ensure!(!files.is_empty(), "no files availabe");
 
-        let labels: Vec<_> = files.iter().map(|f| filename(f.path())).collect();
+        let labels: Vec<String> = files.iter().map(|f| filename(f.path())).collect();
         select("Select file", &labels).map(|i| files[i].path().to_path_buf())
     }
 
@@ -66,7 +66,7 @@ fn filename(path: &Path) -> String {
 }
 
 fn select(msg: &str, items: &[impl ToString]) -> Result<usize> {
-    let labels: Vec<_> = items.iter().map(ToString::to_string).collect();
+    let labels: Vec<String> = items.iter().map(ToString::to_string).collect();
     let choice = Select::new(msg, labels.clone()).with_starting_cursor(0).prompt().context("selection")?;
 
     labels.into_iter().position(|l| l == choice).ok_or_else(|| anyhow!("invalid selection"))

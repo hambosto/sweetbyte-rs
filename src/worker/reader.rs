@@ -11,9 +11,8 @@ pub struct Reader {
 
 impl Reader {
     pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
-        if chunk_size < CHUNK_SIZE {
-            anyhow::bail!("chunk size must be at least {CHUNK_SIZE} bytes, got {chunk_size}")
-        }
+        anyhow::ensure!(chunk_size >= CHUNK_SIZE, "chunk size must be at least {CHUNK_SIZE} bytes, got {chunk_size}");
+
         Ok(Self { mode, chunk_size })
     }
 
