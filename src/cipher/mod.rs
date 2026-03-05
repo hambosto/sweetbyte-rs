@@ -3,12 +3,12 @@ use anyhow::{Context, Result};
 mod aes_gcm;
 mod chacha20poly1305;
 mod derive;
-mod mac;
+mod signer;
 
 pub use aes_gcm::AesGcm;
 pub use chacha20poly1305::ChaCha20Poly1305;
 pub use derive::Derive;
-pub use mac::Mac;
+pub use signer::Signer;
 
 use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
 use crate::secret::SecretBytes;

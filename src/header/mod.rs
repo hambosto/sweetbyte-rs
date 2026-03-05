@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use tokio::io::AsyncRead;
 
-use crate::cipher::Mac;
+use crate::cipher::Signer;
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CURRENT_VERSION, DATA_SHARDS, MAGIC_BYTES, MAX_FILENAME_LENGTH, PARITY_SHARDS};
 use crate::header::metadata::Metadata;
 use crate::header::parameter::Parameters;
@@ -87,7 +87,7 @@ impl Header {
 
         let parameter = wincode::serialize(&self.parameters)?;
         let metadata_bytes = wincode::serialize(&self.metadata)?;
-        let mac = Mac::new(key.expose_secret())?.compute_parts(&[salt, &parameter, &metadata_bytes])?;
+        let mac = Signer::new(key.expose_secret())?.compute_parts(&[salt, &parameter, &metadata_bytes])?;
 
         self.shield.pack(salt, &parameter, &metadata_bytes, &mac)
     }
@@ -118,7 +118,7 @@ impl Header {
             }
         };
 
-        let mac = match Mac::new(key.expose_secret()) {
+        let mac = match Signer::new(key.expose_secret()) {
             Ok(mac) => mac,
             Err(error) => {
                 tracing::error!("failed to create MAC: {error}");

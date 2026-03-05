@@ -14,7 +14,6 @@ impl Metadata {
     pub fn new(filename: impl Into<String>, size: u64, content_hash: Vec<u8>) -> Result<Self> {
         let filename = filename.into();
         if filename.len() > MAX_FILENAME_LENGTH {
-            // lets enforce maximum 255 file name length. i dont care.
             anyhow::bail!("filename exceeds maximum length of {MAX_FILENAME_LENGTH} characters");
         }
 
