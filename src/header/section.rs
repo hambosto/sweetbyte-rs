@@ -1,30 +1,26 @@
 use anyhow::{Context, Result};
+use bytemuck::{Pod, Zeroable};
+use bytes::BytesMut;
 use tokio::io::{AsyncRead, AsyncReadExt};
-use wincode::{SchemaRead, SchemaWrite};
 
 use crate::encoding::Encoding;
 use crate::secret::SecretBytes;
 
-const SECTION_COUNT: usize = 4;
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct Frame {
+    salt: u32,
+    params: u32,
+    metadata: u32,
+    mac: u32,
+}
 
-pub struct DecodedSections {
+pub struct PackedSections {
     pub salt: SecretBytes,
-    pub parameter: Vec<u8>,
+    pub params: Vec<u8>,
     pub metadata: Vec<u8>,
     pub mac: SecretBytes,
-}
-
-#[derive(SchemaRead, SchemaWrite)]
-struct SectionsLength {
-    lengths: [u32; SECTION_COUNT],
-}
-
-impl SectionsLength {
-    const SIZE: usize = std::mem::size_of::<Self>();
-
-    fn total_bytes(&self) -> usize {
-        self.lengths.iter().map(|&n| n as usize).sum()
-    }
 }
 
 pub struct SectionShield {
@@ -36,65 +32,52 @@ impl SectionShield {
         Ok(Self { encoder: Encoding::new(data_shards, parity_shards)? })
     }
 
-    pub fn pack(&self, salt: &[u8], parameter: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
-        let sections = [salt, parameter, metadata, mac];
+    pub fn pack(&self, salt: &[u8], params: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
+        anyhow::ensure!(!salt.is_empty(), "salt is empty");
+        anyhow::ensure!(!params.is_empty(), "params is empty");
+        anyhow::ensure!(!metadata.is_empty(), "metadata is empty");
+        anyhow::ensure!(!mac.is_empty(), "mac is empty");
 
-        for (idx, data) in sections.iter().enumerate() {
-            anyhow::ensure!(!data.is_empty(), "Header section {idx} is empty");
-        }
+        let salt = self.encoder.encode(salt).context("encode salt")?;
+        let params = self.encoder.encode(params).context("encode params")?;
+        let metadata = self.encoder.encode(metadata).context("encode metadata")?;
+        let mac = self.encoder.encode(mac).context("encode mac")?;
+        let frame = Frame {
+            salt: u32::try_from(salt.len()).context("salt length overflow")?,
+            params: u32::try_from(params.len()).context("params length overflow")?,
+            metadata: u32::try_from(metadata.len()).context("metadata length overflow")?,
+            mac: u32::try_from(mac.len()).context("mac length overflow")?,
+        };
 
-        let mut encoded_sections = Vec::with_capacity(SECTION_COUNT);
-        let mut lengths = [0u32; SECTION_COUNT];
-
-        for (idx, &section) in sections.iter().enumerate() {
-            let encoded = self.encoder.encode(section).context(format!("Failed to encode section {idx}"))?;
-            lengths[idx] = u32::try_from(encoded.len())?;
-            encoded_sections.push(encoded);
-        }
-
-        let sections_length = SectionsLength { lengths };
-        let mut result = Vec::with_capacity(SectionsLength::SIZE + sections_length.total_bytes());
-
-        result.extend_from_slice(&wincode::serialize(&sections_length)?);
-        for section in &encoded_sections {
-            result.extend_from_slice(section);
-        }
+        let mut result = bytemuck::bytes_of(&frame).to_vec();
+        result.extend(salt);
+        result.extend(params);
+        result.extend(metadata);
+        result.extend(mac);
 
         Ok(result)
     }
 
-    pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<DecodedSections> {
-        let mut buffer = [0u8; SectionsLength::SIZE];
-        reader.read_exact(&mut buffer).await.context("Failed to read sections length")?;
+    pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<PackedSections> {
+        let frame = self.read_frame(reader).await?;
+        let salt = self.read_section(reader, frame.salt, "salt").await?;
+        let params = self.read_section(reader, frame.params, "params").await?;
+        let metadata = self.read_section(reader, frame.metadata, "metadata").await?;
+        let mac = self.read_section(reader, frame.mac, "mac").await?;
 
-        let header: SectionsLength = wincode::deserialize(&buffer).context("Failed to deserialize sections length")?;
-        let decoded_sections = self.read_sections(reader, &header).await?;
-
-        Ok(decoded_sections)
+        Ok(PackedSections { salt: SecretBytes::from_slice(&salt), params, metadata, mac: SecretBytes::from_slice(&mac) })
     }
 
-    async fn read_sections<R: AsyncRead + Unpin>(&self, reader: &mut R, header: &SectionsLength) -> Result<DecodedSections> {
-        let [salt, parameter, metadata, mac] = header.lengths;
-
-        Ok(DecodedSections {
-            salt: SecretBytes::from_slice(&self.read_and_decode(reader, salt, 0).await?),
-            parameter: self.read_and_decode(reader, parameter, 1).await?,
-            metadata: self.read_and_decode(reader, metadata, 2).await?,
-            mac: SecretBytes::from_slice(&self.read_and_decode(reader, mac, 3).await?),
-        })
+    async fn read_frame<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Frame> {
+        let mut frame = Frame::zeroed();
+        reader.read_exact(bytemuck::bytes_of_mut(&mut frame)).await.context("read frame")?;
+        Ok(frame)
     }
 
-    async fn read_and_decode<R: AsyncRead + Unpin>(&self, reader: &mut R, size: u32, section_idx: usize) -> Result<Vec<u8>> {
-        if size == 0 {
-            anyhow::bail!("Header section {section_idx} is empty");
-        }
-
-        let mut buffer = vec![0u8; size as usize];
-        reader
-            .read_exact(&mut buffer)
-            .await
-            .with_context(|| format!("Failed to read section {} ({} bytes)", section_idx, size as usize))?;
-
-        self.encoder.decode(&buffer).with_context(|| format!("Failed to decode section {section_idx}"))
+    async fn read_section<R: AsyncRead + Unpin>(&self, reader: &mut R, len: u32, name: &str) -> Result<Vec<u8>> {
+        anyhow::ensure!(len > 0, "{name} section is empty");
+        let mut buffer = BytesMut::zeroed(len as usize);
+        reader.read_exact(&mut buffer).await.with_context(|| format!("read {name}"))?;
+        self.encoder.decode(&buffer).with_context(|| format!("decode {name}"))
     }
 }

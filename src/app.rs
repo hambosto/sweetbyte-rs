@@ -7,8 +7,7 @@ use tokio::io::AsyncWriteExt;
 use crate::cipher::Derive;
 use crate::config::{ARGON_SALT_LEN, PASSWORD_MIN_LENGTH};
 use crate::file::File;
-use crate::header::Header;
-use crate::header::metadata::Metadata;
+use crate::header::{HeaderReader, HeaderWriter, Metadata};
 use crate::secret::SecretString;
 use crate::types::{Processing, ProcessorMode};
 use crate::ui::display::Display;
@@ -135,7 +134,7 @@ impl App {
         let (name, size, hash) = src.file_metadata().await?;
         let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
         let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(&salt)?;
-        let header = Header::new(Metadata::new(name.clone(), size, hash)?)?;
+        let header = HeaderWriter::new(Metadata::new(name.clone(), size, hash)?)?;
 
         let mut writer = dest.writer().await?;
         writer.write_all(&header.serialize(&salt, &key)?).await?;
@@ -147,13 +146,13 @@ impl App {
 
     async fn decrypt(&self, src: &File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
         let mut reader = src.reader().await?;
-        let header = Header::deserialize(reader.get_mut()).await?;
+        let header = HeaderReader::read(reader.get_mut()).await?;
 
         if header.file_size() == 0 {
             return Err(anyhow!("cannot decrypt a file with zero size"));
         }
 
-        let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(header.salt()?)?;
+        let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(header.salt())?;
         if !header.verify(&key) {
             return Err(anyhow!("invalid password or corrupted data"));
         }

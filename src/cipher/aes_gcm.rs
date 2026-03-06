@@ -1,6 +1,6 @@
 use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{AeadCore, Aes256Gcm, Nonce};
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::config::AES_NONCE_SIZE;
 
@@ -17,7 +17,7 @@ impl AesGcm {
         anyhow::ensure!(!plaintext.is_empty(), "Cannot encrypt empty plaintext");
 
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        let ciphertext = self.cipher.encrypt(&nonce, plaintext).map_err(|error| anyhow::anyhow!("AES-GCM encryption failed: {error}"))?;
+        let ciphertext = self.cipher.encrypt(&nonce, plaintext).context("AES-GCM encryption failed")?;
         let mut result = Vec::with_capacity(AES_NONCE_SIZE + ciphertext.len());
 
         result.extend_from_slice(&nonce);
@@ -32,6 +32,6 @@ impl AesGcm {
         let (nonce, ciphertext) = ciphertext.split_at(AES_NONCE_SIZE);
         let nonce = Nonce::from_slice(nonce);
 
-        self.cipher.decrypt(nonce, ciphertext).map_err(|error| anyhow::anyhow!("AES-GCM decryption failed: {error}"))
+        self.cipher.decrypt(nonce, ciphertext).context("AES-GCM decryption failed")
     }
 }

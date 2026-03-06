@@ -1,0 +1,69 @@
+use anyhow::{Context, Result};
+use tokio::io::AsyncRead;
+
+use crate::cipher::Signer;
+use crate::config::{ARGON_KEY_LEN, DATA_SHARDS, PARITY_SHARDS};
+use crate::header::section::{PackedSections, SectionShield};
+use crate::header::types::{Metadata, Parameters};
+use crate::secret::SecretBytes;
+
+pub struct HeaderReader {
+    params: Parameters,
+    metadata: Metadata,
+    packed: PackedSections,
+}
+
+impl HeaderReader {
+    pub async fn read<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
+        let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
+        let packed = shield.unpack(reader).await?;
+
+        let params: Parameters = postcard::from_bytes(&packed.params).context("Deserialize params")?;
+        let metadata: Metadata = postcard::from_bytes(&packed.metadata).context("Deserialize metadata")?;
+
+        params.validate()?;
+
+        Ok(Self { params, metadata, packed })
+    }
+
+    pub fn file_name(&self) -> &str {
+        self.metadata.name()
+    }
+
+    pub fn file_size(&self) -> u64 {
+        self.metadata.size()
+    }
+
+    pub fn file_hash(&self) -> &[u8] {
+        self.metadata.hash()
+    }
+
+    pub fn salt(&self) -> &[u8] {
+        self.packed.salt.expose_secret()
+    }
+
+    pub fn verify(&self, key: &SecretBytes) -> bool {
+        let key_bytes = key.expose_secret();
+        if key_bytes.len() != ARGON_KEY_LEN {
+            tracing::error!("Invalid key length");
+            return false;
+        }
+
+        let Ok(params_bytes) = postcard::to_allocvec(&self.params) else {
+            tracing::error!("Serialize params failed");
+            return false;
+        };
+
+        let Ok(metadata_bytes) = postcard::to_allocvec(&self.metadata) else {
+            tracing::error!("Serialize metadata failed");
+            return false;
+        };
+
+        let Ok(signer) = Signer::new(key_bytes) else {
+            tracing::error!("Create signer failed");
+            return false;
+        };
+
+        signer.verify_parts(self.packed.mac.expose_secret(), &[self.packed.salt.expose_secret(), &params_bytes, &metadata_bytes])
+    }
+}

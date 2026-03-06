@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chacha20poly1305::aead::{Aead, KeyInit, OsRng};
 use chacha20poly1305::{AeadCore, XChaCha20Poly1305, XNonce};
 
@@ -17,10 +17,7 @@ impl ChaCha20Poly1305 {
         anyhow::ensure!(!plaintext.is_empty(), "Cannot encrypt empty plaintext");
 
         let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
-        let ciphertext = self
-            .cipher
-            .encrypt(&nonce, plaintext)
-            .map_err(|error| anyhow::anyhow!("ChaCha20-Poly1305 encryption failed: {error}"))?;
+        let ciphertext = self.cipher.encrypt(&nonce, plaintext).context("ChaCha20-Poly1305 encryption failed")?;
         let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE + ciphertext.len());
 
         result.extend_from_slice(&nonce);
@@ -35,6 +32,6 @@ impl ChaCha20Poly1305 {
         let (nonce, ciphertext) = ciphertext.split_at(CHACHA_NONCE_SIZE);
         let nonce = XNonce::from_slice(nonce);
 
-        self.cipher.decrypt(nonce, ciphertext).map_err(|error| anyhow::anyhow!("ChaCha20-Poly1305 encryption failed: {error}"))
+        self.cipher.decrypt(nonce, ciphertext).context("ChaCha20-Poly1305 decryption failed")
     }
 }
