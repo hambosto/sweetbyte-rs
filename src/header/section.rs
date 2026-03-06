@@ -8,7 +8,6 @@ use crate::secret::SecretBytes;
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
-#[allow(clippy::struct_field_names)]
 struct Frame {
     salt: u32,
     params: u32,

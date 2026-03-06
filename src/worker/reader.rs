@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use flume::Sender;
 use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::sync::mpsc::Sender;
 
 use crate::config::CHUNK_SIZE;
 use crate::types::{Processing, Task};
@@ -36,7 +36,7 @@ impl Reader {
                 break;
             }
 
-            sender.send_async(Task { data: buffer, index }).await.context("Failed to send chunk to worker")?;
+            sender.send(Task { data: buffer, index }).await.context("Failed to send chunk to worker")?;
             index += 1;
         }
 
@@ -59,7 +59,7 @@ impl Reader {
 
             let mut data = vec![0u8; chunk_len];
             reader.read_exact(&mut data).await.context("Failed to read chunk data")?;
-            sender.send_async(Task { data, index }).await.context("Failed to send chunk to worker")?;
+            sender.send(Task { data, index }).await.context("Failed to send chunk to worker")?;
             index += 1;
         }
 
