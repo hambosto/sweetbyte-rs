@@ -139,7 +139,7 @@ src/
 ├── app.rs                  # CLI parsing, encrypt/decrypt orchestration
 ├── config.rs               # All constants in one place
 ├── types.rs                # Processing, ProcessorMode, Task, TaskResult
-├── secret.rs               # Wrapper around secrecy crate
+├── secret.rs               # Zeroize-based secret handling
 ├── allocator.rs            # MiMalloc as global allocator
 │
 ├── cipher/
@@ -147,13 +147,14 @@ src/
 │   ├── aes_gcm.rs          # AES-256-GCM wrapper
 │   ├── chacha20poly1305.rs # XChaCha20-Poly130 wrapper
 │   ├── derive.rs           # Argon2id key derivation
-│   └── mac.rs              # HMAC-SHA256 with constant-time comparison
+│   └── signer.rs           # HMAC-SHA256 with constant-time comparison
 │
 ├── header/
-│   ├── mod.rs              # Header struct, serialize/deserialize
-│   ├── metadata.rs         # Filename, size, BLAKE3 hash
-│   ├── parameter.rs        # Magic bytes and version validation
-│   └── section.rs          # Packs/unpacks RS-encoded sections
+│   ├── mod.rs              # Header module exports
+│   ├── types.rs            # Metadata, Parameters structs
+│   ├── section.rs          # Packs/unpacks RS-encoded sections
+│   ├── reader.rs           # Async header deserialization
+│   └── writer.rs           # Header serialization
 │
 ├── worker/
 │   ├── mod.rs              # Worker, sets up the pipeline
@@ -164,6 +165,7 @@ src/
 │   └── pipeline.rs         # The actual encrypt/decrypt stages
 │
 ├── ui/
+│   ├── mod.rs              # UI module exports
 │   ├── display.rs          # Tables, banner, success messages
 │   ├── prompt.rs           # Interactive prompts via inquire
 │   └── progress.rs         # Progress bar via indicatif
@@ -178,7 +180,7 @@ src/
 
 - Your password matters. Use something strong (minimum 8 characters enforced).
 - Constant-time MAC comparison via `subtle` crate.
-- Keys and passwords live in `SecretBox` from the `secrecy` crate, which zeroizes on drop.
+- Keys and passwords use `zeroize` for secure memory handling.
 - "Delete source file" in interactive mode calls `remove_file`. That's it. SSDs and journaling filesystems may retain data.
 - Not hardened against hardware side-channels. If that's your threat model, look elsewhere.
 
