@@ -13,7 +13,7 @@ impl Progress {
         bar.set_style(ProgressStyle::with_template(TEMPLATE)?.progress_chars("●○"));
         bar.set_message(msg.into());
 
-        Ok(Self { bar: bar })
+        Ok(Self { bar })
     }
 
     pub fn add(&self, delta: u64) {
