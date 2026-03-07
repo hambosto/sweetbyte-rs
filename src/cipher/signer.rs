@@ -1,7 +1,5 @@
 use anyhow::Result;
-use ring::hmac::Context;
-use ring::hmac::HMAC_SHA256;
-use ring::hmac::Key;
+use ring::hmac::{Context, HMAC_SHA256, Key};
 use subtle::ConstantTimeEq;
 
 use crate::secret::SecretBytes;

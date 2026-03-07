@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use tokio::io::BufWriter;
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
 use crate::types::{Processing, TaskResult};

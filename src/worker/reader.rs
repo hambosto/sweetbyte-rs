@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use tokio::io::BufReader;
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
 use crate::config::CHUNK_SIZE;
