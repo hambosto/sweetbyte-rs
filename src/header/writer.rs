@@ -29,7 +29,7 @@ impl HeaderWriter {
 
         let params_bytes = postcard::to_allocvec(&self.params)?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata)?;
-        let mac = Signer::new(key.expose_secret())?.compute_parts(&[salt, &params_bytes, &metadata_bytes])?;
+        let mac = Signer::new(key.expose_secret())?.compute_parts(&[salt, &params_bytes, &metadata_bytes]);
 
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
         shield.pack(salt, &params_bytes, &metadata_bytes, &mac)

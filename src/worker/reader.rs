@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use tokio::io::BufReader;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::mpsc::Sender;
 
@@ -17,7 +18,7 @@ impl Reader {
     }
 
     pub async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
-        let mut reader = tokio::io::BufReader::new(input);
+        let mut reader = BufReader::new(input);
 
         match self.mode {
             Processing::Encryption => self.read_fixed_chunks(&mut reader, sender).await,

@@ -12,14 +12,11 @@ impl Progress {
         let bar = ProgressBar::new(total);
         bar.set_style(ProgressStyle::with_template(TEMPLATE)?.progress_chars("●○"));
         bar.set_message(msg.into());
-        Ok(Self { bar })
+
+        Ok(Self { bar: bar })
     }
 
     pub fn add(&self, delta: u64) {
         self.bar.inc(delta);
-    }
-
-    pub fn finish(&self) {
-        self.bar.finish();
     }
 }

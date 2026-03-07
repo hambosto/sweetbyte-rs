@@ -1,37 +1,57 @@
 use anyhow::{Context, Result};
-use chacha20poly1305::aead::{Aead, KeyInit, OsRng};
-use chacha20poly1305::{AeadCore, XChaCha20Poly1305, XNonce};
-
-use crate::config::CHACHA_NONCE_SIZE;
+use ring::aead::{Aad, BoundKey, CHACHA20_POLY1305, NONCE_LEN, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey};
+use ring::error::Unspecified;
+use ring::rand::{SecureRandom, SystemRandom};
 
 pub struct ChaCha20Poly1305 {
-    cipher: XChaCha20Poly1305,
+    key: Vec<u8>,
+}
+
+struct OneTimeNonce([u8; NONCE_LEN]);
+
+impl NonceSequence for OneTimeNonce {
+    fn advance(&mut self) -> std::result::Result<Nonce, Unspecified> {
+        Ok(Nonce::assume_unique_for_key(self.0))
+    }
 }
 
 impl ChaCha20Poly1305 {
     pub fn new(key: &[u8]) -> Result<Self> {
-        Ok(Self { cipher: XChaCha20Poly1305::new_from_slice(key)? })
+        UnboundKey::new(&CHACHA20_POLY1305, key).context("Invalid ChaCha20-Poly1305 key")?;
+
+        Ok(Self { key: key.to_vec() })
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         anyhow::ensure!(!plaintext.is_empty(), "Cannot encrypt empty plaintext");
 
-        let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
-        let ciphertext = self.cipher.encrypt(&nonce, plaintext).context("ChaCha20-Poly1305 encryption failed")?;
-        let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE + ciphertext.len());
+        let mut nonce_bytes = [0u8; NONCE_LEN];
+        SystemRandom::new().fill(&mut nonce_bytes).context("Failed to generate nonce")?;
 
-        result.extend_from_slice(&nonce);
-        result.extend_from_slice(&ciphertext);
+        let unbound = UnboundKey::new(&CHACHA20_POLY1305, &self.key).context("Failed to create ChaCha20 key")?;
+        let mut sealing_key = SealingKey::new(unbound, OneTimeNonce(nonce_bytes));
+        let mut buf = plaintext.to_vec();
+
+        sealing_key.seal_in_place_append_tag(Aad::empty(), &mut buf).context("ChaCha20-Poly1305 encryption failed")?;
+
+        let mut result = Vec::with_capacity(NONCE_LEN + buf.len());
+        result.extend_from_slice(&nonce_bytes);
+        result.extend_from_slice(&buf);
 
         Ok(result)
     }
 
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(ciphertext.len() >= CHACHA_NONCE_SIZE, "Ciphertext too short (minimum {CHACHA_NONCE_SIZE} bytes required)");
+        anyhow::ensure!(ciphertext.len() >= NONCE_LEN, "Ciphertext too short (minimum {NONCE_LEN} bytes required)");
 
-        let (nonce, ciphertext) = ciphertext.split_at(CHACHA_NONCE_SIZE);
-        let nonce = XNonce::from_slice(nonce);
+        let (nonce_bytes, ciphertext) = ciphertext.split_at(NONCE_LEN);
+        let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes.try_into().context("Invalid nonce length")?;
 
-        self.cipher.decrypt(nonce, ciphertext).context("ChaCha20-Poly1305 decryption failed")
+        let unbound = UnboundKey::new(&CHACHA20_POLY1305, &self.key).context("Failed to create ChaCha20 key")?;
+        let mut opening_key = OpeningKey::new(unbound, OneTimeNonce(nonce_bytes));
+        let mut buf = ciphertext.to_vec();
+        let plaintext = opening_key.open_in_place(Aad::empty(), &mut buf).context("ChaCha20-Poly1305 decryption failed")?;
+
+        Ok(plaintext.to_vec())
     }
 }

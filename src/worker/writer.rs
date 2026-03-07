@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use tokio::io::BufWriter;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc::Receiver;
 
@@ -17,7 +18,7 @@ impl Writer {
     }
 
     pub async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, mut receiver: Receiver<TaskResult>, progress: Option<&Progress>) -> Result<()> {
-        let mut writer = tokio::io::BufWriter::new(output);
+        let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
             let ready = self.buffer.add(result);
@@ -31,18 +32,18 @@ impl Writer {
     }
 
     async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: Option<&Progress>) -> Result<()> {
-        for r in results {
-            if let Some(error) = &r.error {
-                anyhow::bail!("Processing error in chunk {}: {}", r.index, error)
+        for result in results {
+            if let Some(error) = &result.error {
+                anyhow::bail!("Processing error in chunk {}: {}", result.index, error)
             }
 
             if matches!(self.mode, Processing::Encryption) {
-                writer.write_all(&u32::try_from(r.data.len())?.to_be_bytes()).await.context("Failed to write chunk length")?;
+                writer.write_all(&u32::try_from(result.data.len())?.to_be_bytes()).await.context("Failed to write chunk length")?;
             }
 
-            writer.write_all(&r.data).await.context("Failed to write chunk data")?;
+            writer.write_all(&result.data).await.context("Failed to write chunk data")?;
             if let Some(bar) = progress {
-                bar.add(r.size as u64);
+                bar.add(result.size as u64);
             }
         }
 

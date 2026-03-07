@@ -24,11 +24,7 @@ pub const CURRENT_VERSION: u16 = 0x0002;
 
 pub const MAX_FILENAME_LENGTH: usize = 256;
 
-pub const AES_NONCE_SIZE: usize = 12;
-
 pub const KEY_SIZE: usize = 32;
-
-pub const CHACHA_NONCE_SIZE: usize = 24;
 
 pub const PASSWORD_MIN_LENGTH: usize = 8;
 

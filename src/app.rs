@@ -148,20 +148,15 @@ impl App {
         let mut reader = src.reader().await?;
         let header = HeaderReader::read(reader.get_mut()).await?;
 
-        if header.file_size() == 0 {
-            return Err(anyhow!("cannot decrypt a file with zero size"));
-        }
+        anyhow::ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
         let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(header.salt())?;
-        if !header.verify(&key) {
-            return Err(anyhow!("invalid password or corrupted data"));
-        }
+
+        anyhow::ensure!(header.verify(&key), "invalid password or corrupted data");
 
         Worker::new(&key, Processing::Decryption)?.process(reader, dest.writer().await?, header.file_size()).await?;
 
-        if !dest.validate_hash(header.file_hash()).await? {
-            return Err(anyhow!("hash mismatch"));
-        }
+        anyhow::ensure!(dest.validate_hash(header.file_hash()).await?, "hash mismatch");
 
         Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }

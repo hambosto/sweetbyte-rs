@@ -2,8 +2,7 @@ use anyhow::{Context, Result};
 use argon2::Algorithm::Argon2id;
 use argon2::Version::V0x13;
 use argon2::{Argon2, Params};
-use rand::TryRng;
-use rand::rngs::SysRng;
+use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_PARALLELISM, ARGON_TIME};
 use crate::secret::SecretBytes;
@@ -30,9 +29,9 @@ impl Derive {
     }
 
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
-        let mut bytes = vec![0; size];
+        let mut bytes = vec![0u8; size];
 
-        SysRng.try_fill_bytes(&mut bytes).context("Failed to generate cryptographic salt")?;
+        SystemRandom::new().fill(&mut bytes).context("Failed to generate cryptographic salt")?;
 
         Ok(bytes)
     }

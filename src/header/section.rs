@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use bytemuck::{Pod, Zeroable};
-use bytes::BytesMut;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::encoding::Encoding;
@@ -49,20 +48,26 @@ impl SectionShield {
         };
 
         let mut result = bytemuck::bytes_of(&frame).to_vec();
-        result.extend(salt);
-        result.extend(params);
-        result.extend(metadata);
-        result.extend(mac);
+        result.extend_from_slice(&salt);
+        result.extend_from_slice(&params);
+        result.extend_from_slice(&metadata);
+        result.extend_from_slice(&mac);
 
         Ok(result)
     }
 
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<PackedSections> {
         let frame = self.read_frame(reader).await?;
-        let salt = self.read_section(reader, frame.salt, "salt").await?;
-        let params = self.read_section(reader, frame.params, "params").await?;
-        let metadata = self.read_section(reader, frame.metadata, "metadata").await?;
-        let mac = self.read_section(reader, frame.mac, "mac").await?;
+
+        anyhow::ensure!(frame.salt > 0, "salt section is empty");
+        anyhow::ensure!(frame.params > 0, "params section is empty");
+        anyhow::ensure!(frame.metadata > 0, "metadata section is empty");
+        anyhow::ensure!(frame.mac > 0, "mac section is empty");
+
+        let salt = self.read_section(reader, frame.salt).await?;
+        let params = self.read_section(reader, frame.params).await?;
+        let metadata = self.read_section(reader, frame.metadata).await?;
+        let mac = self.read_section(reader, frame.mac).await?;
 
         Ok(PackedSections { salt: SecretBytes::from_slice(&salt), params, metadata, mac: SecretBytes::from_slice(&mac) })
     }
@@ -70,13 +75,13 @@ impl SectionShield {
     async fn read_frame<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Frame> {
         let mut frame = Frame::zeroed();
         reader.read_exact(bytemuck::bytes_of_mut(&mut frame)).await.context("read frame")?;
+
         Ok(frame)
     }
 
-    async fn read_section<R: AsyncRead + Unpin>(&self, reader: &mut R, len: u32, name: &str) -> Result<Vec<u8>> {
-        anyhow::ensure!(len > 0, "{name} section is empty");
-        let mut buffer = BytesMut::zeroed(len as usize);
-        reader.read_exact(&mut buffer).await.with_context(|| format!("read {name}"))?;
-        self.encoder.decode(&buffer).with_context(|| format!("decode {name}"))
+    async fn read_section<R: AsyncRead + Unpin>(&self, reader: &mut R, len: u32) -> Result<Vec<u8>> {
+        let mut buffer = vec![0u8; len as usize];
+        reader.read_exact(&mut buffer).await.context("read section")?;
+        self.encoder.decode(&buffer).context("decode section")
     }
 }
