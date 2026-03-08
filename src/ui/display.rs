@@ -2,11 +2,15 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use bytesize::ByteSize;
-use comfy_table::{Cell, Color, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Cell, Color, ContentArrangement, Table};
 use console::{StyledObject, style};
 use figlet_rs::FIGfont;
 
-use crate::{config::APP_NAME, file::File, types::ProcessorMode};
+use crate::config::APP_NAME;
+use crate::file::File;
+use crate::types::ProcessorMode;
 
 pub struct Display {
     name_max_len: usize,

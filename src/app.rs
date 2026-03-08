@@ -49,8 +49,8 @@ pub struct HeaderInfo {
 }
 
 impl App {
-    pub fn init() -> Result<Self> {
-        Ok(Self::parse())
+    pub fn init() -> Self {
+        Self::parse()
     }
 
     pub async fn execute(mut self) -> Result<()> {
