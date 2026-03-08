@@ -13,8 +13,7 @@ pub struct HeaderWriter {
 
 impl HeaderWriter {
     pub fn new(metadata: Metadata) -> Result<Self> {
-        let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION);
-        params.validate()?;
+        let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION)?;
 
         Ok(Self { params, metadata })
     }
@@ -30,8 +29,8 @@ impl HeaderWriter {
         let params_bytes = postcard::to_allocvec(&self.params)?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata)?;
         let mac = Signer::new(key.expose_secret())?.compute_parts(&[salt, &params_bytes, &metadata_bytes]);
-
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
+
         shield.pack(salt, &params_bytes, &metadata_bytes, &mac)
     }
 }

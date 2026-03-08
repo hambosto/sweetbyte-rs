@@ -8,23 +8,23 @@ use crate::worker::buffer::Buffer;
 
 pub struct Writer {
     mode: Processing,
-    buffer: Buffer,
 }
 
 impl Writer {
     pub fn new(mode: Processing) -> Self {
-        Self { mode, buffer: Buffer::new(0) }
+        Self { mode }
     }
 
     pub async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, mut receiver: Receiver<TaskResult>, progress: Option<&Progress>) -> Result<()> {
+        let mut buffer = Buffer::new(0);
         let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
-            let ready = self.buffer.add(result);
+            let ready = buffer.add(result);
             self.write_batch(&mut writer, &ready, progress).await?;
         }
 
-        let remaining = self.buffer.flush();
+        let remaining = buffer.flush();
         self.write_batch(&mut writer, &remaining, progress).await?;
 
         writer.flush().await.context("Failed to flush writer")

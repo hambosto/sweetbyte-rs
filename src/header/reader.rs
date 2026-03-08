@@ -18,10 +18,10 @@ impl HeaderReader {
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
         let packed = shield.unpack(reader).await?;
 
-        let params: Parameters = postcard::from_bytes(&packed.params).context("Deserialize params")?;
-        let metadata: Metadata = postcard::from_bytes(&packed.metadata).context("Deserialize metadata")?;
-
-        params.validate()?;
+        let (magic, version): (u32, u16) = postcard::from_bytes(&packed.params).context("Deserialize params")?;
+        let (name, size, hash): (String, u64, Vec<u8>) = postcard::from_bytes(&packed.metadata).context("Deserialize metadata")?;
+        let metadata = Metadata::new(name, size, hash)?;
+        let params = Parameters::new(magic, version)?;
 
         Ok(Self { params, metadata, packed })
     }

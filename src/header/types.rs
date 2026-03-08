@@ -36,18 +36,15 @@ impl Metadata {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Parameters {
-    magic: u32,
-    version: u16,
+    pub magic: u32,
+    pub version: u16,
 }
 
 impl Parameters {
-    pub fn new(magic: u32, version: u16) -> Self {
-        Self { magic, version }
-    }
+    pub fn new(magic: u32, version: u16) -> Result<Self> {
+        anyhow::ensure!(magic == MAGIC_BYTES, "Invalid magic: {:08X}", magic);
+        anyhow::ensure!(version == CURRENT_VERSION, "Invalid version: {:04X}", version);
 
-    pub fn validate(&self) -> Result<()> {
-        anyhow::ensure!(self.magic == MAGIC_BYTES, "Invalid magic: {:08X}", self.magic);
-        anyhow::ensure!(self.version == CURRENT_VERSION, "Invalid version: {}", self.version);
-        Ok(())
+        Ok(Self { magic, version })
     }
 }
