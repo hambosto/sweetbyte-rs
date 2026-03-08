@@ -2,18 +2,21 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use bytesize::ByteSize;
-use comfy_table::modifiers::UTF8_ROUND_CORNERS;
-use comfy_table::presets::UTF8_FULL;
-use comfy_table::{Cell, Color, ContentArrangement, Table};
+use comfy_table::{Cell, Color, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+use console::{StyledObject, style};
 use figlet_rs::FIGfont;
 
-use crate::config::APP_NAME;
-use crate::file::File;
-use crate::types::ProcessorMode;
+use crate::{config::APP_NAME, file::File, types::ProcessorMode};
 
 pub struct Display {
     name_max_len: usize,
     icon: &'static str,
+}
+
+impl Default for Display {
+    fn default() -> Self {
+        Self::new(25, "✔")
+    }
 }
 
 impl Display {
@@ -29,30 +32,27 @@ impl Display {
         if s.len() > self.name_max_len { format!("{}...", &s[..self.name_max_len.saturating_sub(3)]) } else { s.to_owned() }
     }
 
-    fn icon(&self) -> console::StyledObject<&'static str> {
-        console::style(self.icon).green().bright()
+    fn icon(&self) -> StyledObject<&'static str> {
+        style(self.icon).green().bright()
     }
 
     fn msg(&self, text: impl std::fmt::Display) {
-        println!("{} {}", self.icon(), console::style(text).white().bright());
+        println!("{} {}", self.icon(), style(text).white().bright());
     }
 
     fn table() -> Table {
-        let mut table = Table::new();
-        table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
-        table
+        let mut t = Table::new();
+        t.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
+        t
     }
 
-    fn action_label(mode: ProcessorMode) -> &'static str {
-        match mode {
-            ProcessorMode::Encrypt => "encrypted",
-            ProcessorMode::Decrypt => "decrypted",
-        }
+    fn colored<S: ToString + ?Sized>(text: &S, color: Color) -> Cell {
+        Cell::new(text.to_string()).fg(color)
     }
 
     pub async fn files(&self, items: &mut [File]) -> Result<()> {
         if items.is_empty() {
-            println!("{}", console::style("No files found").yellow().bright());
+            println!("{}", style("No files found").yellow().bright());
             return Ok(());
         }
 
@@ -60,57 +60,58 @@ impl Display {
         self.msg(format!("Found {} file(s):", items.len()));
         println!();
 
-        let header = ["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White));
         let mut table = Self::table();
-        table.set_header(header);
+        table.set_header(["No", "Name", "Size", "Status"].map(|h| Self::colored(h, Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
-            let name = self.truncate(&Self::filename(file.path()));
-            let (status, color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
+            let (status, status_color) = if file.is_encrypted() { ("encrypted", Color::Cyan) } else { ("unencrypted", Color::Green) };
 
-            table.add_row([Cell::new(i + 1), Cell::new(name).fg(Color::Green), Cell::new(ByteSize(file.size().await?).to_string()), Cell::new(status).fg(color)]);
+            table.add_row([
+                Cell::new(i + 1),
+                Self::colored(&self.truncate(&Self::filename(file.path())), Color::Green),
+                Cell::new(ByteSize(file.size().await?).to_string()),
+                Self::colored(status, status_color),
+            ]);
         }
 
-        println!("{table}");
-        println!();
+        println!("{table}\n");
+
         Ok(())
     }
 
     pub fn success(&self, mode: ProcessorMode, path: &Path) {
+        let label = match mode {
+            ProcessorMode::Encrypt => "encrypted",
+            ProcessorMode::Decrypt => "decrypted",
+        };
         println!();
-        self.msg(format!("File {} successfully: {}", Self::action_label(mode), Self::filename(path)));
+        self.msg(format!("File {label} successfully: {}", Self::filename(path)));
     }
 
     pub fn deleted(&self, path: &Path) {
         self.msg(format!("Source file deleted: {}", Self::filename(path)));
     }
 
-    pub fn clear() -> Result<()> {
-        console::Term::stdout().clear_screen().context("Failed to clear terminal")
-    }
-
     pub fn header(&self, name: &str, size: u64, hash: &str) {
         println!();
-        println!("{} {}", self.icon(), console::style("Header Information:").bold());
+        println!("{} {}", self.icon(), style("Header Information:").bold());
 
         let mut table = Self::table();
-        table.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(name).fg(Color::White)]);
-        table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(ByteSize(size).to_string()).fg(Color::White)]);
-        table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hash).fg(Color::White)]);
+        for (label, value) in [("Original Filename", name.to_owned()), ("Original Size", ByteSize(size).to_string()), ("Original Hash", hash.to_owned())] {
+            table.add_row([Self::colored(label, Color::Green), Self::colored(&value, Color::White)]);
+        }
 
         println!("{table}");
     }
 
     pub fn banner() -> Result<()> {
-        let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|error| anyhow::anyhow!("Failed to load font: {error}"))?;
+        let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
         let fig = font.convert(APP_NAME).context("Failed to render banner")?;
-        println!("{}", console::style(fig).green().bright());
+        println!("{}", style(fig).green().bright());
         Ok(())
     }
-}
 
-impl Default for Display {
-    fn default() -> Self {
-        Self::new(25, "✔")
+    pub fn clear() -> Result<()> {
+        console::Term::stdout().clear_screen().context("Failed to clear terminal")
     }
 }
