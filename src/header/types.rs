@@ -42,8 +42,8 @@ pub struct Parameters {
 
 impl Parameters {
     pub fn new(magic: u32, version: u16) -> Result<Self> {
-        anyhow::ensure!(magic == MAGIC_BYTES, "Invalid magic: {:08X}", magic);
-        anyhow::ensure!(version == CURRENT_VERSION, "Invalid version: {:04X}", version);
+        anyhow::ensure!(magic == MAGIC_BYTES, "Invalid magic: {magic:08X}");
+        anyhow::ensure!(version == CURRENT_VERSION, "Invalid version: {version:04X}");
 
         Ok(Self { magic, version })
     }
