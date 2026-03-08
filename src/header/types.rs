@@ -16,6 +16,7 @@ impl Metadata {
         anyhow::ensure!(!name.is_empty(), "Filename cannot be empty");
         anyhow::ensure!(name.len() <= MAX_FILENAME_LENGTH, "Filename too long");
         anyhow::ensure!(size > 0, "File size must be positive");
+        anyhow::ensure!(!hash.is_empty(), "Hash cannot be empty");
 
         Ok(Self { name, size, hash })
     }

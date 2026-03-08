@@ -117,10 +117,6 @@ impl File {
         self.path.exists()
     }
 
-    pub fn is_dir(&self) -> bool {
-        self.path.is_dir()
-    }
-
     pub async fn reader(&self) -> Result<BufReader<tokio::fs::File>> {
         let file = tokio::fs::File::open(&self.path).await.with_context(|| format!("Failed to open file: {}", self.path.display()))?;
 
@@ -147,25 +143,6 @@ impl File {
         anyhow::ensure!(self.exists(), "File not found: {}", self.path.display());
 
         tokio::fs::remove_file(&self.path).await.context("Failed to delete file")
-    }
-
-    pub async fn validate(&mut self) -> bool {
-        if !self.exists() {
-            tracing::error!("File not found: {}", self.path().display());
-            return false;
-        }
-
-        if self.is_dir() {
-            tracing::error!("Path is a directory: {}", self.path().display());
-            return false;
-        }
-
-        if self.size().await.unwrap_or(0) == 0 {
-            tracing::error!("File is empty: {}", self.path().display());
-            return false;
-        }
-
-        true
     }
 
     pub async fn validate_hash(&self, expected_hash: &[u8]) -> Result<bool> {

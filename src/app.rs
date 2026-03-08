@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use tokio::io::AsyncWriteExt;
 
@@ -43,15 +43,13 @@ pub struct App {
 }
 
 pub struct HeaderInfo {
-    name: String,
-    size: u64,
-    hash: String,
+    pub name: String,
+    pub size: u64,
+    pub hash: String,
 }
 
 impl App {
     pub fn init() -> Result<Self> {
-        let subscriber = tracing_subscriber::fmt().with_file(true).with_line_number(true).finish();
-        tracing::subscriber::set_global_default(subscriber)?;
         Ok(Self::parse())
     }
 
@@ -69,7 +67,10 @@ impl App {
     async fn run_cli(&self, input: &str, output: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt, display: &Display) -> Result<()> {
         let src = File::new(input);
         let dest = File::new(output.map_or_else(|| src.output_path(processing.mode()), PathBuf::from));
-        let secret = password.map_or_else(|| Self::password(prompt, processing), |p| Ok(SecretString::from_str(&p)))?;
+        let secret = match password {
+            Some(password) => SecretString::from_str(&password),
+            None => Self::prompt_password(prompt, processing)?,
+        };
 
         let info = self.process(&src, &dest, &secret, processing).await?;
         display.success(processing.mode(), dest.path());
@@ -85,25 +86,19 @@ impl App {
         let processing = Processing::from(mode);
 
         let mut files = File::discover(mode);
-        if files.is_empty() {
-            return Err(anyhow!("no eligible files found"));
-        }
+        anyhow::ensure!(!files.is_empty(), "no eligible files found");
 
         display.files(&mut files).await?;
 
         let path = Prompt::file(&files)?;
-        let mut src = File::new(&path);
-
-        if !src.validate().await {
-            return Err(anyhow!("invalid input file: {}", path.display()));
-        }
+        let src = File::new(&path);
 
         let dest = File::new(src.output_path(mode));
         if dest.exists() && !Prompt::overwrite(dest.path())? {
-            return Err(anyhow!("operation canceled"));
+            anyhow::bail!("operation cancelled");
         }
 
-        let secret = Self::password(prompt, processing)?;
+        let secret = Self::prompt_password(prompt, processing)?;
         let info = self.process(&src, &dest, &secret, processing).await?;
 
         display.success(mode, dest.path());
@@ -123,11 +118,14 @@ impl App {
     }
 
     async fn process(&self, src: &File, dest: &File, secret: &SecretString, processing: Processing) -> Result<HeaderInfo> {
-        match processing {
+        anyhow::ensure!(src.exists(), "Source file not found: {}", src.path().display());
+        anyhow::ensure!(!src.path().is_dir(), "Source is a directory: {}", src.path().display());
+
+        let result = match processing {
             Processing::Encryption => self.encrypt(src, dest, secret).await,
             Processing::Decryption => self.decrypt(src, dest, secret).await,
-        }
-        .with_context(|| format!("{processing} failed: {}", src.path().display()))
+        };
+        result.with_context(|| format!("{processing} failed: {}", src.path().display()))
     }
 
     async fn encrypt(&self, src: &File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
@@ -138,7 +136,6 @@ impl App {
 
         let mut writer = dest.writer().await?;
         writer.write_all(&header.serialize(&salt, &key)?).await?;
-
         Worker::new(&key, Processing::Encryption)?.process(src.reader().await?, writer, size).await?;
 
         Ok(HeaderInfo { name, size, hash: hex::encode(header.file_hash()) })
@@ -151,8 +148,7 @@ impl App {
         anyhow::ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
         let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(header.salt())?;
-
-        anyhow::ensure!(header.verify(&key), "invalid password or corrupted data");
+        anyhow::ensure!(header.verify(&key)?, "invalid password or corrupted data");
 
         Worker::new(&key, Processing::Decryption)?.process(reader, dest.writer().await?, header.file_size()).await?;
 
@@ -161,12 +157,11 @@ impl App {
         Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
 
-    fn password(prompt: &Prompt, processing: Processing) -> Result<SecretString> {
+    fn prompt_password(prompt: &Prompt, processing: Processing) -> Result<SecretString> {
         let password = match processing {
             Processing::Encryption => prompt.encrypt_password()?,
             Processing::Decryption => prompt.decrypt_password()?,
         };
-
         Ok(SecretString::new(password))
     }
 }
@@ -186,16 +181,13 @@ mod tests {
         let src_path = base.join("test.txt");
         let enc_path = base.join("test.txt.swx");
         let dec_path = base.join("test_dec.txt");
-        let content = b"test content";
 
-        fs::write(&src_path, content).await.unwrap();
+        fs::write(&src_path, b"test content").await.unwrap();
 
-        let mut src = File::new(&src_path);
+        let src = File::new(&src_path);
         let enc = File::new(&enc_path);
         let dec = File::new(&dec_path);
         let secret = SecretString::new("password123".to_owned());
-
-        assert!(src.validate().await);
 
         let app = App { command: None };
         app.encrypt(&src, &enc, &secret).await.unwrap();
@@ -204,6 +196,6 @@ mod tests {
         app.decrypt(&enc, &dec, &secret).await.unwrap();
         assert!(dec.exists());
 
-        assert_eq!(fs::read(&dec_path).await.unwrap(), content);
+        assert_eq!(fs::read(&dec_path).await.unwrap(), b"test content");
     }
 }

@@ -42,28 +42,14 @@ impl HeaderReader {
         self.packed.salt.expose_secret()
     }
 
-    pub fn verify(&self, key: &SecretBytes) -> bool {
+    pub fn verify(&self, key: &SecretBytes) -> Result<bool> {
         let key_bytes = key.expose_secret();
-        if key_bytes.len() != ARGON_KEY_LEN {
-            tracing::error!("Invalid key length");
-            return false;
-        }
+        anyhow::ensure!(key_bytes.len() == ARGON_KEY_LEN, "Invalid key length");
 
-        let Ok(params_bytes) = postcard::to_allocvec(&self.params) else {
-            tracing::error!("Serialize params failed");
-            return false;
-        };
+        let params_bytes = postcard::to_allocvec(&self.params).context("Serialize params failed")?;
+        let metadata_bytes = postcard::to_allocvec(&self.metadata).context("Serialize metadata failed")?;
+        let signer = Signer::new(key_bytes).context("Create signer failed")?;
 
-        let Ok(metadata_bytes) = postcard::to_allocvec(&self.metadata) else {
-            tracing::error!("Serialize metadata failed");
-            return false;
-        };
-
-        let Ok(signer) = Signer::new(key_bytes) else {
-            tracing::error!("Create signer failed");
-            return false;
-        };
-
-        signer.verify_parts(self.packed.mac.expose_secret(), &[self.packed.salt.expose_secret(), &params_bytes, &metadata_bytes])
+        Ok(signer.verify_parts(self.packed.mac.expose_secret(), &[self.packed.salt.expose_secret(), &params_bytes, &metadata_bytes]))
     }
 }
