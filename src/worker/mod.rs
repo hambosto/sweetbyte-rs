@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::Semaphore;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
-use crate::config::CHUNK_SIZE;
 use crate::secret::SecretBytes;
 use crate::types::{Processing, Task, TaskResult};
 use crate::ui::progress::Progress;
@@ -40,7 +40,7 @@ impl Worker {
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);
         let (result_tx, result_rx) = tokio::sync::mpsc::channel::<TaskResult>(channel_size);
 
-        let reader_handle = tokio::spawn(async move { Reader::new(self.mode, CHUNK_SIZE)?.read_all(input, &task_tx).await });
+        let reader_handle = tokio::spawn(async move { Reader::new(self.mode).read_all(input, &task_tx).await });
         let writer_handle = tokio::spawn(async move { Writer::new(self.mode).write_all(output, result_rx, Some(&progress_bar)).await });
         let executor_handle = self.spawn_executor(task_rx, result_tx, channel_size);
 
@@ -55,8 +55,12 @@ impl Worker {
 
     fn spawn_executor(&self, mut task_rx: Receiver<Task>, result_tx: Sender<TaskResult>, concurrency: usize) -> JoinHandle<Result<()>> {
         let pipeline = Arc::clone(&self.pipeline);
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+        let semaphore = Arc::new(Semaphore::new(concurrency));
 
+        // this already blazingly fast on decryption, but is quite slow on encryption
+        // encryption should be using non blocking
+        // TODO: find way to fix that as clean possible
+        // TODO: reduce clone
         tokio::spawn(async move {
             while let Some(task) = task_rx.recv().await {
                 let permit = Arc::clone(&semaphore).acquire_owned().await.context("Semaphore closed unexpectedly")?;
