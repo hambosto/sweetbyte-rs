@@ -57,10 +57,9 @@ impl Worker {
         let pipeline = Arc::clone(&self.pipeline);
         let semaphore = Arc::new(Semaphore::new(concurrency));
 
-        // this already blazingly fast on decryption, but is quite slow on encryption
-        // encryption should be using non blocking
-        // TODO: find way to fix that as clean possible
-        // TODO: reduce clone
+        // encryption should be using non blocking I/O to improve performance
+        // TODO: refactor to use async I/O for encryption instead of spawn_blocking
+        // TODO: optimize Arc cloning in the task loop
         tokio::spawn(async move {
             while let Some(task) = task_rx.recv().await {
                 let permit = Arc::clone(&semaphore).acquire_owned().await.context("Semaphore closed unexpectedly")?;
