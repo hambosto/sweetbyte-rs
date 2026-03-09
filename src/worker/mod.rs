@@ -57,21 +57,24 @@ impl Worker {
         let pipeline = Arc::clone(&self.pipeline);
         let semaphore = Arc::new(Semaphore::new(concurrency));
 
-        // encryption should be using non blocking I/O to improve performance
-        // TODO: refactor to use async I/O for encryption instead of spawn_blocking
-        // TODO: optimize Arc cloning in the task loop
         tokio::spawn(async move {
+            let mut handles = Vec::new();
+
             while let Some(task) = task_rx.recv().await {
-                let permit = Arc::clone(&semaphore).acquire_owned().await.context("Semaphore closed unexpectedly")?;
+                let permit = semaphore.clone().acquire_owned().await.context("Semaphore closed unexpectedly")?;
                 let pipeline = Arc::clone(&pipeline);
                 let result_tx = result_tx.clone();
-
-                tokio::task::spawn_blocking(move || {
+                handles.push(tokio::task::spawn_blocking(move || {
                     let result = pipeline.process(&task);
-                    result_tx.blocking_send(result).ok();
+                    let _ = result_tx.blocking_send(result);
                     drop(permit);
-                });
+                }));
             }
+
+            for handle in handles {
+                handle.await.context("Executor task panicked")?;
+            }
+
             Ok(())
         })
     }
