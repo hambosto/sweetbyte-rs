@@ -31,13 +31,13 @@ impl AesGcm {
 
         let unbound = UnboundKey::new(&AES_256_GCM, &self.key).context("Failed to create AES key")?;
         let mut sealing_key = SealingKey::new(unbound, OneTimeNonce(nonce_bytes));
-        let mut buffer = plaintext.to_vec();
+        let mut ciphertext = plaintext.to_vec();
 
-        sealing_key.seal_in_place_append_tag(Aad::empty(), &mut buffer).context("AES-GCM encryption failed")?;
+        sealing_key.seal_in_place_append_tag(Aad::empty(), &mut ciphertext).context("AES-GCM encryption failed")?;
 
-        let mut result = Vec::with_capacity(NONCE_LEN + buffer.len());
+        let mut result = Vec::with_capacity(NONCE_LEN + ciphertext.len());
         result.extend_from_slice(&nonce_bytes);
-        result.extend_from_slice(&buffer);
+        result.extend_from_slice(&ciphertext);
 
         Ok(result)
     }

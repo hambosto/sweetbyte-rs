@@ -30,13 +30,13 @@ impl ChaCha20Poly1305 {
 
         let unbound = UnboundKey::new(&CHACHA20_POLY1305, &self.key).context("Failed to create ChaCha20 key")?;
         let mut sealing_key = SealingKey::new(unbound, OneTimeNonce(nonce_bytes));
-        let mut buffer = plaintext.to_vec();
+        let mut buf = plaintext.to_vec();
 
-        sealing_key.seal_in_place_append_tag(Aad::empty(), &mut buffer).context("ChaCha20-Poly1305 encryption failed")?;
+        sealing_key.seal_in_place_append_tag(Aad::empty(), &mut buf).context("ChaCha20-Poly1305 encryption failed")?;
 
-        let mut result = Vec::with_capacity(NONCE_LEN + buffer.len());
+        let mut result = Vec::with_capacity(NONCE_LEN + buf.len());
         result.extend_from_slice(&nonce_bytes);
-        result.extend_from_slice(&buffer);
+        result.extend_from_slice(&buf);
 
         Ok(result)
     }
@@ -49,8 +49,8 @@ impl ChaCha20Poly1305 {
 
         let unbound = UnboundKey::new(&CHACHA20_POLY1305, &self.key).context("Failed to create ChaCha20 key")?;
         let mut opening_key = OpeningKey::new(unbound, OneTimeNonce(nonce_bytes));
-        let mut buffer = ciphertext.to_vec();
-        let plaintext = opening_key.open_in_place(Aad::empty(), &mut buffer).context("ChaCha20-Poly1305 decryption failed")?;
+        let mut buf = ciphertext.to_vec();
+        let plaintext = opening_key.open_in_place(Aad::empty(), &mut buf).context("ChaCha20-Poly1305 decryption failed")?;
 
         Ok(plaintext.to_vec())
     }

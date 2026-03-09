@@ -5,6 +5,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
+use crate::config::CHUNK_SIZE;
 use crate::secret::SecretBytes;
 use crate::types::{Processing, Task, TaskResult};
 use crate::ui::progress::Progress;
@@ -39,7 +40,7 @@ impl Worker {
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);
         let (result_tx, result_rx) = tokio::sync::mpsc::channel::<TaskResult>(channel_size);
 
-        let reader_handle = tokio::spawn(async move { Reader::new(self.mode).read_all(input, &task_tx).await });
+        let reader_handle = tokio::spawn(async move { Reader::new(self.mode, CHUNK_SIZE)?.read_all(input, &task_tx).await });
         let writer_handle = tokio::spawn(async move { Writer::new(self.mode).write_all(output, result_rx, Some(&progress_bar)).await });
         let executor_handle = self.spawn_executor(task_rx, result_tx, channel_size);
 
@@ -53,46 +54,21 @@ impl Worker {
     }
 
     fn spawn_executor(&self, mut task_rx: Receiver<Task>, result_tx: Sender<TaskResult>, concurrency: usize) -> JoinHandle<Result<()>> {
-        // this approach is still ugly for me but absolutely quite fast.
         let pipeline = Arc::clone(&self.pipeline);
         let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
-        let mode = self.mode;
 
         tokio::spawn(async move {
-            match mode {
-                Processing::Decryption => {
-                    while let Some(task) = task_rx.recv().await {
-                        let permit = Arc::clone(&semaphore).acquire_owned().await.context("Semaphore closed")?;
-                        let pipeline = Arc::clone(&pipeline);
-                        let result_tx = result_tx.clone();
+            while let Some(task) = task_rx.recv().await {
+                let permit = Arc::clone(&semaphore).acquire_owned().await.context("Semaphore closed unexpectedly")?;
+                let pipeline = Arc::clone(&pipeline);
+                let result_tx = result_tx.clone();
 
-                        tokio::task::spawn_blocking(move || {
-                            let result = pipeline.process(&task);
-                            result_tx.blocking_send(result).ok();
-                            drop(permit);
-                        });
-                    }
-                }
-
-                Processing::Encryption => {
-                    while let Some(task) = task_rx.recv().await {
-                        let permit = Arc::clone(&semaphore).acquire_owned().await.context("Semaphore closed")?;
-                        let pipeline = Arc::clone(&pipeline);
-                        let result_tx = result_tx.clone();
-                        let (tx, rx) = tokio::sync::oneshot::channel();
-
-                        tokio::spawn(async move {
-                            let result = pipeline.process(&task);
-                            let _ = tx.send(result);
-                            drop(permit);
-                        });
-
-                        let result = rx.await.context("Rayon worker dropped sender")?;
-                        result_tx.send(result).await.ok();
-                    }
-                }
+                tokio::task::spawn_blocking(move || {
+                    let result = pipeline.process(&task);
+                    result_tx.blocking_send(result).ok();
+                    drop(permit);
+                });
             }
-
             Ok(())
         })
     }
