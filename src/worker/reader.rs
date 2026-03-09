@@ -6,14 +6,11 @@ use crate::config::CHUNK_SIZE;
 use crate::types::{Processing, Task};
 pub struct Reader {
     mode: Processing,
-    chunk_size: usize,
 }
 
 impl Reader {
-    pub fn new(mode: Processing, chunk_size: usize) -> Result<Self> {
-        anyhow::ensure!(chunk_size >= CHUNK_SIZE, "Invalid chunk size: minimum {CHUNK_SIZE} bytes required, got {chunk_size}");
-
-        Ok(Self { mode, chunk_size })
+    pub fn new(mode: Processing) -> Self {
+        Self { mode }
     }
 
     pub async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
@@ -29,8 +26,8 @@ impl Reader {
         let mut index = 0u64;
 
         loop {
-            let mut buffer = Vec::with_capacity(self.chunk_size);
-            let bytes_read = reader.take(self.chunk_size as u64).read_to_end(&mut buffer).await.context("Failed to read chunk from input")?;
+            let mut buffer = Vec::with_capacity(CHUNK_SIZE);
+            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut buffer).await.context("Failed to read chunk from input")?;
 
             if bytes_read == 0 {
                 break;
