@@ -5,8 +5,8 @@ use bytesize::ByteSize;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
-use console::{StyledObject, style};
-use figlet_rs::FIGfont;
+use console::StyledObject;
+use figlet_rs::FIGlet;
 
 use crate::config::APP_NAME;
 use crate::file::File;
@@ -37,11 +37,11 @@ impl Display {
     }
 
     fn icon(&self) -> StyledObject<&'static str> {
-        style(self.icon).green().bright()
+        console::style(self.icon).green().bright()
     }
 
     fn msg(&self, text: impl std::fmt::Display) {
-        println!("{} {}", self.icon(), style(text).white().bright());
+        println!("{} {}", self.icon(), console::style(text).white().bright());
     }
 
     fn table() -> Table {
@@ -56,7 +56,7 @@ impl Display {
 
     pub async fn files(&self, items: &mut [File]) -> Result<()> {
         if items.is_empty() {
-            println!("{}", style("No files found").yellow().bright());
+            println!("{}", console::style("No files found").yellow().bright());
             return Ok(());
         }
 
@@ -98,7 +98,7 @@ impl Display {
 
     pub fn header(&self, name: &str, size: u64, hash: &str) {
         println!();
-        println!("{} {}", self.icon(), style("Header Information:").bold());
+        println!("{} {}", self.icon(), console::style("Header Information:").bold());
 
         let mut table = Self::table();
         for (label, value) in [("Original Filename", name.to_owned()), ("Original Size", ByteSize(size).to_string()), ("Original Hash", hash.to_owned())] {
@@ -109,9 +109,9 @@ impl Display {
     }
 
     pub fn banner() -> Result<()> {
-        let font = FIGfont::from_content(include_str!("../../assets/rectangles.flf")).map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
-        let fig = font.convert(APP_NAME).context("Failed to render banner")?;
-        println!("{}", style(fig).green().bright());
+        let figlet_font = FIGlet::from_file("assets/rectangles.flf").map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
+        let figure = figlet_font.convert(APP_NAME).context("Failed to render banner")?;
+        println!("{}", console::style(figure).green().bright());
         Ok(())
     }
 
