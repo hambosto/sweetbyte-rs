@@ -18,7 +18,7 @@ blake3             = { version = "1.8.3", features = ["zeroize"] }
 block-padding      = "0.4.2"
 bytemuck           = { version = "1.25.0", features = ["derive"] }
 bytesize           = "2.3.1"
-clap               = { version = "4.5.60", features = ["derive"] }
+clap               = { version = "4.6.0", features = ["derive"] }
 comfy-table        = "7.2.2"
 console            = "0.16.2"
 crc32fast          = "1.5.0"
