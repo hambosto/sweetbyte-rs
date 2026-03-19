@@ -15,7 +15,7 @@ impl Writer {
         Self { mode }
     }
 
-    pub async fn write_all<W: AsyncWrite + Unpin>(self,output: W, mut receiver: Receiver<TaskResult>, progress: Option<&Progress>) -> Result<()> {
+    pub async fn write_all<W: AsyncWrite + Unpin>(self, output: W, mut receiver: Receiver<TaskResult>, progress: Option<&Progress>) -> Result<()> {
         let mut buffer = Buffer::new(0);
         let mut writer = BufWriter::new(output);
 
