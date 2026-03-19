@@ -61,7 +61,7 @@ impl Worker {
             let mut handles = Vec::new();
 
             while let Some(task) = task_rx.recv().await {
-                let permit = semaphore.clone().acquire_owned().await.context("Semaphore closed unexpectedly")?;
+                let permit = Arc::clone(&semaphore).acquire_owned().await.context("Semaphore closed unexpectedly")?;
                 let pipeline = Arc::clone(&pipeline);
                 let result_tx = result_tx.clone();
                 handles.push(tokio::task::spawn_blocking(move || {
