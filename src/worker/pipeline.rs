@@ -34,64 +34,38 @@ impl Pipeline {
     }
 
     fn encrypt_pipeline(&self, task: &Task) -> TaskResult {
-        let compressed_data = match self.compressor.compress(&task.data) {
-            Ok(compressed) => compressed,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
+        let result = self
+            .compressor
+            .compress(&task.data)
+            .and_then(|data| self.padding.pad(&data))
+            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &data))
+            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::XChaCha20Poly1305, &data))
+            .and_then(|data| self.encoder.encode(&data));
 
-        let padded_data = match self.padding.pad(&compressed_data) {
-            Ok(padded) => padded,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let aes_encrypted = match self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &padded_data) {
-            Ok(aes_encrypted) => aes_encrypted,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let chacha_encrypted = match self.cipher.encrypt(&CipherAlgorithm::XChaCha20Poly1305, &aes_encrypted) {
-            Ok(chacha_encrypted) => chacha_encrypted,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let encoded_data = match self.encoder.encode(&chacha_encrypted) {
-            Ok(encoded) => encoded,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let input_size = task.data.len();
-
-        TaskResult::ok(task.index, encoded_data, input_size)
+        match result {
+            Ok(encoded_data) => {
+                let size = task.data.len();
+                TaskResult::ok(task.index, encoded_data, size)
+            }
+            Err(error) => TaskResult::err(task.index, &error),
+        }
     }
 
     fn decrypt_pipeline(&self, task: &Task) -> TaskResult {
-        let decoded_data = match self.encoder.decode(&task.data) {
-            Ok(decoded) => decoded,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
+        let result = self
+            .encoder
+            .decode(&task.data)
+            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::XChaCha20Poly1305, &data))
+            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &data))
+            .and_then(|data| self.padding.unpad(&data))
+            .and_then(|data| Compressor::decompress(&data));
 
-        let chacha_decrypted = match self.cipher.decrypt(&CipherAlgorithm::XChaCha20Poly1305, &decoded_data) {
-            Ok(chacha_decrypted) => chacha_decrypted,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let aes_decrypted = match self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &chacha_decrypted) {
-            Ok(aes_decrypted) => aes_decrypted,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let unpadded_data = match self.padding.unpad(&aes_decrypted) {
-            Ok(unpadded) => unpadded,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let decompressed_data = match Compressor::decompress(&unpadded_data) {
-            Ok(decompressed) => decompressed,
-            Err(error) => return TaskResult::err(task.index, &error),
-        };
-
-        let output_size = decompressed_data.len();
-
-        TaskResult::ok(task.index, decompressed_data, output_size)
+        match result {
+            Ok(data) => {
+                let size = data.len();
+                TaskResult::ok(task.index, data, size)
+            }
+            Err(error) => TaskResult::err(task.index, &error),
+        }
     }
 }

@@ -26,13 +26,6 @@ impl Processing {
     pub fn label(self) -> &'static str {
         self.into()
     }
-
-    pub fn mode(self) -> ProcessorMode {
-        match self {
-            Self::Encryption => ProcessorMode::Encrypt,
-            Self::Decryption => ProcessorMode::Decrypt,
-        }
-    }
 }
 
 impl From<ProcessorMode> for Processing {
@@ -40,6 +33,15 @@ impl From<ProcessorMode> for Processing {
         match mode {
             ProcessorMode::Encrypt => Self::Encryption,
             ProcessorMode::Decrypt => Self::Decryption,
+        }
+    }
+}
+
+impl From<Processing> for ProcessorMode {
+    fn from(processing: Processing) -> Self {
+        match processing {
+            Processing::Encryption => Self::Encrypt,
+            Processing::Decryption => Self::Decrypt,
         }
     }
 }

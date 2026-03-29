@@ -6,7 +6,7 @@ pub struct Secret<T: Zeroize> {
 
 impl<T: Zeroize> Secret<T> {
     pub fn new(data: T) -> Self {
-        Secret { inner: data }
+        Self { inner: data }
     }
 
     pub fn expose_secret(&self) -> &T {

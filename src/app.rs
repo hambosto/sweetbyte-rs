@@ -65,15 +65,15 @@ impl App {
     }
 
     async fn run_cli(&self, input: &str, output: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt, display: &Display) -> Result<()> {
-        let src = File::new(input);
-        let dest = File::new(output.map_or_else(|| src.output_path(processing.mode()), PathBuf::from));
+        let mut src = File::new(input);
+        let dest = File::new(output.map_or_else(|| src.output_path(ProcessorMode::from(processing)), PathBuf::from));
         let secret = match password {
             Some(password) => SecretString::from_str(&password),
             None => Self::prompt_password(prompt, processing)?,
         };
 
-        let info = self.process(&src, &dest, &secret, processing).await?;
-        display.success(processing.mode(), dest.path());
+        let info = self.process(&mut src, &dest, &secret, processing).await?;
+        display.success(ProcessorMode::from(processing), dest.path());
         display.header(&info.name, info.size, &info.hash);
         Ok(())
     }
@@ -91,7 +91,7 @@ impl App {
         display.files(&mut files).await?;
 
         let path = Prompt::file(&files)?;
-        let src = File::new(&path);
+        let mut src = File::new(&path);
 
         let dest = File::new(src.output_path(mode));
         if dest.exists() && !Prompt::overwrite(dest.path())? {
@@ -99,7 +99,7 @@ impl App {
         }
 
         let secret = Self::prompt_password(prompt, processing)?;
-        let info = self.process(&src, &dest, &secret, processing).await?;
+        let info = self.process(&mut src, &dest, &secret, processing).await?;
 
         display.success(mode, dest.path());
         display.header(&info.name, info.size, &info.hash);
@@ -117,7 +117,7 @@ impl App {
         Ok(())
     }
 
-    async fn process(&self, src: &File, dest: &File, secret: &SecretString, processing: Processing) -> Result<HeaderInfo> {
+    async fn process(&self, src: &mut File, dest: &File, secret: &SecretString, processing: Processing) -> Result<HeaderInfo> {
         anyhow::ensure!(src.exists(), "Source file not found: {}", src.path().display());
         anyhow::ensure!(!src.path().is_dir(), "Source is a directory: {}", src.path().display());
 
@@ -128,7 +128,7 @@ impl App {
         result.with_context(|| format!("{processing} failed: {}", src.path().display()))
     }
 
-    async fn encrypt(&self, src: &File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
+    async fn encrypt(&self, src: &mut File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
         let (name, size, hash) = src.file_metadata().await?;
         let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
         let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(&salt)?;
@@ -184,13 +184,13 @@ mod tests {
 
         fs::write(&src_path, b"test content").await.unwrap();
 
-        let src = File::new(&src_path);
+        let mut src = File::new(&src_path);
         let enc = File::new(&enc_path);
         let dec = File::new(&dec_path);
         let secret = SecretString::new("password123".to_owned());
 
         let app = App { command: None };
-        app.encrypt(&src, &enc, &secret).await.unwrap();
+        app.encrypt(&mut src, &enc, &secret).await.unwrap();
         assert!(enc.exists());
 
         app.decrypt(&enc, &dec, &secret).await.unwrap();
