@@ -14,7 +14,7 @@ repository = "https://github.com/hambosto/sweetbyte-rs"
 [dependencies]
 anyhow             = "1.0.102"
 argon2             = { version = "0.5.3", features = ["std", "zeroize"] }
-blake3             = { version = "1.8.3", features = ["zeroize"] }
+blake3             = { version = "1.8.4", features = ["zeroize"] }
 block-padding      = "0.4.2"
 bytemuck           = { version = "1.25.0", features = ["derive"] }
 bytesize           = "2.3.1"
