@@ -15,7 +15,7 @@ impl Writer {
         Self { mode }
     }
 
-    pub async fn write_all<W: AsyncWrite + Unpin>(self, output: W, mut receiver: Receiver<TaskResult>, progress: Option<&Progress>) -> Result<()> {
+    pub async fn write_all<W: AsyncWrite + Unpin>(self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
         let mut buffer = Buffer::new(0);
         let mut writer = BufWriter::new(output);
 
@@ -30,7 +30,7 @@ impl Writer {
         writer.flush().await.context("Failed to flush writer")
     }
 
-    async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: Option<&Progress>) -> Result<()> {
+    async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: &Progress) -> Result<()> {
         for result in results {
             if let Some(error) = &result.error {
                 anyhow::bail!("Processing error in chunk {}: {}", result.index, error)
@@ -41,9 +41,7 @@ impl Writer {
             }
 
             writer.write_all(&result.data).await.context("Failed to write chunk data")?;
-            if let Some(bar) = progress {
-                bar.add(result.size as u64);
-            }
+            progress.add(result.size as u64);
         }
 
         Ok(())

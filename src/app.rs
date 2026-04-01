@@ -85,7 +85,7 @@ impl App {
         let mode = Prompt::mode()?;
         let processing = Processing::from(mode);
 
-        let mut files = File::discover(mode);
+        let mut files = File::discover(".", mode);
         anyhow::ensure!(!files.is_empty(), "no eligible files found");
 
         display.files(&mut files).await?;
@@ -129,16 +129,17 @@ impl App {
     }
 
     async fn encrypt(&self, src: &mut File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
-        let (name, size, hash) = src.file_metadata().await?;
+        let metadata = src.file_metadata().await?;
         let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
         let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(&salt)?;
-        let header = HeaderWriter::new(Metadata::new(name.clone(), size, hash)?)?;
+        let filename = metadata.filename.clone();
+        let header = HeaderWriter::new(Metadata::new(metadata.filename, metadata.size, metadata.hash)?)?;
 
         let mut writer = dest.writer().await?;
         writer.write_all(&header.serialize(&salt, &key)?).await?;
-        Worker::new(&key, Processing::Encryption)?.process(src.reader().await?, writer, size).await?;
+        Worker::new(&key, Processing::Encryption)?.process(src.reader().await?, writer, metadata.size).await?;
 
-        Ok(HeaderInfo { name, size, hash: hex::encode(header.file_hash()) })
+        Ok(HeaderInfo { name: filename, size: metadata.size, hash: hex::encode(header.file_hash()) })
     }
 
     async fn decrypt(&self, src: &File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {

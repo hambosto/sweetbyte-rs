@@ -23,8 +23,6 @@ impl AesGcm {
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!plaintext.is_empty(), "Cannot encrypt empty plaintext");
-
         let rng = SystemRandom::new();
         let mut nonce_bytes = [0u8; NONCE_LEN];
         rng.fill(&mut nonce_bytes).context("Failed to generate nonce")?;
@@ -43,8 +41,6 @@ impl AesGcm {
     }
 
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(ciphertext.len() >= NONCE_LEN, "Ciphertext too short (minimum {NONCE_LEN} bytes required)");
-
         let (nonce_bytes, ciphertext) = ciphertext.split_at(NONCE_LEN);
         let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes.try_into().context("Invalid nonce length")?;
 

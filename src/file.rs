@@ -9,58 +9,31 @@ use walkdir::WalkDir;
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::types::ProcessorMode;
 
+pub struct FileMetadata {
+    pub filename: String,
+    pub size: u64,
+    pub hash: Vec<u8>,
+}
+
 pub struct File {
     path: PathBuf,
-    size: Option<u64>,
 }
 
 impl File {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into(), size: None }
+        Self { path: path.into() }
     }
 
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    pub async fn hash(&self) -> Result<Vec<u8>> {
-        let mut reader = self.reader().await?;
-        let mut hasher = Hasher::new();
-        let mut buffer = vec![0u8; 64 * 1024];
-        loop {
-            let bytes_read = reader.read(&mut buffer).await.context("Failed to read file for hash")?;
-            if bytes_read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..bytes_read]);
-        }
-
-        Ok(hasher.finalize().as_bytes().to_vec())
-    }
-
-    pub async fn size(&mut self) -> Result<u64> {
-        if let Some(size) = self.size {
-            return Ok(size);
-        }
-
-        let meta = tokio::fs::metadata(&self.path)
-            .await
-            .with_context(|| format!("Failed to read file metadata: {}", self.path.display()))?;
-        self.size = Some(meta.len());
-
-        Ok(meta.len())
-    }
-
-    pub async fn file_metadata(&mut self) -> Result<(String, u64, Vec<u8>)> {
-        let size = self.size().await?;
-        let filename = self.path.file_name().map_or_else(|| "unknown".to_owned(), |n| n.to_string_lossy().into_owned());
-        let hash = self.hash().await?;
-
-        Ok((filename, size, hash))
+    pub fn exists(&self) -> bool {
+        self.path.exists()
     }
 
     pub fn is_encrypted(&self) -> bool {
-        self.path.as_os_str().to_string_lossy().ends_with(FILE_EXTENSION)
+        self.path.extension().is_some_and(|ext| ext == FILE_EXTENSION.trim_start_matches('.'))
     }
 
     pub fn is_hidden(&self) -> bool {
@@ -68,16 +41,11 @@ impl File {
     }
 
     pub fn is_excluded(&self) -> bool {
-        let path_str = self.path.to_str().unwrap_or("");
+        let path = self.path.to_str().unwrap_or("");
 
-        EXCLUDED_PATTERNS.iter().any(|pattern| {
-            let full_match = fast_glob::glob_match(pattern, path_str);
-            if full_match {
-                return true;
-            }
-
-            self.path.components().any(|comp| fast_glob::glob_match(pattern, comp.as_os_str().to_str().unwrap_or("")))
-        })
+        EXCLUDED_PATTERNS
+            .iter()
+            .any(|pattern| fast_glob::glob_match(pattern, path) || self.path.components().any(|comp| fast_glob::glob_match(pattern, comp.as_os_str().to_str().unwrap_or(""))))
     }
 
     pub fn is_eligible(&self, mode: ProcessorMode) -> bool {
@@ -94,30 +62,19 @@ impl File {
     pub fn output_path(&self, mode: ProcessorMode) -> PathBuf {
         match mode {
             ProcessorMode::Encrypt => {
-                if let Some(name) = self.path.to_str() {
-                    PathBuf::from(format!("{name}{FILE_EXTENSION}"))
-                } else {
-                    self.path.clone()
-                }
+                let mut p = self.path.clone().into_os_string();
+                p.push(FILE_EXTENSION);
+                PathBuf::from(p)
             }
-            ProcessorMode::Decrypt => {
-                if let Some(stripped) = self.path.to_string_lossy().strip_suffix(FILE_EXTENSION) {
-                    PathBuf::from(stripped)
-                } else {
-                    self.path.clone()
-                }
-            }
+            ProcessorMode::Decrypt => self.path.with_extension(""),
         }
     }
 
-    pub fn exists(&self) -> bool {
-        self.path.exists()
-    }
-
     pub async fn reader(&self) -> Result<BufReader<tokio::fs::File>> {
-        let file = tokio::fs::File::open(&self.path).await.with_context(|| format!("Failed to open file: {}", self.path.display()))?;
-
-        Ok(BufReader::new(file))
+        tokio::fs::File::open(&self.path)
+            .await
+            .map(BufReader::new)
+            .with_context(|| format!("Failed to open file: {}", self.path.display()))
     }
 
     pub async fn writer(&self) -> Result<BufWriter<tokio::fs::File>> {
@@ -125,37 +82,67 @@ impl File {
             tokio::fs::create_dir_all(parent).await.with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
 
-        let file = tokio::fs::OpenOptions::new()
+        tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .open(&self.path)
             .await
-            .with_context(|| format!("Failed to create file: {}", self.path.display()))?;
-
-        Ok(BufWriter::new(file))
+            .map(BufWriter::new)
+            .with_context(|| format!("Failed to create file: {}", self.path.display()))
     }
 
     pub async fn delete(&self) -> Result<()> {
         anyhow::ensure!(self.exists(), "File not found: {}", self.path.display());
-
         tokio::fs::remove_file(&self.path).await.context("Failed to delete file")
     }
 
-    pub async fn validate_hash(&self, expected_hash: &[u8]) -> Result<bool> {
-        let file_hash = self.hash().await?;
-        let result = bool::from(file_hash.as_slice().ct_eq(expected_hash));
-
-        Ok(result)
+    pub async fn size(&self) -> Result<u64> {
+        tokio::fs::metadata(&self.path)
+            .await
+            .map(|m| m.len())
+            .with_context(|| format!("Failed to read metadata: {}", self.path.display()))
     }
 
-    pub fn discover(mode: ProcessorMode) -> Vec<Self> {
-        WalkDir::new(".")
+    pub async fn hash(&self) -> Result<Vec<u8>> {
+        let buffer_size = 64 * 1024;
+
+        let mut reader = self.reader().await?;
+        let mut hasher = Hasher::new();
+        let mut buffer = vec![0u8; buffer_size];
+
+        loop {
+            let n = reader.read(&mut buffer).await.context("Failed to read file for hashing")?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buffer[..n]);
+        }
+
+        Ok(hasher.finalize().as_bytes().to_vec())
+    }
+
+    pub async fn validate_hash(&self, expected: &[u8]) -> Result<bool> {
+        let actual = self.hash().await?;
+        Ok(bool::from(actual.as_slice().ct_eq(expected)))
+    }
+
+    pub async fn file_metadata(&self) -> Result<FileMetadata> {
+        let filename = self.path.file_name().map_or_else(|| "unknown".to_owned(), |n| n.to_string_lossy().into_owned());
+
+        let size = self.size().await?;
+        let hash = self.hash().await?;
+
+        Ok(FileMetadata { filename, size, hash })
+    }
+
+    pub fn discover(root: impl AsRef<Path>, mode: ProcessorMode) -> Vec<Self> {
+        WalkDir::new(root)
             .into_iter()
             .filter_map(std::result::Result::ok)
-            .filter(|entry| entry.file_type().is_file())
-            .map(|entry| Self::new(entry.into_path()))
-            .filter(|file| file.is_eligible(mode))
+            .filter(|e| e.file_type().is_file())
+            .map(|e| Self::new(e.into_path()))
+            .filter(|f| f.is_eligible(mode))
             .collect()
     }
 }

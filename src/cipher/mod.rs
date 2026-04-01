@@ -12,6 +12,7 @@ pub use signer::Signer;
 
 use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
 use crate::secret::SecretBytes;
+use ring::aead::NONCE_LEN;
 
 pub enum CipherAlgorithm {
     Aes256Gcm,
@@ -32,6 +33,8 @@ impl Cipher {
     }
 
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
+        anyhow::ensure!(!plaintext.is_empty(), "Cannot encrypt empty plaintext");
+
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.encrypt(plaintext),
             CipherAlgorithm::XChaCha20Poly1305 => self.chacha.encrypt(plaintext),
@@ -39,6 +42,8 @@ impl Cipher {
     }
 
     pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        anyhow::ensure!(ciphertext.len() >= NONCE_LEN, "Ciphertext too short (minimum {NONCE_LEN} bytes required)");
+
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.decrypt(ciphertext),
             CipherAlgorithm::XChaCha20Poly1305 => self.chacha.decrypt(ciphertext),

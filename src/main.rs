@@ -12,9 +12,7 @@ mod types;
 mod ui;
 mod worker;
 
-use crate::app::App;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    App::init().execute().await
+    crate::app::App::init().execute().await
 }
