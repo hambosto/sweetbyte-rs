@@ -3,7 +3,9 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use bytesize::ByteSize;
-use comfy_table::{Cell, Color, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Cell, Color, ContentArrangement, Table};
 use console::{Style, Term};
 use figlet_rs::FIGlet;
 use strum::{Display, EnumString};
@@ -61,7 +63,7 @@ fn base_table() -> Table {
     table
 }
 
-fn colored(text: impl ToString, color: Color) -> Cell {
+fn colored(text: &impl ToString, color: Color) -> Cell {
     Cell::new(text.to_string()).fg(color)
 }
 
@@ -73,12 +75,6 @@ pub struct Display {
     term: Term,
     styles: Styles,
     name_max_len: usize,
-}
-
-impl Default for Display {
-    fn default() -> Self {
-        Self::new(25)
-    }
 }
 
 impl Display {
@@ -112,7 +108,7 @@ impl Display {
         self.blank()?;
 
         let mut table = base_table();
-        table.set_header(["No", "Name", "Size", "Status"].map(|h| colored(h, Color::White)));
+        table.set_header(["No", "Name", "Size", "Status"].map(|h| colored(&h, Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
             let name = self.truncate(filename(file.path())).into_owned();
@@ -124,7 +120,7 @@ impl Display {
                 EncryptionStatus::Unencrypted => Color::Green,
             };
 
-            table.add_row([Cell::new(i + 1), colored(name, Color::Green), Cell::new(size), colored(status, status_color)]);
+            table.add_row([Cell::new(i + 1), colored(&name, Color::Green), Cell::new(size), colored(&status, status_color)]);
         }
 
         self.print(table)?;
@@ -150,7 +146,7 @@ impl Display {
 
         let mut table = base_table();
         for (field, value) in [("Original Filename", name.to_owned()), ("Original Size", ByteSize(size).to_string()), ("Original Hash", hash.to_owned())] {
-            table.add_row([colored(field, Color::Green), colored(value, Color::White)]);
+            table.add_row([colored(&field, Color::Green), colored(&value, Color::White)]);
         }
 
         self.print(table)
