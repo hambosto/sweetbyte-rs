@@ -87,7 +87,7 @@ impl Display {
     }
 
     fn msg(&self, icon: Icon, text: impl std::fmt::Display) -> Result<()> {
-        self.print(format!("{} {}", self.styles.icon.apply_to(icon), self.styles.text.apply_to(text),))
+        self.print(format!("{} {}", self.styles.icon.apply_to(icon), self.styles.text.apply_to(text)))
     }
 
     fn blank(&self) -> Result<()> {

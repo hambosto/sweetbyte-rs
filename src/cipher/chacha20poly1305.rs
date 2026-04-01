@@ -45,8 +45,8 @@ impl ChaCha20Poly1305 {
 
         let unbound = UnboundKey::new(&CHACHA20_POLY1305, &self.key).context("Failed to create ChaCha20 key")?;
         let mut opening_key = OpeningKey::new(unbound, OneTimeNonce(nonce_bytes));
-        let mut buf = ciphertext.to_vec();
-        let plaintext = opening_key.open_in_place(Aad::empty(), &mut buf).context("ChaCha20-Poly1305 decryption failed")?;
+        let mut buffer = ciphertext.to_vec();
+        let plaintext = opening_key.open_in_place(Aad::empty(), &mut buffer).context("ChaCha20-Poly1305 decryption failed")?;
 
         Ok(plaintext.to_vec())
     }
