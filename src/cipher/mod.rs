@@ -1,4 +1,5 @@
 use anyhow::Result;
+use ring::aead::NONCE_LEN;
 
 mod aes_gcm;
 mod chacha20poly1305;
@@ -12,7 +13,6 @@ pub use signer::Signer;
 
 use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
 use crate::secret::SecretBytes;
-use ring::aead::NONCE_LEN;
 
 pub enum CipherAlgorithm {
     Aes256Gcm,
