@@ -16,7 +16,7 @@ use crate::secret::SecretBytes;
 
 pub enum CipherAlgorithm {
     Aes256Gcm,
-    XChaCha20Poly1305,
+    ChaCha20Poly1305,
 }
 
 pub struct Cipher {
@@ -37,7 +37,7 @@ impl Cipher {
 
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.encrypt(plaintext),
-            CipherAlgorithm::XChaCha20Poly1305 => self.chacha.encrypt(plaintext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.chacha.encrypt(plaintext),
         }
     }
 
@@ -46,7 +46,7 @@ impl Cipher {
 
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.decrypt(ciphertext),
-            CipherAlgorithm::XChaCha20Poly1305 => self.chacha.decrypt(ciphertext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.chacha.decrypt(ciphertext),
         }
     }
 }

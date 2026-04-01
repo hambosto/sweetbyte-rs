@@ -39,7 +39,7 @@ impl Pipeline {
             .compress(&task.data)
             .and_then(|data| self.padding.pad(&data))
             .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &data))
-            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::XChaCha20Poly1305, &data))
+            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::ChaCha20Poly1305, &data))
             .and_then(|data| self.encoder.encode(&data));
 
         match result {
@@ -55,7 +55,7 @@ impl Pipeline {
         let result = self
             .encoder
             .decode(&task.data)
-            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::XChaCha20Poly1305, &data))
+            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::ChaCha20Poly1305, &data))
             .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &data))
             .and_then(|data| self.padding.unpad(&data))
             .and_then(|data| Compressor::decompress(&data));
