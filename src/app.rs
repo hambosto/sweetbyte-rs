@@ -55,7 +55,7 @@ impl App {
 
     pub async fn execute(mut self) -> Result<()> {
         let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
-        let display = Display::default();
+        let display = Display::new(35);
 
         match self.command.take() {
             Some(Command::Encrypt { input, output, password }) => self.run_cli(&input, output, password, Processing::Encryption, &prompt, &display).await,
@@ -66,21 +66,19 @@ impl App {
 
     async fn run_cli(&self, input: &str, output: Option<String>, password: Option<String>, processing: Processing, prompt: &Prompt, display: &Display) -> Result<()> {
         let mut src = File::new(input);
-        let dest = File::new(output.map_or_else(|| src.output_path(ProcessorMode::from(processing)), PathBuf::from));
-        let secret = match password {
-            Some(password) => SecretString::from_str(&password),
-            None => Self::prompt_password(prompt, processing)?,
-        };
+        let mode = ProcessorMode::from(processing);
+        let dest = File::new(output.map_or_else(|| src.output_path(mode), PathBuf::from));
+        let secret = resolve_secret(password, processing, prompt)?;
 
         let info = self.process(&mut src, &dest, &secret, processing).await?;
-        display.success(ProcessorMode::from(processing), dest.path());
-        display.header(&info.name, info.size, &info.hash);
+        display.success(mode, dest.path())?;
+        display.header(&info.name, info.size, &info.hash)?;
         Ok(())
     }
 
     async fn interactive(&self, prompt: &Prompt, display: &Display) -> Result<()> {
-        Display::clear()?;
-        Display::banner()?;
+        display.clear()?;
+        display.banner()?;
 
         let mode = Prompt::mode()?;
         let processing = Processing::from(mode);
@@ -92,17 +90,17 @@ impl App {
 
         let path = Prompt::file(&files)?;
         let mut src = File::new(&path);
-
         let dest = File::new(src.output_path(mode));
+
         if dest.exists() && !Prompt::overwrite(dest.path())? {
             anyhow::bail!("operation cancelled");
         }
 
-        let secret = Self::prompt_password(prompt, processing)?;
+        let secret = resolve_secret(None, processing, prompt)?;
         let info = self.process(&mut src, &dest, &secret, processing).await?;
 
-        display.success(mode, dest.path());
-        display.header(&info.name, info.size, &info.hash);
+        display.success(mode, dest.path())?;
+        display.header(&info.name, info.size, &info.hash)?;
 
         let label = match mode {
             ProcessorMode::Encrypt => "original",
@@ -111,21 +109,21 @@ impl App {
 
         if Prompt::delete(src.path(), label)? {
             src.delete().await?;
-            display.deleted(src.path());
+            display.deleted(src.path())?;
         }
 
         Ok(())
     }
 
     async fn process(&self, src: &mut File, dest: &File, secret: &SecretString, processing: Processing) -> Result<HeaderInfo> {
-        anyhow::ensure!(src.exists(), "Source file not found: {}", src.path().display());
-        anyhow::ensure!(!src.path().is_dir(), "Source is a directory: {}", src.path().display());
+        anyhow::ensure!(src.exists(), "source file not found: {}", src.path().display());
+        anyhow::ensure!(!src.path().is_dir(), "source is a directory: {}", src.path().display());
 
-        let result = match processing {
+        match processing {
             Processing::Encryption => self.encrypt(src, dest, secret).await,
             Processing::Decryption => self.decrypt(src, dest, secret).await,
-        };
-        result.with_context(|| format!("{processing} failed: {}", src.path().display()))
+        }
+        .with_context(|| format!("{processing} failed: {}", src.path().display()))
     }
 
     async fn encrypt(&self, src: &mut File, dest: &File, secret: &SecretString) -> Result<HeaderInfo> {
@@ -133,6 +131,7 @@ impl App {
         let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
         let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(&salt)?;
         let filename = metadata.filename.clone();
+
         let header = HeaderWriter::new(Metadata::new(metadata.filename, metadata.size, metadata.hash)?)?;
 
         let mut writer = dest.writer().await?;
@@ -157,14 +156,18 @@ impl App {
 
         Ok(HeaderInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
+}
 
-    fn prompt_password(prompt: &Prompt, processing: Processing) -> Result<SecretString> {
-        let password = match processing {
-            Processing::Encryption => prompt.encrypt_password()?,
-            Processing::Decryption => prompt.decrypt_password()?,
-        };
-        Ok(SecretString::new(password))
-    }
+fn resolve_secret(password: Option<String>, processing: Processing, prompt: &Prompt) -> Result<SecretString> {
+    let secret = match password {
+        Some(password) => SecretString::from_str(&password),
+        None => match processing {
+            Processing::Encryption => SecretString::new(prompt.encrypt_password()?),
+            Processing::Decryption => SecretString::new(prompt.decrypt_password()?),
+        },
+    };
+
+    Ok(secret)
 }
 
 #[cfg(test)]
@@ -175,7 +178,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_encrypt_decrypt() {
+    async fn test_encrypt_decrypt_roundtrip() {
         let dir = tempdir().unwrap();
         let base = dir.path();
 
@@ -189,14 +192,14 @@ mod tests {
         let enc = File::new(&enc_path);
         let dec = File::new(&dec_path);
         let secret = SecretString::new("password123".to_owned());
-
         let app = App { command: None };
+
         app.encrypt(&mut src, &enc, &secret).await.unwrap();
-        assert!(enc.exists());
+        assert!(enc.exists(), "encrypted file should exist");
 
         app.decrypt(&enc, &dec, &secret).await.unwrap();
-        assert!(dec.exists());
+        assert!(dec.exists(), "decrypted file should exist");
 
-        assert_eq!(fs::read(&dec_path).await.unwrap(), b"test content");
+        assert_eq!(fs::read(&dec_path).await.unwrap(), b"test content", "roundtrip content must match");
     }
 }
