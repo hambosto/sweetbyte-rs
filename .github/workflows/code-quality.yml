@@ -29,6 +29,7 @@ jobs:
         with:
           toolchain: nightly
           components: rustfmt, clippy
+          cache: false
 
       - name: Check formatting
         run: cargo fmt --all -- --check
