@@ -35,7 +35,7 @@ ring               = { version = "0.17.14", features = ["std"] }
 serde              = { version = "1.0.228", features = ["derive"] }
 strum              = { version = "0.28.0", features = ["derive"] }
 subtle             = "2.6.1"
-tokio              = { version = "1.51.0", features = ["full"] }
+tokio              = { version = "1.51.1", features = ["full"] }
 walkdir            = "2.5.0"
 zeroize            = "1.8.2"
 zstd               = { version = "0.13.3", features = ["thin"] }
