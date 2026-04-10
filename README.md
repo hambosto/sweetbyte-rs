@@ -2,6 +2,8 @@
 
 # SweetByte
 
+<img src="assets/logo.png" alt="SweetByte" width="128">
+
 **File encryption that doesn't suck.**
 
 [![Rust](https://img.shields.io/badge/Rust-2024_Edition-blue.svg)](https://www.rust-lang.org/)
