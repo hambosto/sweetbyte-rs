@@ -4,7 +4,6 @@
 
 **File encryption that doesn't suck.**
 
-[![Rust](https://img.shields.io/badge/Rust-2024-blue.svg)](https://www.rust-lang.org/)
 [![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/code-quality.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
