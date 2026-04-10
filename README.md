@@ -1,8 +1,6 @@
 <div align="center">
 
-# SweetByte
-
-<img src="assets/logo.png" alt="SweetByte" width="128">
+<img src="assets/logo.png" alt="SweetByte" width="256" height="256">
 
 **File encryption that doesn't suck.**
 
