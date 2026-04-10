@@ -7,7 +7,7 @@ use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 use console::{Style, Term};
-use figlet_rs::FIGlet;
+use figlet_rs::Toilet;
 use strum::{Display, EnumString};
 
 use crate::config::APP_NAME;
@@ -153,7 +153,7 @@ impl Display {
     }
 
     pub fn banner(&self) -> Result<()> {
-        let font = FIGlet::from_file("assets/rectangles.flf").map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
+        let font = Toilet::future().map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
         let figure = font.convert(APP_NAME).context("Failed to render banner")?;
         self.print(self.styles.banner.apply_to(figure))
     }

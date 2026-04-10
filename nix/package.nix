@@ -9,7 +9,6 @@ rustPlatform.buildRustPackage (final: {
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [
-      ../assets
       ../src
       ../Cargo.lock
       ../Cargo.toml
