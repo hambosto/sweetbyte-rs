@@ -4,7 +4,8 @@
 
 **File encryption that doesn't suck.**
 
-[![Rust](https://img.shields.io/badge/Rust-2024_Edition-blue.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-2024-blue.svg)](https://www.rust-lang.org/)
+[![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/code-quality.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 </div>
@@ -93,9 +94,9 @@ Each encrypted file starts with a header. Everything in the header gets Reed-Sol
 |-------|------|-------|
 | Lengths | 16 bytes | Four u32 LE values for encoded section sizes |
 | Salt | 32 bytes | Random, for Argon2id |
-| Parameter | 6 bytes | Magic `0xDEADBEEF` + version `0x0002` |
+| Parameters | 6 bytes | Magic `0xDEADBEEF` + version `0x0002` |
 | Metadata | variable | Original filename, size, BLAKE3 hash |
-| MAC | 32 bytes | HMAC-SHA256 of (salt + parameter + metadata) |
+| MAC | 32 bytes | HMAC-SHA256 of (salt + parameters + metadata) |
 
 The HMAC uses constant-time comparison via the `subtle` crate. Header deserialization fails fast if magic bytes or version don't match.
 
@@ -116,10 +117,10 @@ Three stages, running concurrently:
 
 ```
 [Reader Task] -----> [Executor] -----> [Writer Task]
-   tokio async      rayon parallel       tokio async
+ tokio async        spawn_blocking      tokio async
 ```
 
-Files get read in 256KB chunks. Channel buffer size matches CPU core count. The executor processes chunks in parallel via Rayon's work-stealing scheduler. A reordering buffer ensures the writer outputs chunks in order.
+Files get read in 256KB chunks. Channel buffer size matches CPU core count. The executor processes chunks in parallel via tokio's `spawn_blocking` with a semaphore for concurrency control. A reordering buffer ensures the writer outputs chunks in order.
 
 ### Reed-Solomon encoding
 
