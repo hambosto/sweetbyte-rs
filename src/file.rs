@@ -105,11 +105,9 @@ impl File {
     }
 
     pub async fn hash(&self) -> Result<Vec<u8>> {
-        let buffer_size = 64 * 1024;
-
         let mut reader = self.reader().await?;
         let mut hasher = Hasher::new();
-        let mut buffer = vec![0u8; buffer_size];
+        let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
             let n = reader.read(&mut buffer).await.context("Failed to read file for hashing")?;

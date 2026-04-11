@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use inquire::{Confirm, Password, PasswordDisplayMode, Select};
 use strum::IntoEnumIterator;
 
@@ -40,16 +40,12 @@ impl Prompt {
     }
 
     pub fn mode() -> Result<ProcessorMode> {
-        let modes: Vec<ProcessorMode> = ProcessorMode::iter().collect();
-        let labels: Vec<&str> = modes.iter().map(|m| m.label()).collect();
-        select("Select operation", &labels).map(|i| modes[i])
+        select("Select operation", ProcessorMode::iter())
     }
 
     pub fn file(files: &[File]) -> Result<PathBuf> {
         anyhow::ensure!(!files.is_empty(), "No files available");
-
-        let labels: Vec<String> = files.iter().map(|f| filename(f.path())).collect();
-        select("Select file", &labels).map(|i| files[i].path().to_path_buf())
+        select_by("Select file", files, |f: &File| filename(f.path())).map(|f| f.path().to_path_buf())
     }
 
     pub fn overwrite(path: &Path) -> Result<bool> {
@@ -65,11 +61,36 @@ fn filename(path: &Path) -> String {
     path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
 }
 
-fn select(msg: &str, items: &[impl ToString]) -> Result<usize> {
+fn select<T>(msg: &str, items: impl IntoIterator<Item = T>) -> Result<T>
+where
+    T: ToString,
+{
+    let items: Vec<T> = items.into_iter().collect();
     let labels: Vec<String> = items.iter().map(ToString::to_string).collect();
-    let choice = Select::new(msg, labels.clone()).with_starting_cursor(0).prompt().context("Failed to read user selection")?;
 
-    labels.into_iter().position(|l| l == choice).ok_or_else(|| anyhow!("Invalid user selection"))
+    let idx = Select::new(msg, labels.clone())
+        .with_starting_cursor(0)
+        .prompt()
+        .context("Failed to read user selection")
+        .and_then(|choice| labels.iter().position(|l| l == &choice).context("Invalid user selection"))?;
+
+    items.into_iter().nth(idx).context("Invalid user selection")
+}
+
+fn select_by<'a, T, F, D>(msg: &str, items: &'a [T], key: F) -> Result<&'a T>
+where
+    F: Fn(&T) -> D,
+    D: ToString,
+{
+    let labels: Vec<String> = items.iter().map(|i| key(i).to_string()).collect();
+
+    let idx = Select::new(msg, labels.clone())
+        .with_starting_cursor(0)
+        .prompt()
+        .context("Failed to read user selection")
+        .and_then(|choice| labels.iter().position(|l| l == &choice).context("Invalid user selection"))?;
+
+    items.get(idx).context("Invalid user selection")
 }
 
 fn confirm(msg: &str) -> Result<bool> {

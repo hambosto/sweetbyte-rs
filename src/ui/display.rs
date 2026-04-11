@@ -44,18 +44,19 @@ impl From<bool> for EncryptionStatus {
     }
 }
 
-struct Styles {
-    icon: Style,
-    text: Style,
-    warning: Style,
-    banner: Style,
-}
-
-impl Default for Styles {
-    fn default() -> Self {
-        Self { icon: Style::new().green().bright(), text: Style::new().white().bright(), warning: Style::new().yellow().bright(), banner: Style::new().green().bright() }
+impl EncryptionStatus {
+    fn color(&self) -> Color {
+        match self {
+            Self::Encrypted => Color::Cyan,
+            Self::Unencrypted => Color::Green,
+        }
     }
 }
+
+const ICON: Style = Style::new().green().bright();
+const TEXT: Style = Style::new().white().bright();
+const WARNING: Style = Style::new().yellow().bright();
+const BANNER: Style = Style::new().green().bright();
 
 fn base_table() -> Table {
     let mut table = Table::new();
@@ -63,7 +64,15 @@ fn base_table() -> Table {
     table
 }
 
-fn colored(text: &impl ToString, color: Color) -> Cell {
+fn kv_table(rows: impl IntoIterator<Item = (&'static str, String)>) -> Table {
+    let mut table = base_table();
+    for (k, v) in rows {
+        table.add_row([colored(k, Color::Green), colored(&v, Color::White)]);
+    }
+    table
+}
+
+fn colored(text: &(impl ToString + ?Sized), color: Color) -> Cell {
     Cell::new(text.to_string()).fg(color)
 }
 
@@ -73,25 +82,24 @@ fn filename(path: &Path) -> &str {
 
 pub struct Display {
     term: Term,
-    styles: Styles,
     name_max_len: usize,
 }
 
 impl Display {
     pub fn new(name_max_len: usize) -> Self {
-        Self { term: Term::stdout(), styles: Styles::default(), name_max_len }
+        Self { term: Term::stdout(), name_max_len }
     }
 
     fn print(&self, line: impl std::fmt::Display) -> Result<()> {
         self.term.write_line(&line.to_string()).context("Failed to write to terminal")
     }
 
-    fn msg(&self, icon: Icon, text: impl std::fmt::Display) -> Result<()> {
-        self.print(format!("{} {}", self.styles.icon.apply_to(icon), self.styles.text.apply_to(text)))
-    }
-
     fn blank(&self) -> Result<()> {
         self.term.write_line("").context("Failed to write blank line")
+    }
+
+    fn message(&self, icon: Icon, text: impl std::fmt::Display) -> Result<()> {
+        self.print(format!("{} {}", ICON.apply_to(icon), TEXT.apply_to(text),))
     }
 
     fn truncate<'a>(&self, s: &'a str) -> Cow<'a, str> {
@@ -100,11 +108,11 @@ impl Display {
 
     pub async fn files(&self, items: &mut [File]) -> Result<()> {
         if items.is_empty() {
-            return self.print(self.styles.warning.apply_to("No files found"));
+            return self.print(WARNING.apply_to("No files found"));
         }
 
         self.blank()?;
-        self.msg(Icon::Ok, format!("Found {} file(s):", items.len()))?;
+        self.message(Icon::Ok, format!("Found {} file(s):", items.len()))?;
         self.blank()?;
 
         let mut table = base_table();
@@ -115,12 +123,7 @@ impl Display {
             let size = ByteSize(file.size().await?).to_string();
             let status = EncryptionStatus::from(file.is_encrypted());
 
-            let status_color = match status {
-                EncryptionStatus::Encrypted => Color::Cyan,
-                EncryptionStatus::Unencrypted => Color::Green,
-            };
-
-            table.add_row([Cell::new(i + 1), colored(&name, Color::Green), Cell::new(size), colored(&status, status_color)]);
+            table.add_row([Cell::new(i + 1), colored(&name, Color::Green), Cell::new(size), colored(&status, status.color())]);
         }
 
         self.print(table)?;
@@ -133,29 +136,23 @@ impl Display {
             ProcessorMode::Decrypt => (Icon::Unlock, "decrypted"),
         };
         self.blank()?;
-        self.msg(icon, format!("File {label} successfully: {}", filename(path)))
+        self.message(icon, format!("File {label} successfully: {}", filename(path)))
     }
 
     pub fn deleted(&self, path: &Path) -> Result<()> {
-        self.msg(Icon::Trash, format!("Source file deleted: {}", filename(path)))
+        self.message(Icon::Trash, format!("Source file deleted: {}", filename(path)))
     }
 
     pub fn header(&self, name: &str, size: u64, hash: &str) -> Result<()> {
         self.blank()?;
-        self.msg(Icon::Info, "Header Information:")?;
-
-        let mut table = base_table();
-        for (field, value) in [("Original Filename", name.to_owned()), ("Original Size", ByteSize(size).to_string()), ("Original Hash", hash.to_owned())] {
-            table.add_row([colored(&field, Color::Green), colored(&value, Color::White)]);
-        }
-
-        self.print(table)
+        self.message(Icon::Info, "Header Information:")?;
+        self.print(kv_table([("Original Filename", name.to_owned()), ("Original Size", ByteSize(size).to_string()), ("Original Hash", hash.to_owned())]))
     }
 
     pub fn banner(&self) -> Result<()> {
         let font = Toilet::future().map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
         let figure = font.convert(APP_NAME).context("Failed to render banner")?;
-        self.print(self.styles.banner.apply_to(figure))
+        self.print(BANNER.apply_to(figure))
     }
 
     pub fn clear(&self) -> Result<()> {
