@@ -99,7 +99,7 @@ impl Display {
     }
 
     fn message(&self, icon: Icon, text: impl std::fmt::Display) -> Result<()> {
-        self.print(format!("{} {}", ICON.apply_to(icon), TEXT.apply_to(text),))
+        self.print(format!("{} {}", ICON.apply_to(icon), TEXT.apply_to(text)))
     }
 
     fn truncate<'a>(&self, s: &'a str) -> Cow<'a, str> {
