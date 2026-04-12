@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -102,8 +101,8 @@ impl Display {
         self.print(format!("{} {}", ICON.apply_to(icon), TEXT.apply_to(text)))
     }
 
-    fn truncate<'a>(&self, s: &'a str) -> Cow<'a, str> {
-        if s.len() > self.name_max_len { format!("{}…", &s[..self.name_max_len.saturating_sub(1)]).into() } else { s.into() }
+    fn truncate(&self, s: &str) -> String {
+        if s.len() > self.name_max_len { format!("{}…", &s[..self.name_max_len.saturating_sub(1)]) } else { s.to_owned() }
     }
 
     pub async fn files(&self, items: &mut [File]) -> Result<()> {
@@ -119,7 +118,7 @@ impl Display {
         table.set_header(["No", "Name", "Size", "Status"].map(|h| colored(&h, Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
-            let name = self.truncate(filename(file.path())).into_owned();
+            let name = self.truncate(filename(file.path()));
             let size = ByteSize(file.size().await?).to_string();
             let status = EncryptionStatus::from(file.is_encrypted());
 
