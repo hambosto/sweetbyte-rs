@@ -34,7 +34,7 @@ impl Worker {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let channel_size = std::thread::available_parallelism().map(NonZero::get).unwrap_or(4);
+        let channel_size = std::thread::available_parallelism().map_or(4, NonZero::get).unwrap_or(4);
         let progress_bar = Progress::new(total_size, self.mode.label()).context("Failed to initialise progress")?;
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);
