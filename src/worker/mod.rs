@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -32,7 +34,7 @@ impl Worker {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let channel_size = if let Ok(cores) = std::thread::available_parallelism() { cores.get() } else { 4 };
+        let channel_size = std::thread::available_parallelism().map(NonZero::get).unwrap_or(4);
         let progress_bar = Progress::new(total_size, self.mode.label()).context("Failed to initialise progress")?;
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);
@@ -42,11 +44,11 @@ impl Worker {
         let writer_handle = tokio::spawn(async move { Writer::new(self.mode).write_all(output, result_rx, &progress_bar).await });
         let executor_handle = tokio::spawn(async move { Executor::new(self.pipeline, channel_size).execute(task_rx, result_tx).await });
 
-        let (writer_result, reader_result, executor_result) = tokio::join!(writer_handle, reader_handle, executor_handle);
+        let (reader_result, executor_result, writer_result) = tokio::join!(reader_handle, executor_handle, writer_handle);
 
-        writer_result.context("Writer panicked")?.context("Writer failed")?;
         reader_result.context("Reader panicked")?.context("Reader failed")?;
         executor_result.context("Executor panicked")?.context("Executor failed")?;
+        writer_result.context("Writer panicked")?.context("Writer failed")?;
 
         Ok(())
     }
