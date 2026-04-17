@@ -39,7 +39,6 @@ jobs:
       - name: Run tests
         run: cargo test --all-features
 
-      - name: Build and push niri-unstable to Cachix
-        if: ${{ steps.update.outputs.pull-request-number != '' }}
+      - name: Build and push sweetbyte-rs to Cachix
         run: |
           nix-store --query --requisites $(nix-store --query --deriver $(nix build --print-out-paths .)) | cachix push ${{ secrets.CACHIX_CACHE_NAME }}
