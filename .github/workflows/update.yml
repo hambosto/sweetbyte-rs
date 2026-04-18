@@ -12,9 +12,7 @@ permissions:
 jobs:
   update:
     name: Update Dependencies (Flake Lock)
-
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
