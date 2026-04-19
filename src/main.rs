@@ -150,14 +150,12 @@ async fn encrypt(src: &mut File, dest: &File, secret: &SecretString) -> Result<F
 async fn decrypt(src: &File, dest: &File, secret: &SecretString) -> Result<FileInfo> {
     let mut reader = src.reader().await?;
     let header = HeaderReader::read(reader.get_mut()).await?;
-
     anyhow::ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
     let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(header.salt())?;
     anyhow::ensure!(header.verify(&key)?, "invalid password or corrupted data");
 
     Worker::new(&key, Processing::Decryption)?.process(reader, dest.writer().await?, header.file_size()).await?;
-
     anyhow::ensure!(dest.validate_hash(header.file_hash()).await?, "hash mismatch");
 
     Ok(FileInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
