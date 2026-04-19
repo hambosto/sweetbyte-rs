@@ -14,14 +14,13 @@ mod worker;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use tokio::io::AsyncWriteExt;
-
 use cipher::Derive;
+use clap::{Parser, Subcommand};
 use config::{ARGON_SALT_LEN, PASSWORD_MIN_LENGTH};
 use file::File;
 use header::{HeaderReader, HeaderWriter, Metadata};
 use secret::SecretString;
+use tokio::io::AsyncWriteExt;
 use types::{Processing, ProcessorMode};
 use ui::display::Display;
 use ui::prompt::Prompt;
