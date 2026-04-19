@@ -8,9 +8,9 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       systems,
-      self,
       ...
     }:
     let
@@ -19,11 +19,11 @@
     in
     {
       overlays.default = final: _prev: {
-        sweetbyte-rs = final.callPackage ./nix/package.nix { };
+        sweetbyte-rs = final.callPackage ./nix/package.nix { inherit self; };
       };
 
       packages = forAllSystems (system: {
-        default = (pkgsFor system).callPackage ./nix/package.nix { };
+        default = (pkgsFor system).callPackage ./nix/package.nix { inherit self; };
       });
 
       devShells = forAllSystems (system: {

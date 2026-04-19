@@ -1,10 +1,24 @@
 {
   lib,
   rustPlatform,
+  self,
 }:
-rustPlatform.buildRustPackage (final: {
+let
+  fmtDate =
+    raw:
+    let
+      year = builtins.substring 0 4 raw;
+      month = builtins.substring 4 2 raw;
+      day = builtins.substring 6 2 raw;
+    in
+    "${year}-${month}-${day}";
+
+  date = fmtDate (self.lastModifiedDate or "19700101");
+  shortRev = self.shortRev or "dirty";
+in
+rustPlatform.buildRustPackage {
   pname = "sweetbyte-rs";
-  version = "v26.1.0";
+  version = "unstable-${date}-${shortRev}";
 
   src = lib.fileset.toSource {
     root = ../.;
@@ -24,4 +38,4 @@ rustPlatform.buildRustPackage (final: {
     mainProgram = "sweetbyte-rs";
     platforms = lib.platforms.unix;
   };
-})
+}
