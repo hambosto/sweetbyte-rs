@@ -13,7 +13,6 @@ pub enum Cmd {
 }
 
 impl Cli {
-    #[must_use]
     pub fn parse_args() -> Self {
         Self::parse()
     }

@@ -18,10 +18,3 @@ impl<T: Zeroize + ZeroizeOnDrop> ZeroizeOnDrop for Secret<T> {}
 
 pub type SecretBytes = Secret<Vec<u8>>;
 pub type SecretString = Secret<String>;
-
-impl SecretBytes {
-    #[must_use]
-    pub fn from_slice(data: &[u8]) -> Self {
-        Self::new(data.to_vec())
-    }
-}

@@ -2,23 +2,23 @@ use anyhow::Result;
 
 use crate::cipher::Signer;
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CURRENT_VERSION, DATA_SHARDS, MAGIC_BYTES, PARITY_SHARDS};
+use crate::header::metadata::Metadata;
+use crate::header::parameters::Parameters;
 use crate::header::section::SectionShield;
-use crate::header::types::{Metadata, Parameters};
 use crate::secret::SecretBytes;
 
-pub struct HeaderWriter {
+pub struct Serializer {
     params: Parameters,
     metadata: Metadata,
 }
 
-impl HeaderWriter {
+impl Serializer {
     pub fn new(metadata: Metadata) -> Result<Self> {
         let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION)?;
 
         Ok(Self { params, metadata })
     }
 
-    #[must_use]
     pub fn file_hash(&self) -> &[u8] {
         self.metadata.hash()
     }

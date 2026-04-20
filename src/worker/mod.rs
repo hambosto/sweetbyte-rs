@@ -1,10 +1,8 @@
-use std::num::NonZero;
-
 use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::secret::SecretBytes;
-use crate::types::{Processing, Task, TaskResult};
+use crate::types::{ProcessorMode, Task, TaskResult};
 use crate::ui::progress::Progress;
 use crate::worker::executor::Executor;
 use crate::worker::pipeline::Pipeline;
@@ -18,12 +16,12 @@ pub mod reader;
 pub mod writer;
 
 pub struct Worker {
-    mode: Processing,
+    mode: ProcessorMode,
     pipeline: Pipeline,
 }
 
 impl Worker {
-    pub fn new(key: &SecretBytes, mode: Processing) -> Result<Self> {
+    pub fn new(key: &SecretBytes, mode: ProcessorMode) -> Result<Self> {
         let pipeline = Pipeline::new(key, mode).context("Failed to initialise pipeline")?;
 
         Ok(Self { mode, pipeline })
@@ -34,7 +32,7 @@ impl Worker {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let channel_size = std::thread::available_parallelism().map_or(4, NonZero::get);
+        let channel_size = std::thread::available_parallelism().map(|p| p.get())?;
         let progress_bar = Progress::new(total_size, self.mode.label()).context("Failed to initialise progress")?;
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);

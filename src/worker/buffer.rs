@@ -8,7 +8,6 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    #[must_use]
     pub fn new(start: u64) -> Self {
         Self { buffer: HashMap::new(), next_idx: start }
     }

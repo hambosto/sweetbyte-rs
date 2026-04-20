@@ -10,7 +10,6 @@ pub enum CompressionLevel {
 }
 
 impl CompressionLevel {
-    #[must_use]
     pub fn is_valid(&self) -> bool {
         matches!(self, Self::Fast | Self::Default | Self::Good | Self::Best)
     }

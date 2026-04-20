@@ -9,22 +9,21 @@ use console::{Style, Term};
 use figlet_rs::Toilet;
 
 use crate::config::APP_NAME;
-use crate::file::File;
+use crate::files::Files;
 use crate::types::ProcessorMode;
 
 pub struct Display {
-    term: Term,
+    terminal: Term,
     name_max_len: usize,
 }
 
 impl Display {
-    #[must_use]
     pub fn new(name_max_len: usize) -> Self {
-        Self { term: Term::stdout(), name_max_len }
+        Self { terminal: Term::stdout(), name_max_len }
     }
 
     fn print(&self, s: impl Into<String>) -> Result<()> {
-        self.term.write_line(&s.into()).context("write failed")
+        self.terminal.write_line(&s.into()).context("write failed")
     }
 
     fn message(&self, icon: &str, text: impl std::fmt::Display) -> Result<()> {
@@ -32,7 +31,7 @@ impl Display {
         self.print(line)
     }
 
-    pub async fn files(&self, items: &mut [File]) -> Result<()> {
+    pub async fn files(&self, items: &mut [Files]) -> Result<()> {
         if items.is_empty() {
             return self.print(Style::new().yellow().bright().apply_to("No files found").to_string());
         }
@@ -59,8 +58,8 @@ impl Display {
 
     pub fn success(&self, mode: ProcessorMode, path: &Path) -> Result<()> {
         let (icon, verb) = match mode {
-            ProcessorMode::Encrypt => ("[E]", "encrypted"),
-            ProcessorMode::Decrypt => ("[D]", "decrypted"),
+            ProcessorMode::Encryption => ("[E]", "encrypted"),
+            ProcessorMode::Decryption => ("[D]", "decrypted"),
         };
         self.print("")?;
         self.message(icon, format!("File {verb} successfully: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or_default()))
@@ -92,6 +91,6 @@ impl Display {
     }
 
     pub fn clear(&self) -> Result<()> {
-        self.term.clear_screen().context("clear failed")
+        self.terminal.clear_screen().context("clear failed")
     }
 }

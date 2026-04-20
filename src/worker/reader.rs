@@ -3,14 +3,13 @@ use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
 use crate::config::CHUNK_SIZE;
-use crate::types::{Processing, Task};
+use crate::types::{ProcessorMode, Task};
 pub struct Reader {
-    mode: Processing,
+    mode: ProcessorMode,
 }
 
 impl Reader {
-    #[must_use]
-    pub fn new(mode: Processing) -> Self {
+    pub fn new(mode: ProcessorMode) -> Self {
         Self { mode }
     }
 
@@ -18,8 +17,8 @@ impl Reader {
         let mut reader = BufReader::new(input);
 
         match self.mode {
-            Processing::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
-            Processing::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
+            ProcessorMode::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
+            ProcessorMode::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
         }
     }
 

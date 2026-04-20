@@ -3,18 +3,19 @@ use tokio::io::AsyncRead;
 
 use crate::cipher::Signer;
 use crate::config::{ARGON_KEY_LEN, DATA_SHARDS, PARITY_SHARDS};
+use crate::header::metadata::Metadata;
+use crate::header::parameters::Parameters;
 use crate::header::section::{PackedSections, SectionShield};
-use crate::header::types::{Metadata, Parameters};
 use crate::secret::SecretBytes;
 
-pub struct HeaderReader {
+pub struct Deserializer {
     params: Parameters,
     metadata: Metadata,
     packed: PackedSections,
 }
 
-impl HeaderReader {
-    pub async fn read<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
+impl Deserializer {
+    pub async fn deserialize<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
         let packed = shield.unpack(reader).await?;
 
@@ -26,22 +27,18 @@ impl HeaderReader {
         Ok(Self { params, metadata, packed })
     }
 
-    #[must_use]
     pub fn file_name(&self) -> &str {
         self.metadata.name()
     }
 
-    #[must_use]
     pub fn file_size(&self) -> u64 {
         self.metadata.size()
     }
 
-    #[must_use]
     pub fn file_hash(&self) -> &[u8] {
         self.metadata.hash()
     }
 
-    #[must_use]
     pub fn salt(&self) -> &[u8] {
         self.packed.salt.expose_secret()
     }

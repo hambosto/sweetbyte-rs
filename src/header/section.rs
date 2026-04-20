@@ -69,7 +69,7 @@ impl SectionShield {
         let metadata = self.read_section(reader, frame.metadata).await?;
         let mac = self.read_section(reader, frame.mac).await?;
 
-        Ok(PackedSections { salt: SecretBytes::from_slice(&salt), params, metadata, mac: SecretBytes::from_slice(&mac) })
+        Ok(PackedSections { salt: SecretBytes::new(salt), params, metadata, mac: SecretBytes::new(mac) })
     }
 
     async fn read_frame<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Frame> {

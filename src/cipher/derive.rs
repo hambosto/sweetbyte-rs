@@ -25,7 +25,7 @@ impl Derive {
 
         argon2.hash_password_into(self.key.expose_secret(), salt, &mut derived_key).context("Argon2 key derivation failed")?;
 
-        Ok(SecretBytes::from_slice(&derived_key))
+        Ok(SecretBytes::new(derived_key))
     }
 
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {

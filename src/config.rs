@@ -1,6 +1,6 @@
 pub const APP_NAME: &str = "SweetByte";
 
-pub const FILE_EXTENSION: &str = ".swx";
+pub const FILE_EXTENSION: &str = "swx";
 
 pub const ARGON_TIME: u32 = 3;
 
