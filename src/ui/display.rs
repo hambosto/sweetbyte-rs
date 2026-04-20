@@ -1,5 +1,4 @@
 use std::path::Path;
-
 use anyhow::{Context, Result};
 use bytesize::ByteSize;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
@@ -7,93 +6,9 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 use console::{Style, Term};
 use figlet_rs::Toilet;
-use strum::{Display, EnumString};
-
 use crate::config::APP_NAME;
 use crate::file::File;
 use crate::types::ProcessorMode;
-
-#[derive(Clone, Copy, Display, EnumString)]
-enum Icon {
-    #[strum(to_string = "[+]")]
-    Ok,
-    #[strum(to_string = "[!]")]
-    Warn,
-    #[strum(to_string = "[E]")]
-    Lock,
-    #[strum(to_string = "[D]")]
-    Unlock,
-    #[strum(to_string = "[-]")]
-    Trash,
-    #[strum(to_string = "[i]")]
-    Info,
-}
-
-#[derive(Display)]
-enum EncryptionStatus {
-    #[strum(to_string = "[E] encrypted")]
-    Encrypted,
-    #[strum(to_string = "[D] unencrypted")]
-    Unencrypted,
-}
-
-impl From<bool> for EncryptionStatus {
-    fn from(encrypted: bool) -> Self {
-        if encrypted { Self::Encrypted } else { Self::Unencrypted }
-    }
-}
-
-impl EncryptionStatus {
-    fn color(&self) -> Color {
-        match self {
-            Self::Encrypted => Color::Cyan,
-            Self::Unencrypted => Color::Green,
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum Theme {
-    Icon,
-    Text,
-    Warning,
-    Banner,
-}
-
-impl Theme {
-    #[must_use]
-    pub fn style(self) -> Style {
-        match self {
-            Theme::Icon | Theme::Banner => Style::new().green().bright(),
-            Theme::Text => Style::new().white().bright(),
-            Theme::Warning => Style::new().yellow().bright(),
-        }
-    }
-}
-
-
-
-fn base_table() -> Table {
-    let mut table = Table::new();
-    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
-    table
-}
-
-fn kv_table(rows: impl IntoIterator<Item = (&'static str, String)>) -> Table {
-    let mut table = base_table();
-    for (k, v) in rows {
-        table.add_row([colored(k, Color::Green), colored(&v, Color::White)]);
-    }
-    table
-}
-
-fn colored(text: &(impl ToString + ?Sized), color: Color) -> Cell {
-    Cell::new(text.to_string()).fg(color)
-}
-
-fn filename(path: &Path) -> &str {
-    path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
-}
 
 pub struct Display {
     term: Term,
@@ -101,77 +16,111 @@ pub struct Display {
 }
 
 impl Display {
-    #[must_use]
     pub fn new(name_max_len: usize) -> Self {
         Self { term: Term::stdout(), name_max_len }
     }
 
-    fn print(&self, line: impl std::fmt::Display) -> Result<()> {
-        self.term.write_line(&line.to_string()).context("Failed to write to terminal")
+    fn print(&self, s: impl ToString) -> Result<()> {
+        self.term.write_line(&s.to_string()).context("write failed")
     }
 
-    fn blank(&self) -> Result<()> {
-        self.term.write_line("").context("Failed to write blank line")
-    }
-
-    fn message(&self, icon: Icon, text: impl std::fmt::Display) -> Result<()> {
-        self.print(format!("{} {}", Theme::Icon.style().apply_to(icon), Theme::Text.style().apply_to(text)))
-    }
-
-    fn truncate(&self, s: &str) -> String {
-        if s.len() > self.name_max_len { format!("{}…", &s[..self.name_max_len.saturating_sub(1)]) } else { s.to_owned() }
+    fn msg(&self, icon: &str, text: impl ToString) -> Result<()> {
+        let line = format!(
+            "{} {}",
+            Style::new().green().bright().apply_to(icon),
+            Style::new().white().bright().apply_to(text.to_string()),
+        );
+        self.print(line)
     }
 
     pub async fn files(&self, items: &mut [File]) -> Result<()> {
         if items.is_empty() {
-            return self.print(Theme::Warning.style().apply_to("No files found"));
+            return self.print(Style::new().yellow().bright().apply_to("No files found"));
         }
 
-        self.blank()?;
-        self.message(Icon::Ok, format!("Found {} file(s):", items.len()))?;
-        self.blank()?;
+        self.print("")?;
+        self.msg("[+]", format!("Found {} file(s):", items.len()))?;
+        self.print("")?;
 
-        let mut table = base_table();
-        table.set_header(["No", "Name", "Size", "Status"].map(|h| colored(&h, Color::White)));
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic);
+        table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
-            let name = self.truncate(filename(file.path()));
+            let raw_name = file.path().file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            let name = if raw_name.len() > self.name_max_len {
+                &raw_name[..self.name_max_len.saturating_sub(1)]
+            } else {
+                raw_name
+            };
             let size = ByteSize(file.size().await?).to_string();
-            let status = EncryptionStatus::from(file.is_encrypted());
-
-            table.add_row([Cell::new(i + 1), colored(&name, Color::Green), Cell::new(size), colored(&status, status.color())]);
+            let (status, color) = if file.is_encrypted() {
+                ("[E] encrypted", Color::Cyan)
+            } else {
+                ("[D] unencrypted", Color::Green)
+            };
+            table.add_row([
+                Cell::new(i + 1),
+                Cell::new(name).fg(Color::Green),
+                Cell::new(size),
+                Cell::new(status).fg(color),
+            ]);
         }
 
         self.print(table)?;
-        self.blank()
+        self.print("")
     }
 
     pub fn success(&self, mode: ProcessorMode, path: &Path) -> Result<()> {
-        let (icon, label) = match mode {
-            ProcessorMode::Encrypt => (Icon::Lock, "encrypted"),
-            ProcessorMode::Decrypt => (Icon::Unlock, "decrypted"),
+        let (icon, verb) = match mode {
+            ProcessorMode::Encrypt => ("[E]", "encrypted"),
+            ProcessorMode::Decrypt => ("[D]", "decrypted"),
         };
-        self.blank()?;
-        self.message(icon, format!("File {label} successfully: {}", filename(path)))
+        self.print("")?;
+        self.msg(icon, format!(
+            "File {verb} successfully: {}",
+            path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
+        ))
     }
 
     pub fn deleted(&self, path: &Path) -> Result<()> {
-        self.message(Icon::Trash, format!("Source file deleted: {}", filename(path)))
+        self.msg("[-]", format!(
+            "Source file deleted: {}",
+            path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
+        ))
     }
 
     pub fn header(&self, name: &str, size: u64, hash: &str) -> Result<()> {
-        self.blank()?;
-        self.message(Icon::Info, "Header Information:")?;
-        self.print(kv_table([("Original Filename", name.to_owned()), ("Original Size", ByteSize(size).to_string()), ("Original Hash", hash.to_owned())]))
+        self.print("")?;
+        self.msg("[i]", "Header Information:")?;
+
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic);
+
+        for (k, v) in [
+            ("Original Filename", name),
+            ("Original Size",     &ByteSize(size).to_string() as &str),
+            ("Original Hash",     hash),
+        ] {
+            table.add_row([Cell::new(k).fg(Color::Green), Cell::new(v).fg(Color::White)]);
+        }
+
+        self.print(table)
     }
 
     pub fn banner(&self) -> Result<()> {
-        let font = Toilet::future().map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
-        let figure = font.convert(APP_NAME).context("Failed to render banner")?;
-        self.print(Theme::Banner.style().apply_to(figure))
+        let toilet = Toilet::future().map_err(|e| anyhow::anyhow!("font: {e}"))?;
+        let figure = toilet.convert(APP_NAME).context("render failed")?;
+        self.print(Style::new().green().bright().apply_to(figure))
     }
 
     pub fn clear(&self) -> Result<()> {
-        self.term.clear_screen().context("Failed to clear terminal")
+        self.term.clear_screen().context("clear failed")
     }
 }
