@@ -1,16 +1,30 @@
-use anyhow::Result;
-use tokio::io::AsyncWriteExt;
+mod allocator;
+mod cipher;
+mod cli;
+mod compression;
+mod config;
+mod encoding;
+mod file;
+mod header;
+mod padding;
+mod secret;
+mod types;
+mod ui;
+mod worker;
 
-use sweetbyte_rs::cipher::Derive;
-use sweetbyte_rs::config::{ARGON_SALT_LEN, PASSWORD_MIN_LENGTH};
-use sweetbyte_rs::file::File;
-use sweetbyte_rs::header::{HeaderReader, HeaderWriter, Metadata};
-use sweetbyte_rs::secret::SecretString;
-use sweetbyte_rs::types::{FileInfo, Processing};
-use sweetbyte_rs::ui::display::Display;
-use sweetbyte_rs::ui::prompt::Prompt;
-use sweetbyte_rs::worker::Worker;
-use sweetbyte_rs::cli::{Cli, Cmd};
+
+use anyhow::Result;
+use cipher::Derive;
+use cli::{Cli, Cmd};
+use config::{ARGON_SALT_LEN, PASSWORD_MIN_LENGTH};
+use file::File;
+use header::{HeaderReader, HeaderWriter, Metadata};
+use secret::SecretString;
+use types::{FileInfo, Processing};
+use ui::display::Display;
+use ui::prompt::Prompt;
+use worker::Worker;
+use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -30,7 +44,9 @@ async fn run(prompt: &Prompt, display: &Display) -> Result<()> {
     let processing = Processing::from(mode);
 
     let mut files = File::discover(".", mode);
-    anyhow::ensure!(!files.is_empty(), "no eligible files found");
+    if files.is_empty() {
+        anyhow::bail!("no eligible files found");
+    }
 
     display.files(&mut files).await?;
 
@@ -42,10 +58,7 @@ async fn run(prompt: &Prompt, display: &Display) -> Result<()> {
         anyhow::bail!("operation cancelled");
     }
 
-    let secret = SecretString::new(prompt.password(&processing)?);
-    anyhow::ensure!(src.exists(), "source file not found: {}", src.path().display());
-    anyhow::ensure!(!src.path().is_dir(), "source is a directory: {}", src.path().display());
-
+    let secret = SecretString::new(prompt.password(processing)?);
     let info = match processing {
         Processing::Encryption => encrypt(&mut src, &dest, &secret).await,
         Processing::Decryption => decrypt(&src, &dest, &secret).await,
@@ -84,7 +97,6 @@ async fn encrypt(src: &mut File, dest: &File, secret: &SecretString) -> Result<F
 async fn decrypt(src: &File, dest: &File, secret: &SecretString) -> Result<FileInfo> {
     let mut reader = src.reader().await?;
     let header = HeaderReader::read(reader.get_mut()).await?;
-    anyhow::ensure!(header.file_size() != 0, "cannot decrypt a file with zero size");
 
     let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(header.salt())?;
     anyhow::ensure!(header.verify(&key)?, "invalid password or corrupted data");

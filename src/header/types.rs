@@ -21,17 +21,17 @@ impl Metadata {
         Ok(Self { name, size, hash })
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn size(&self) -> u64 {
         self.size
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn hash(&self) -> &[u8] {
         &self.hash
     }

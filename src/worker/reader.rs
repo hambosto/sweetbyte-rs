@@ -9,7 +9,7 @@ pub struct Reader {
 }
 
 impl Reader {
-    #[must_use] 
+    #[must_use]
     pub fn new(mode: Processing) -> Self {
         Self { mode }
     }

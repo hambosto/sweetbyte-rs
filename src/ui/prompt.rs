@@ -1,8 +1,10 @@
-use crate::types::ProcessorMode;
-use crate::{file::File, types::Processing};
+use std::path::{Path, PathBuf};
+
 use anyhow::{Context, Result};
 use inquire::{Confirm, Password, PasswordDisplayMode, Select};
-use std::path::{Path, PathBuf};
+
+use crate::file::File;
+use crate::types::{Processing, ProcessorMode};
 
 struct PasswordPrompt {
     message: String,
@@ -41,6 +43,7 @@ impl SelectPrompt {
         let items: Vec<T> = items.into_iter().collect();
         let labels: Vec<String> = items.iter().map(ToString::to_string).collect();
         let idx = self.resolve_index(&labels)?;
+        
         items.into_iter().nth(idx).context("Invalid selection")
     }
 
@@ -81,18 +84,17 @@ pub struct Prompt {
 }
 
 impl Prompt {
-    #[must_use] 
     pub fn new(min_len: usize) -> Self {
         Self { min_len }
     }
 
-    pub fn password(&self, processing: &Processing) -> Result<String> {
+    pub fn password(&self, processing: Processing) -> Result<String> {
         let message = match processing {
             Processing::Encryption => "Enter encryption password",
             Processing::Decryption => "Enter decryption password",
         };
 
-        PasswordPrompt::new(message, self.min_len, *processing).ask()
+        PasswordPrompt::new(message, self.min_len, processing).ask()
     }
 
     pub fn mode(&self) -> Result<ProcessorMode> {
@@ -101,6 +103,7 @@ impl Prompt {
 
     pub fn file(&self, files: &[File]) -> Result<PathBuf> {
         anyhow::ensure!(!files.is_empty(), "No files available");
+        
         let idx = SelectPrompt::new("Select file").ask_ref(files, |f: &File| filename(f.path()))?;
         files.get(idx).map(|f| f.path().to_path_buf()).context("Invalid selection")
     }

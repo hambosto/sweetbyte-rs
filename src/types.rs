@@ -9,7 +9,7 @@ pub enum ProcessorMode {
 }
 
 impl ProcessorMode {
-    #[must_use] 
+    #[must_use]
     pub fn label(self) -> &'static str {
         self.into()
     }
@@ -28,7 +28,7 @@ pub enum Processing {
 }
 
 impl Processing {
-    #[must_use] 
+    #[must_use]
     pub fn label(self) -> &'static str {
         self.into()
     }
@@ -65,12 +65,12 @@ pub struct TaskResult {
 }
 
 impl TaskResult {
-    #[must_use] 
+    #[must_use]
     pub fn ok(index: u64, data: Vec<u8>, size: usize) -> Self {
         Self { data, error: None, index, size }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn err(index: u64, error: &anyhow::Error) -> Self {
         Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
     }

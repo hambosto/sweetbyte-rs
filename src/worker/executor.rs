@@ -15,7 +15,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    #[must_use] 
+    #[must_use]
     pub fn new(pipeline: Pipeline, concurrency: usize) -> Self {
         let pipeline = Arc::new(pipeline);
         let semaphore = Arc::new(Semaphore::new(concurrency));

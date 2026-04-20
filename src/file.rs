@@ -24,27 +24,27 @@ impl File {
         Self { path: path.into() }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn exists(&self) -> bool {
         self.path.exists()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_encrypted(&self) -> bool {
         self.path.extension().is_some_and(|ext| ext == FILE_EXTENSION.trim_start_matches('.'))
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_hidden(&self) -> bool {
         self.path.file_name().is_some_and(|name| name.to_string_lossy().starts_with('.'))
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_excluded(&self) -> bool {
         let path = self.path.to_str().unwrap_or("");
 
@@ -53,7 +53,7 @@ impl File {
             .any(|pattern| fast_glob::glob_match(pattern, path) || self.path.components().any(|comp| fast_glob::glob_match(pattern, comp.as_os_str().to_str().unwrap_or(""))))
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_eligible(&self, mode: ProcessorMode) -> bool {
         if self.is_hidden() || self.is_excluded() {
             return false;
@@ -65,7 +65,7 @@ impl File {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn output_path(&self, mode: ProcessorMode) -> PathBuf {
         match mode {
             ProcessorMode::Encrypt => {
@@ -134,7 +134,6 @@ impl File {
 
     pub async fn file_metadata(&self) -> Result<FileMetadata> {
         let filename = self.path.file_name().map_or_else(|| "unknown".to_owned(), |n| n.to_string_lossy().into_owned());
-
         let size = self.size().await?;
         let hash = self.hash().await?;
 
@@ -143,6 +142,7 @@ impl File {
 
     pub fn discover(root: impl AsRef<Path>, mode: ProcessorMode) -> Vec<Self> {
         WalkDir::new(root)
+            .min_depth(1)
             .into_iter()
             .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file())

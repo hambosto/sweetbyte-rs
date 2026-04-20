@@ -25,10 +25,3 @@ impl SecretBytes {
         Self::new(data.to_vec())
     }
 }
-
-impl SecretString {
-    #[must_use]
-    pub fn from_str(s: &str) -> Self {
-        Self::new(s.to_owned())
-    }
-}

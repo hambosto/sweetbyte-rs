@@ -15,7 +15,7 @@ impl Signer {
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Vec<u8> {
         let key = Key::new(HMAC_SHA256, self.key.expose_secret());
         let mut ctx = Context::with_key(&key);
@@ -25,7 +25,7 @@ impl Signer {
         ctx.sign().as_ref().to_vec()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn verify_parts(&self, expected: &[u8], parts: &[&[u8]]) -> bool {
         let computed = self.compute_parts(parts);
         expected.ct_eq(&computed).into()

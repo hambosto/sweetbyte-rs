@@ -26,22 +26,22 @@ impl HeaderReader {
         Ok(Self { params, metadata, packed })
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn file_name(&self) -> &str {
         self.metadata.name()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn file_size(&self) -> u64 {
         self.metadata.size()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn file_hash(&self) -> &[u8] {
         self.metadata.hash()
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn salt(&self) -> &[u8] {
         self.packed.salt.expose_secret()
     }
