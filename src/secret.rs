@@ -20,12 +20,14 @@ pub type SecretBytes = Secret<Vec<u8>>;
 pub type SecretString = Secret<String>;
 
 impl SecretBytes {
+    #[must_use]
     pub fn from_slice(data: &[u8]) -> Self {
         Self::new(data.to_vec())
     }
 }
 
 impl SecretString {
+    #[must_use]
     pub fn from_str(s: &str) -> Self {
         Self::new(s.to_owned())
     }

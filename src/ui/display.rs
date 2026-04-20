@@ -52,10 +52,26 @@ impl EncryptionStatus {
     }
 }
 
-const ICON: Style = Style::new().green().bright();
-const TEXT: Style = Style::new().white().bright();
-const WARNING: Style = Style::new().yellow().bright();
-const BANNER: Style = Style::new().green().bright();
+#[derive(Clone, Copy)]
+pub enum Theme {
+    Icon,
+    Text,
+    Warning,
+    Banner,
+}
+
+impl Theme {
+    #[must_use]
+    pub fn style(self) -> Style {
+        match self {
+            Theme::Icon | Theme::Banner => Style::new().green().bright(),
+            Theme::Text => Style::new().white().bright(),
+            Theme::Warning => Style::new().yellow().bright(),
+        }
+    }
+}
+
+
 
 fn base_table() -> Table {
     let mut table = Table::new();
@@ -85,6 +101,7 @@ pub struct Display {
 }
 
 impl Display {
+    #[must_use]
     pub fn new(name_max_len: usize) -> Self {
         Self { term: Term::stdout(), name_max_len }
     }
@@ -98,7 +115,7 @@ impl Display {
     }
 
     fn message(&self, icon: Icon, text: impl std::fmt::Display) -> Result<()> {
-        self.print(format!("{} {}", ICON.apply_to(icon), TEXT.apply_to(text)))
+        self.print(format!("{} {}", Theme::Icon.style().apply_to(icon), Theme::Text.style().apply_to(text)))
     }
 
     fn truncate(&self, s: &str) -> String {
@@ -107,7 +124,7 @@ impl Display {
 
     pub async fn files(&self, items: &mut [File]) -> Result<()> {
         if items.is_empty() {
-            return self.print(WARNING.apply_to("No files found"));
+            return self.print(Theme::Warning.style().apply_to("No files found"));
         }
 
         self.blank()?;
@@ -151,7 +168,7 @@ impl Display {
     pub fn banner(&self) -> Result<()> {
         let font = Toilet::future().map_err(|e| anyhow::anyhow!("Failed to load font: {e}"))?;
         let figure = font.convert(APP_NAME).context("Failed to render banner")?;
-        self.print(BANNER.apply_to(figure))
+        self.print(Theme::Banner.style().apply_to(figure))
     }
 
     pub fn clear(&self) -> Result<()> {

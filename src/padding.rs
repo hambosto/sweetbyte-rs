@@ -13,6 +13,7 @@ pub enum BlockSize {
 }
 
 impl BlockSize {
+    #[must_use] 
     pub fn is_valid(self) -> bool {
         matches!(self, Self::B16 | Self::B32 | Self::B64 | Self::B128)
     }

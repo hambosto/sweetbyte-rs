@@ -24,22 +24,27 @@ impl File {
         Self { path: path.into() }
     }
 
+    #[must_use] 
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    #[must_use] 
     pub fn exists(&self) -> bool {
         self.path.exists()
     }
 
+    #[must_use] 
     pub fn is_encrypted(&self) -> bool {
         self.path.extension().is_some_and(|ext| ext == FILE_EXTENSION.trim_start_matches('.'))
     }
 
+    #[must_use] 
     pub fn is_hidden(&self) -> bool {
         self.path.file_name().is_some_and(|name| name.to_string_lossy().starts_with('.'))
     }
 
+    #[must_use] 
     pub fn is_excluded(&self) -> bool {
         let path = self.path.to_str().unwrap_or("");
 
@@ -48,6 +53,7 @@ impl File {
             .any(|pattern| fast_glob::glob_match(pattern, path) || self.path.components().any(|comp| fast_glob::glob_match(pattern, comp.as_os_str().to_str().unwrap_or(""))))
     }
 
+    #[must_use] 
     pub fn is_eligible(&self, mode: ProcessorMode) -> bool {
         if self.is_hidden() || self.is_excluded() {
             return false;
@@ -59,6 +65,7 @@ impl File {
         }
     }
 
+    #[must_use] 
     pub fn output_path(&self, mode: ProcessorMode) -> PathBuf {
         match mode {
             ProcessorMode::Encrypt => {

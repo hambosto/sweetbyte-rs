@@ -40,8 +40,7 @@ impl Encoding {
             result.extend_from_slice(shard);
         }
 
-        let parity_shards = encoder.encode()?;
-        for shard in parity_shards.recovery_iter() {
+        for shard in encoder.encode()?.recovery_iter() {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
             result.extend_from_slice(shard);
         }

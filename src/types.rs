@@ -1,4 +1,4 @@
-use strum::{Display, EnumIter, IntoStaticStr};
+use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
 #[derive(Clone, Copy, Display, EnumIter, IntoStaticStr)]
 pub enum ProcessorMode {
@@ -9,8 +9,13 @@ pub enum ProcessorMode {
 }
 
 impl ProcessorMode {
+    #[must_use] 
     pub fn label(self) -> &'static str {
         self.into()
+    }
+
+    pub fn iter() -> impl Iterator<Item = Self> {
+        <Self as IntoEnumIterator>::iter()
     }
 }
 
@@ -23,6 +28,7 @@ pub enum Processing {
 }
 
 impl Processing {
+    #[must_use] 
     pub fn label(self) -> &'static str {
         self.into()
     }
@@ -59,11 +65,19 @@ pub struct TaskResult {
 }
 
 impl TaskResult {
+    #[must_use] 
     pub fn ok(index: u64, data: Vec<u8>, size: usize) -> Self {
         Self { data, error: None, index, size }
     }
 
+    #[must_use] 
     pub fn err(index: u64, error: &anyhow::Error) -> Self {
         Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
     }
+}
+
+pub struct FileInfo {
+    pub name: String,
+    pub size: u64,
+    pub hash: String,
 }

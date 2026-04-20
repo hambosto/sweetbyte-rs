@@ -18,6 +18,7 @@ impl HeaderWriter {
         Ok(Self { params, metadata })
     }
 
+    #[must_use] 
     pub fn file_hash(&self) -> &[u8] {
         self.metadata.hash()
     }

@@ -11,6 +11,7 @@ pub struct Writer {
 }
 
 impl Writer {
+    #[must_use] 
     pub fn new(mode: Processing) -> Self {
         Self { mode }
     }

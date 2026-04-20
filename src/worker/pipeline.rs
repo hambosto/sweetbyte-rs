@@ -26,6 +26,7 @@ impl Pipeline {
         Ok(Self { cipher, encoder, compressor, padding, mode })
     }
 
+    #[must_use] 
     pub fn process(&self, task: &Task) -> TaskResult {
         match self.mode {
             Processing::Encryption => self.encrypt_pipeline(task),
