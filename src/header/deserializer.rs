@@ -3,23 +3,24 @@ use tokio::io::AsyncRead;
 
 use crate::cipher::Signer;
 use crate::config::{ARGON_KEY_LEN, DATA_SHARDS, PARITY_SHARDS};
+use crate::header::metadata::Metadata;
+use crate::header::parameters::Parameters;
 use crate::header::section::{PackedSections, SectionShield};
-use crate::header::types::{Metadata, Parameters};
 use crate::secret::SecretBytes;
 
-pub struct HeaderReader {
+pub struct Deserializer {
     params: Parameters,
     metadata: Metadata,
     packed: PackedSections,
 }
 
-impl HeaderReader {
-    pub async fn read<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
+impl Deserializer {
+    pub async fn deserialize<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
         let packed = shield.unpack(reader).await?;
 
-        let (magic, version): (u32, u16) = postcard::from_bytes(&packed.params).context("Deserialize params")?;
-        let (name, size, hash): (String, u64, Vec<u8>) = postcard::from_bytes(&packed.metadata).context("Deserialize metadata")?;
+        let (magic, version): (u32, u16) = postcard::from_bytes(&packed.params).context("failed to deserialize params")?;
+        let (name, size, hash): (String, u64, Vec<u8>) = postcard::from_bytes(&packed.metadata).context("failed to deserialize metadata")?;
         let metadata = Metadata::new(name, size, hash)?;
         let params = Parameters::new(magic, version)?;
 
@@ -44,11 +45,11 @@ impl HeaderReader {
 
     pub fn verify(&self, key: &SecretBytes) -> Result<bool> {
         let key_bytes = key.expose_secret();
-        anyhow::ensure!(key_bytes.len() == ARGON_KEY_LEN, "Invalid key length");
+        anyhow::ensure!(key_bytes.len() == ARGON_KEY_LEN, "invalid key length");
 
-        let params_bytes = postcard::to_allocvec(&self.params).context("Serialize params failed")?;
-        let metadata_bytes = postcard::to_allocvec(&self.metadata).context("Serialize metadata failed")?;
-        let signer = Signer::new(key_bytes).context("Create signer failed")?;
+        let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
+        let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
+        let signer = Signer::new(key_bytes).context("failed to create signer")?;
 
         Ok(signer.verify_parts(self.packed.mac.expose_secret(), &[self.packed.salt.expose_secret(), &params_bytes, &metadata_bytes]))
     }

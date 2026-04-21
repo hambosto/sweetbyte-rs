@@ -2,16 +2,16 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
-use crate::types::{Processing, TaskResult};
+use crate::types::{ProcessorMode, TaskResult};
 use crate::ui::progress::Progress;
 use crate::worker::buffer::Buffer;
 
 pub struct Writer {
-    mode: Processing,
+    mode: ProcessorMode,
 }
 
 impl Writer {
-    pub fn new(mode: Processing) -> Self {
+    pub fn new(mode: ProcessorMode) -> Self {
         Self { mode }
     }
 
@@ -27,20 +27,16 @@ impl Writer {
         let remaining = buffer.flush();
         self.write_batch(&mut writer, &remaining, progress).await?;
 
-        writer.flush().await.context("Failed to flush writer")
+        writer.flush().await.context("failed to flush writer")
     }
 
     async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: &Progress) -> Result<()> {
         for result in results {
-            if let Some(error) = &result.error {
-                anyhow::bail!("Processing error in chunk {}: {}", result.index, error)
+            if matches!(self.mode, ProcessorMode::Encryption) {
+                writer.write_all(&u32::try_from(result.data.len())?.to_be_bytes()).await.context("failed to write chunk")?;
             }
 
-            if matches!(self.mode, Processing::Encryption) {
-                writer.write_all(&u32::try_from(result.data.len())?.to_be_bytes()).await.context("Failed to write chunk length")?;
-            }
-
-            writer.write_all(&result.data).await.context("Failed to write chunk data")?;
+            writer.write_all(&result.data).await.context("failed to write chunk")?;
             progress.add(result.size as u64);
         }
 

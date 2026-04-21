@@ -1,8 +1,9 @@
-pub mod reader;
+pub mod deserializer;
+pub mod metadata;
+pub mod parameters;
 pub mod section;
-pub mod types;
-pub mod writer;
+pub mod serializer;
 
-pub use reader::HeaderReader;
-pub use types::Metadata;
-pub use writer::HeaderWriter;
+pub use deserializer::Deserializer;
+pub use metadata::Metadata;
+pub use serializer::Serializer;

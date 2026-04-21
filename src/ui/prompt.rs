@@ -2,97 +2,85 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use inquire::{Confirm, Password, PasswordDisplayMode, Select};
-use strum::IntoEnumIterator;
 
-use crate::file::File;
+use crate::files::Files;
 use crate::types::ProcessorMode;
 
 pub struct Prompt {
-    min_len: usize,
+    min_password_len: usize,
+    default_overwrite: bool,
+    default_delete: bool,
+    starting_cursor: usize,
 }
 
 impl Prompt {
-    pub fn new(min_len: usize) -> Self {
-        Self { min_len }
+    pub fn new(min_password_len: usize) -> Self {
+        Self { min_password_len, default_overwrite: false, default_delete: false, starting_cursor: 0 }
     }
 
-    pub fn encrypt_password(&self) -> Result<String> {
-        self.password("Enter encryption password", true)
-    }
+    pub fn password(&self, processing: ProcessorMode) -> Result<String> {
+        let message = match processing {
+            ProcessorMode::Encryption => "Enter encryption password",
+            ProcessorMode::Decryption => "Enter decryption password",
+        };
 
-    pub fn decrypt_password(&self) -> Result<String> {
-        self.password("Enter decryption password", false)
-    }
+        let validator = inquire::min_length!(self.min_password_len);
+        let password = Password::new(message).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
 
-    fn password(&self, msg: &str, confirm: bool) -> Result<String> {
-        let validator = inquire::min_length!(self.min_len);
-        let mut password = Password::new(msg).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
-
-        if confirm {
-            password = password
+        let prompt = match processing {
+            ProcessorMode::Encryption => password
                 .with_custom_confirmation_message("Confirm password")
-                .with_custom_confirmation_error_message("passwords mismatch");
-        } else {
-            password = password.without_confirmation();
-        }
+                .with_custom_confirmation_error_message("Passwords mismatch"),
+            ProcessorMode::Decryption => password.without_confirmation(),
+        };
 
-        password.prompt().context("Failed to read password")
+        prompt.prompt().context("failed to read password")
     }
 
-    pub fn mode() -> Result<ProcessorMode> {
-        select("Select operation", ProcessorMode::iter())
+    pub fn mode(&self) -> Result<ProcessorMode> {
+        let modes: Vec<ProcessorMode> = ProcessorMode::iter().collect();
+        let labels: Vec<String> = modes.iter().map(|m| m.to_string()).collect();
+
+        let choice = Select::new("Select operation", labels)
+            .with_starting_cursor(self.starting_cursor)
+            .prompt()
+            .context("failed to read selection")?;
+
+        modes.into_iter().find(|m| m.to_string() == choice).context("invalid selection")
     }
 
-    pub fn file(files: &[File]) -> Result<PathBuf> {
-        anyhow::ensure!(!files.is_empty(), "No files available");
-        select_by("Select file", files, |f: &File| filename(f.path())).map(|f| f.path().to_path_buf())
+    pub fn file(&self, files: &[Files]) -> Result<PathBuf> {
+        anyhow::ensure!(!files.is_empty(), "no files available");
+
+        let labels: Vec<String> = files.iter().map(|f| filename(f.path())).collect();
+        let choice = Select::new("Select file", labels)
+            .with_starting_cursor(self.starting_cursor)
+            .prompt()
+            .context("failed to read selection")?;
+
+        files
+            .iter()
+            .position(|f| filename(f.path()) == choice)
+            .and_then(|i| files.get(i))
+            .map(|f| f.path().to_path_buf())
+            .context("invalid selection")
     }
 
-    pub fn overwrite(path: &Path) -> Result<bool> {
-        confirm(&format!("Output file {} already exists. Overwrite?", filename(path)))
+    pub fn overwrite(&self, path: &Path) -> Result<bool> {
+        let message = format!("Output file {} already exists. Overwrite?", filename(path));
+        Confirm::new(&message).with_default(self.default_overwrite).prompt().context("failed to read confirmation")
     }
 
-    pub fn delete(path: &Path, kind: &str) -> Result<bool> {
-        confirm(&format!("Delete {} file {}?", kind, filename(path)))
+    pub fn delete(&self, path: &Path, mode: ProcessorMode) -> Result<bool> {
+        let kind = match mode {
+            ProcessorMode::Encryption => "encrypted",
+            ProcessorMode::Decryption => "decrypted",
+        };
+        let message = format!("Delete {} file {}?", kind, filename(path));
+        Confirm::new(&message).with_default(self.default_delete).prompt().context("failed to read confirmation")
     }
 }
 
 fn filename(path: &Path) -> String {
-    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
-}
-
-fn select<T>(msg: &str, items: impl IntoIterator<Item = T>) -> Result<T>
-where
-    T: ToString,
-{
-    let items: Vec<T> = items.into_iter().collect();
-    let labels: Vec<String> = items.iter().map(ToString::to_string).collect();
-
-    let idx = Select::new(msg, labels.clone())
-        .with_starting_cursor(0)
-        .prompt()
-        .context("Failed to read user selection")
-        .and_then(|choice| labels.iter().position(|l| l == &choice).context("Invalid user selection"))?;
-
-    items.into_iter().nth(idx).context("Invalid user selection")
-}
-
-fn select_by<'a, T, F, D>(msg: &str, items: &'a [T], key: F) -> Result<&'a T>
-where
-    F: Fn(&T) -> D,
-    D: ToString,
-{
-    let labels: Vec<String> = items.iter().map(|i| key(i).to_string()).collect();
-
-    let idx = Select::new(msg, labels.clone())
-        .with_starting_cursor(0)
-        .prompt()
-        .context("Failed to read user selection")
-        .and_then(|choice| labels.iter().position(|l| l == &choice).context("Invalid user selection"))?;
-
-    items.get(idx).context("Invalid user selection")
-}
-
-fn confirm(msg: &str) -> Result<bool> {
-    Confirm::new(msg).with_default(false).prompt().context("Failed to read user confirmation")
+    path.file_name().unwrap_or(path.as_os_str()).to_string_lossy().into()
 }

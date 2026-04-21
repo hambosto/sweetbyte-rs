@@ -12,7 +12,7 @@ pub struct Encoding {
 
 impl Encoding {
     pub fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
-        anyhow::ensure!(ReedSolomonEncoder::supports(original_count, recovery_count), "Reed-Solomon encoding not supported: {original_count} data shards + {recovery_count} parity shards");
+        anyhow::ensure!(ReedSolomonEncoder::supports(original_count, recovery_count), "unsupported reed-solomon shards");
 
         Ok(Self { original_count, recovery_count })
     }
@@ -40,8 +40,7 @@ impl Encoding {
             result.extend_from_slice(shard);
         }
 
-        let parity_shards = encoder.encode()?;
-        for shard in parity_shards.recovery_iter() {
+        for shard in encoder.encode()?.recovery_iter() {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
             result.extend_from_slice(shard);
         }
@@ -76,7 +75,7 @@ impl Encoding {
             if let Some(s) = shard {
                 result.extend_from_slice(s);
             } else {
-                let restored = restored.restored_original(idx).ok_or_else(|| anyhow::anyhow!("Reed-Solomon decoding failed: missing shard {idx}"))?;
+                let restored = restored.restored_original(idx).ok_or_else(|| anyhow::anyhow!("missing shard: {idx}"))?;
                 result.extend_from_slice(restored);
             }
         }

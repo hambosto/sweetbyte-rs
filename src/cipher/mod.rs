@@ -26,14 +26,14 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "Invalid cipher key length: expected {} bytes, got {}", ARGON_KEY_LEN, key.expose_secret().len());
+        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "invalid key length");
         let (aes_key, chacha_key) = key.expose_secret().split_at(KEY_SIZE);
 
         Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
     }
 
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!plaintext.is_empty(), "Cannot encrypt empty plaintext");
+        anyhow::ensure!(!plaintext.is_empty(), "empty plaintext");
 
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.encrypt(plaintext),
@@ -42,7 +42,7 @@ impl Cipher {
     }
 
     pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(ciphertext.len() >= NONCE_LEN, "Ciphertext too short (minimum {NONCE_LEN} bytes required)");
+        anyhow::ensure!(ciphertext.len() >= NONCE_LEN, "ciphertext too short");
 
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.decrypt(ciphertext),

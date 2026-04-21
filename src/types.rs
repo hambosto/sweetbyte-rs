@@ -1,47 +1,22 @@
-use strum::{Display, EnumIter, IntoStaticStr};
+use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
-#[derive(Clone, Copy, Display, EnumIter, IntoStaticStr)]
+#[derive(Display, Debug, Clone, Copy, Eq, PartialEq, EnumIter, IntoStaticStr)]
 pub enum ProcessorMode {
     #[strum(to_string = "Encrypt")]
-    Encrypt,
-    #[strum(to_string = "Decrypt")]
-    Decrypt,
-}
-
-impl ProcessorMode {
-    pub fn label(self) -> &'static str {
-        self.into()
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Display, IntoStaticStr)]
-pub enum Processing {
-    #[strum(to_string = "Encrypting...")]
     Encryption,
-    #[strum(to_string = "Decrypting...")]
+    #[strum(to_string = "Decrypt")]
     Decryption,
 }
 
-impl Processing {
+impl ProcessorMode {
+    pub fn iter() -> impl Iterator<Item = Self> {
+        <Self as IntoEnumIterator>::iter()
+    }
+
     pub fn label(self) -> &'static str {
-        self.into()
-    }
-}
-
-impl From<ProcessorMode> for Processing {
-    fn from(mode: ProcessorMode) -> Self {
-        match mode {
-            ProcessorMode::Encrypt => Self::Encryption,
-            ProcessorMode::Decrypt => Self::Decryption,
-        }
-    }
-}
-
-impl From<Processing> for ProcessorMode {
-    fn from(processing: Processing) -> Self {
-        match processing {
-            Processing::Encryption => Self::Encrypt,
-            Processing::Decryption => Self::Decrypt,
+        match self {
+            Self::Encryption => "Encrypting...",
+            Self::Decryption => "Decrypting...",
         }
     }
 }
@@ -52,18 +27,19 @@ pub struct Task {
 }
 
 pub struct TaskResult {
-    pub data: Vec<u8>,
-    pub error: Option<Box<str>>,
     pub index: u64,
+    pub data: Vec<u8>,
     pub size: usize,
 }
 
 impl TaskResult {
-    pub fn ok(index: u64, data: Vec<u8>, size: usize) -> Self {
-        Self { data, error: None, index, size }
+    pub fn new(index: u64, data: Vec<u8>, size: usize) -> Self {
+        Self { index, data, size }
     }
+}
 
-    pub fn err(index: u64, error: &anyhow::Error) -> Self {
-        Self { data: Vec::new(), error: Some(error.to_string().into_boxed_str()), index, size: 0 }
-    }
+pub struct FileInfo {
+    pub name: String,
+    pub size: u64,
+    pub hash: String,
 }

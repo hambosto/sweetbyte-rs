@@ -1,6 +1,6 @@
 pub const APP_NAME: &str = "SweetByte";
 
-pub const FILE_EXTENSION: &str = ".swx";
+pub const FILE_EXTENSION: &str = "swx";
 
 pub const ARGON_TIME: u32 = 3;
 
@@ -27,5 +27,7 @@ pub const MAX_FILENAME_LENGTH: usize = 256;
 pub const KEY_SIZE: usize = 32;
 
 pub const PASSWORD_MIN_LENGTH: usize = 8;
+
+pub const NAME_MAX_LEN: usize = 35;
 
 pub const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go"];

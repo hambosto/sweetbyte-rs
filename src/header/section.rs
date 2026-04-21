@@ -31,20 +31,20 @@ impl SectionShield {
     }
 
     pub fn pack(&self, salt: &[u8], params: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!salt.is_empty(), "salt is empty");
-        anyhow::ensure!(!params.is_empty(), "params is empty");
-        anyhow::ensure!(!metadata.is_empty(), "metadata is empty");
-        anyhow::ensure!(!mac.is_empty(), "mac is empty");
+        anyhow::ensure!(!salt.is_empty(), "empty salt");
+        anyhow::ensure!(!params.is_empty(), "empty params");
+        anyhow::ensure!(!metadata.is_empty(), "empty metadata");
+        anyhow::ensure!(!mac.is_empty(), "empty mac");
 
-        let salt = self.encoder.encode(salt).context("encode salt")?;
-        let params = self.encoder.encode(params).context("encode params")?;
-        let metadata = self.encoder.encode(metadata).context("encode metadata")?;
-        let mac = self.encoder.encode(mac).context("encode mac")?;
+        let salt = self.encoder.encode(salt).context("failed to encode salt")?;
+        let params = self.encoder.encode(params).context("failed to encode params")?;
+        let metadata = self.encoder.encode(metadata).context("failed to encode metadata")?;
+        let mac = self.encoder.encode(mac).context("failed to encode mac")?;
         let frame = Frame {
-            salt: u32::try_from(salt.len()).context("salt length overflow")?,
-            params: u32::try_from(params.len()).context("params length overflow")?,
-            metadata: u32::try_from(metadata.len()).context("metadata length overflow")?,
-            mac: u32::try_from(mac.len()).context("mac length overflow")?,
+            salt: u32::try_from(salt.len()).context("salt overflow")?,
+            params: u32::try_from(params.len()).context("params overflow")?,
+            metadata: u32::try_from(metadata.len()).context("metadata overflow")?,
+            mac: u32::try_from(mac.len()).context("mac overflow")?,
         };
 
         let mut result = bytemuck::bytes_of(&frame).to_vec();
@@ -59,29 +59,29 @@ impl SectionShield {
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<PackedSections> {
         let frame = self.read_frame(reader).await?;
 
-        anyhow::ensure!(frame.salt > 0, "salt section is empty");
-        anyhow::ensure!(frame.params > 0, "params section is empty");
-        anyhow::ensure!(frame.metadata > 0, "metadata section is empty");
-        anyhow::ensure!(frame.mac > 0, "mac section is empty");
+        anyhow::ensure!(frame.salt > 0, "empty salt section");
+        anyhow::ensure!(frame.params > 0, "empty params section");
+        anyhow::ensure!(frame.metadata > 0, "empty metadata section");
+        anyhow::ensure!(frame.mac > 0, "empty mac section");
 
         let salt = self.read_section(reader, frame.salt).await?;
         let params = self.read_section(reader, frame.params).await?;
         let metadata = self.read_section(reader, frame.metadata).await?;
         let mac = self.read_section(reader, frame.mac).await?;
 
-        Ok(PackedSections { salt: SecretBytes::from_slice(&salt), params, metadata, mac: SecretBytes::from_slice(&mac) })
+        Ok(PackedSections { salt: SecretBytes::new(salt), params, metadata, mac: SecretBytes::new(mac) })
     }
 
     async fn read_frame<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Frame> {
         let mut frame = Frame::zeroed();
-        reader.read_exact(bytemuck::bytes_of_mut(&mut frame)).await.context("read frame")?;
+        reader.read_exact(bytemuck::bytes_of_mut(&mut frame)).await.context("failed to read frame")?;
 
         Ok(frame)
     }
 
     async fn read_section<R: AsyncRead + Unpin>(&self, reader: &mut R, len: u32) -> Result<Vec<u8>> {
         let mut buffer = vec![0u8; len as usize];
-        reader.read_exact(&mut buffer).await.context("read section")?;
-        self.encoder.decode(&buffer).context("decode section")
+        reader.read_exact(&mut buffer).await.context("failed to read section")?;
+        self.encoder.decode(&buffer).context("failed to decode section")
     }
 }
