@@ -1,7 +1,7 @@
 {
+  self,
   lib,
   rustPlatform,
-  self,
 }:
 let
   fmtDate =
