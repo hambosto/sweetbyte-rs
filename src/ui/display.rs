@@ -14,16 +14,16 @@ use crate::types::ProcessorMode;
 
 pub struct Display {
     terminal: Term,
-    name_max_len: usize,
+    name_len: usize,
 }
 
 impl Display {
     pub fn new(name_max_len: usize) -> Self {
-        Self { terminal: Term::stdout(), name_max_len }
+        Self { terminal: Term::stdout(), name_len: name_max_len }
     }
 
     fn print(&self, s: impl Into<String>) -> Result<()> {
-        self.terminal.write_line(&s.into()).context("write failed")
+        self.terminal.write_line(&s.into()).context("failed to write")
     }
 
     fn message(&self, icon: &str, text: impl std::fmt::Display) -> Result<()> {
@@ -45,8 +45,8 @@ impl Display {
         table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
-            let raw_name = file.path().file_name().and_then(|n| n.to_str()).unwrap_or_default();
-            let name = if raw_name.len() > self.name_max_len { &raw_name[..self.name_max_len.saturating_sub(1)] } else { raw_name };
+            let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            let name = if filename.len() > self.name_len { &filename[..self.name_len.saturating_sub(1)] } else { filename };
             let size = ByteSize(file.size().await?).to_string();
             let (status, color) = if file.is_encrypted() { ("[E] encrypted", Color::Cyan) } else { ("[D] unencrypted", Color::Green) };
             table.add_row([Cell::new(i + 1), Cell::new(name).fg(Color::Green), Cell::new(size), Cell::new(status).fg(color)]);
@@ -85,12 +85,12 @@ impl Display {
     }
 
     pub fn banner(&self) -> Result<()> {
-        let toilet = Toilet::future().map_err(|e| anyhow::anyhow!("font: {e}"))?;
-        let figure = toilet.convert(APP_NAME).context("render failed")?;
+        let toilet = Toilet::future().map_err(|e| anyhow::anyhow!("font error: {e}"))?;
+        let figure = toilet.convert(APP_NAME).context("failed to render")?;
         self.print(Style::new().green().bright().apply_to(figure).to_string())
     }
 
     pub fn clear(&self) -> Result<()> {
-        self.terminal.clear_screen().context("clear failed")
+        self.terminal.clear_screen().context("failed to clear")
     }
 }

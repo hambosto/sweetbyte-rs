@@ -27,17 +27,16 @@ impl Writer {
         let remaining = buffer.flush();
         self.write_batch(&mut writer, &remaining, progress).await?;
 
-        writer.flush().await.context("Failed to flush writer")
+        writer.flush().await.context("failed to flush writer")
     }
 
     async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: &Progress) -> Result<()> {
         for result in results {
             if matches!(self.mode, ProcessorMode::Encryption) {
-                writer.write_all(&u32::try_from(result.data.len())?.to_be_bytes()).await.context("Failed to write chunk length")?;
+                writer.write_all(&u32::try_from(result.data.len())?.to_be_bytes()).await.context("failed to write chunk")?;
             }
 
-            writer.write_all(&result.data).await.context("Failed to write chunk data")?;
-
+            writer.write_all(&result.data).await.context("failed to write chunk")?;
             progress.add(result.size as u64);
         }
 

@@ -10,7 +10,7 @@ pub struct Signer {
 
 impl Signer {
     pub fn new(key: &[u8]) -> Result<Self> {
-        anyhow::ensure!(!key.is_empty(), "Cannot use empty key for HMAC");
+        anyhow::ensure!(!key.is_empty(), "empty key");
 
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }

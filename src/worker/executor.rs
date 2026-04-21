@@ -25,13 +25,13 @@ impl Executor {
 
     pub async fn execute(mut self, mut task_rx: Receiver<Task>, result_tx: Sender<TaskResult>) -> Result<()> {
         while let Some(task) = task_rx.recv().await {
-            let permit = self.semaphore.clone().acquire_owned().await.context("Semaphore closed unexpectedly")?;
+            let permit = self.semaphore.clone().acquire_owned().await.context("failed to acquire semaphore")?;
             let pipeline = self.pipeline.clone();
             let result_tx = result_tx.clone();
 
             self.join_set.spawn_blocking(move || {
-                let result = pipeline.process(&task).with_context(|| format!("Pipeline failed on chunk {}", task.index))?;
-                result_tx.blocking_send(result).context("Result channel closed before executor finished")?;
+                let result = pipeline.process(&task)?;
+                result_tx.blocking_send(result).context("failed to send result")?;
 
                 drop(permit);
                 Ok(())
@@ -39,7 +39,7 @@ impl Executor {
         }
 
         while let Some(join_result) = self.join_set.join_next().await {
-            join_result?.context("Executor task panicked")?;
+            join_result?.context("executor task panicked")?;
         }
 
         Ok(())

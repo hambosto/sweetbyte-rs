@@ -70,12 +70,12 @@ impl Files {
     }
 
     pub async fn reader(&self) -> Result<BufReader<File>> {
-        tokio::fs::File::open(&self.path).await.map(BufReader::new).context("Failed to open file")
+        tokio::fs::File::open(&self.path).await.map(BufReader::new).context("failed to open file")
     }
 
     pub async fn writer(&self) -> Result<BufWriter<File>> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            tokio::fs::create_dir_all(parent).await.context("Failed to create directory")?;
+            tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
         }
 
         tokio::fs::OpenOptions::new()
@@ -85,17 +85,17 @@ impl Files {
             .open(&self.path)
             .await
             .map(BufWriter::new)
-            .context("Failed to create file")
+            .context("failed to create file")
     }
 
     pub async fn delete(&self) -> Result<()> {
-        anyhow::ensure!(self.exists(), "File not found: {}", self.path.display());
+        anyhow::ensure!(self.exists(), "file not found {}", self.path.display());
 
-        tokio::fs::remove_file(&self.path).await.context("Failed to delete file")
+        tokio::fs::remove_file(&self.path).await.context("failed to delete file")
     }
 
     pub async fn size(&self) -> Result<u64> {
-        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("Failed to read metadata")
+        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to read metadata")
     }
 
     pub async fn hash(&self) -> Result<Vec<u8>> {
@@ -104,7 +104,7 @@ impl Files {
         let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
-            let n = reader.read(&mut buffer).await.context("Failed to read file for hashing")?;
+            let n = reader.read(&mut buffer).await.context("failed to hash file")?;
             if n == 0 {
                 break;
             }
@@ -121,7 +121,7 @@ impl Files {
     }
 
     pub async fn file_metadata(&self) -> Result<FileMetadata> {
-        let filename = self.path.file_name().context("Path is missing a file name")?.to_string_lossy().into();
+        let filename = self.path.file_name().context("invalid path")?.to_string_lossy().into();
         let size = self.size().await?;
         let hash = self.hash().await?;
 

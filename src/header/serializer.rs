@@ -24,8 +24,8 @@ impl Serializer {
     }
 
     pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {
-        anyhow::ensure!(salt.len() == ARGON_SALT_LEN, "Invalid salt len");
-        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "Invalid key len");
+        anyhow::ensure!(salt.len() == ARGON_SALT_LEN, "invalid salt length");
+        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "invalid key length");
 
         let params_bytes = postcard::to_allocvec(&self.params)?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata)?;

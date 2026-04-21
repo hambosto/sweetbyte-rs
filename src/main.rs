@@ -1,6 +1,5 @@
 mod allocator;
 mod cipher;
-mod cli;
 mod compression;
 mod config;
 mod encoding;
@@ -13,90 +12,105 @@ mod ui;
 mod worker;
 
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 use tokio::io::AsyncWriteExt;
 
 use crate::cipher::Derive;
-use crate::cli::{Cli, Cmd};
-use crate::config::{ARGON_SALT_LEN, PASSWORD_MIN_LENGTH};
+use crate::config::{ARGON_SALT_LEN, NAME_MAX_LEN, PASSWORD_MIN_LENGTH};
 use crate::files::Files;
 use crate::header::{Deserializer, Metadata, Serializer};
-use crate::secret::SecretString;
+use crate::secret::{SecretBytes, SecretString};
 use crate::types::{FileInfo, ProcessorMode};
-use crate::ui::ask::Ask;
 use crate::ui::display::Display;
+use crate::ui::prompt::Prompt;
 use crate::worker::Worker;
+
+#[derive(Parser)]
+#[command(name = "sweetbyte-rs", version = "26.1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Cmd>,
+}
+
+#[derive(Subcommand)]
+pub enum Cmd {
+    Interactive,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let ask = Ask::new(PASSWORD_MIN_LENGTH);
-    let display = Display::new(35);
+    let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
+    let display = Display::new(NAME_MAX_LEN);
 
-    match Cli::parse_args().command {
-        Some(Cmd::Interactive) | None => run(&ask, &display).await,
+    match Cli::parse().command {
+        Some(Cmd::Interactive) | None => run_interactive(&prompt, &display).await,
     }
 }
 
-async fn run(ask: &Ask, display: &Display) -> Result<()> {
+async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
     display.clear()?;
     display.banner()?;
 
-    let mode = ask.mode()?;
-
+    let mode = prompt.mode()?;
     let mut files = Files::discover(".", mode);
-    anyhow::ensure!(!files.is_empty(), "no eligible files found");
+    anyhow::ensure!(!files.is_empty(), "no eligible files");
 
     display.files(&mut files).await?;
 
-    let path = ask.file(&files)?;
-    let mut src = Files::new(&path);
-    let dest = Files::new(src.output_path(mode));
+    let source = Files::new(prompt.file(&files)?);
+    let target = Files::new(source.output_path(mode));
 
-    if dest.exists() && !ask.overwrite(dest.path())? {
+    if target.exists() && !prompt.overwrite(target.path())? {
         anyhow::bail!("operation cancelled");
     }
 
-    let secret = SecretString::new(ask.password(mode)?);
-    let info = match mode {
-        ProcessorMode::Encryption => encrypt(&mut src, &dest, &secret).await,
-        ProcessorMode::Decryption => decrypt(&src, &dest, &secret).await,
+    let secret = SecretString::new(prompt.password(mode)?);
+    let process = match mode {
+        ProcessorMode::Encryption => encrypt_file(&source, &target, &secret).await,
+        ProcessorMode::Decryption => decrypt_file(&source, &target, &secret).await,
     }?;
 
-    display.success(mode, dest.path())?;
-    display.header(&info.name, info.size, &info.hash)?;
+    display.success(mode, target.path())?;
+    display.header(&process.name, process.size, &process.hash)?;
 
-    if ask.delete(src.path(), mode)? {
-        src.delete().await?;
-        display.deleted(src.path())?;
+    if prompt.delete(source.path(), mode)? {
+        source.delete().await?;
+        display.deleted(source.path())?;
     }
 
     Ok(())
 }
 
-async fn encrypt(src: &mut Files, dest: &Files, secret: &SecretString) -> Result<FileInfo> {
-    let metadata = src.file_metadata().await?;
+async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileInfo> {
+    let metadata = source.file_metadata().await?;
     let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
-    let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(&salt)?;
+    let key = derive_key(secret, &salt)?;
     let filename = metadata.filename.clone();
-
     let header = Serializer::new(Metadata::new(metadata.filename, metadata.size, metadata.hash)?)?;
-    let mut writer = dest.writer().await?;
+
+    let mut writer = target.writer().await?;
     writer.write_all(&header.serialize(&salt, &key)?).await?;
-    Worker::new(&key, ProcessorMode::Encryption)?.process(src.reader().await?, writer, metadata.size).await?;
+
+    Worker::new(&key, ProcessorMode::Encryption)?.process(source.reader().await?, writer, metadata.size).await?;
 
     Ok(FileInfo { name: filename, size: metadata.size, hash: hex::encode(header.file_hash()) })
 }
 
-async fn decrypt(src: &Files, dest: &Files, secret: &SecretString) -> Result<FileInfo> {
-    let mut reader = src.reader().await?;
+async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileInfo> {
+    let mut reader = source.reader().await?;
     let header = Deserializer::deserialize(reader.get_mut()).await?;
 
-    let key = Derive::new(secret.expose_secret().as_bytes())?.derive_key(header.salt())?;
+    let key = derive_key(secret, header.salt())?;
     anyhow::ensure!(header.verify(&key)?, "invalid password or corrupted data");
 
-    Worker::new(&key, ProcessorMode::Decryption)?.process(reader, dest.writer().await?, header.file_size()).await?;
-    anyhow::ensure!(dest.validate_hash(header.file_hash()).await?, "hash mismatch");
+    Worker::new(&key, ProcessorMode::Decryption)?.process(reader, target.writer().await?, header.file_size()).await?;
+    anyhow::ensure!(target.validate_hash(header.file_hash()).await?, "hash mismatch");
 
     Ok(FileInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+}
+
+fn derive_key(secret: &SecretString, salt: &[u8]) -> Result<SecretBytes> {
+    Derive::new(secret.expose_secret().as_bytes())?.derive_key(salt)
 }
 
 #[cfg(test)]
@@ -107,27 +121,25 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_encrypt_decrypt_roundtrip() {
+    async fn roundtrip_preserves_content() {
         let dir = tempdir().unwrap();
-        let base = dir.path();
+        let source_path = dir.path().join("test.txt");
+        let encrypted_path = dir.path().join("test.txt.swx");
+        let decrypted_path = dir.path().join("test_dec.txt");
 
-        let src_path = base.join("test.txt");
-        let enc_path = base.join("test.txt.swx");
-        let dec_path = base.join("test_dec.txt");
+        fs::write(&source_path, b"test content").await.unwrap();
 
-        fs::write(&src_path, b"test content").await.unwrap();
+        let source = Files::new(&source_path);
+        let encrypted = Files::new(&encrypted_path);
+        let decrypted = Files::new(&decrypted_path);
+        let secret = SecretString::new("password123".into());
 
-        let mut src = Files::new(&src_path);
-        let enc = Files::new(&enc_path);
-        let dec = Files::new(&dec_path);
-        let secret = SecretString::new("password123".to_owned());
+        encrypt_file(&source, &encrypted, &secret).await.unwrap();
+        assert!(encrypted.exists());
 
-        encrypt(&mut src, &enc, &secret).await.unwrap();
-        assert!(enc.exists(), "encrypted file should exist");
+        decrypt_file(&encrypted, &decrypted, &secret).await.unwrap();
+        assert!(decrypted.exists());
 
-        decrypt(&enc, &dec, &secret).await.unwrap();
-        assert!(dec.exists(), "decrypted file should exist");
-
-        assert_eq!(fs::read(&dec_path).await.unwrap(), b"test content", "roundtrip content must match");
+        assert_eq!(fs::read(&decrypted_path).await.unwrap(), b"test content");
     }
 }

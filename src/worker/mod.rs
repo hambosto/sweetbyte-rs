@@ -22,7 +22,7 @@ pub struct Worker {
 
 impl Worker {
     pub fn new(key: &SecretBytes, mode: ProcessorMode) -> Result<Self> {
-        let pipeline = Pipeline::new(key, mode).context("Failed to initialise pipeline")?;
+        let pipeline = Pipeline::new(key, mode).context("failed to init pipeline")?;
 
         Ok(Self { mode, pipeline })
     }
@@ -33,7 +33,7 @@ impl Worker {
         W: AsyncWrite + Unpin + Send + 'static,
     {
         let channel_size = std::thread::available_parallelism().map(|p| p.get())?;
-        let progress_bar = Progress::new(total_size, self.mode.label()).context("Failed to initialise progress")?;
+        let progress_bar = Progress::new(total_size, self.mode.label()).context("failed to init progress")?;
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);
         let (result_tx, result_rx) = tokio::sync::mpsc::channel::<TaskResult>(channel_size);
@@ -44,9 +44,9 @@ impl Worker {
 
         let (reader_result, executor_result, writer_result) = tokio::join!(reader_handle, executor_handle, writer_handle);
 
-        reader_result.context("Reader panicked")?.context("Reader failed")?;
-        executor_result.context("Executor panicked")?.context("Executor failed")?;
-        writer_result.context("Writer panicked")?.context("Writer failed")?;
+        reader_result.context("reader task panicked")?.context("failed to execute reader")?;
+        executor_result.context("executor task panicked")?.context("failed to execute executor")?;
+        writer_result.context("writer task panicked")?.context("failed to execute writer")?;
 
         Ok(())
     }
