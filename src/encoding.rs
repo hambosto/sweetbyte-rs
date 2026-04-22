@@ -1,5 +1,4 @@
 use anyhow::Result;
-use reed_solomon_simd::{ReedSolomonDecoder, ReedSolomonEncoder};
 use subtle::ConstantTimeEq;
 
 const LEN_SIZE: usize = 4;
@@ -12,35 +11,21 @@ pub struct Encoding {
 
 impl Encoding {
     pub fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
-        anyhow::ensure!(ReedSolomonEncoder::supports(original_count, recovery_count), "unsupported reed-solomon shards");
-
+        anyhow::ensure!(reed_solomon_simd::ReedSolomonEncoder::supports(original_count, recovery_count), "unsupported reed-solomon shards");
         Ok(Self { original_count, recovery_count })
     }
 
     pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let shard_size = data.len().div_ceil(self.original_count).next_multiple_of(2);
 
-        let mut encoder = ReedSolomonEncoder::new(self.original_count, self.recovery_count, shard_size)?;
-        let mut shards = Vec::with_capacity(self.original_count);
+        let mut padded = data.to_vec();
+        padded.resize(shard_size * self.original_count, 0);
 
-        for i in 0..self.original_count {
-            let start = i * shard_size;
-            let end = (start + shard_size).min(data.len());
-            let mut shard = vec![0u8; shard_size];
-            shard[..end - start].copy_from_slice(&data[start..end]);
-            encoder.add_original_shard(&shard)?;
-            shards.push(shard);
-        }
+        let shards: Vec<_> = padded.chunks(shard_size).map(|s| s.to_vec()).collect();
+        let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, &shards)?;
 
-        let mut result = Vec::with_capacity(LEN_SIZE + (CRC_SIZE + shard_size) * (self.original_count + self.recovery_count));
-        result.extend_from_slice(&u32::try_from(data.len())?.to_le_bytes());
-
-        for shard in &shards {
-            result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
-            result.extend_from_slice(shard);
-        }
-
-        for shard in encoder.encode()?.recovery_iter() {
+        let mut result = (data.len() as u32).to_le_bytes().to_vec();
+        for shard in shards.iter().chain(&recovery) {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
             result.extend_from_slice(shard);
         }
@@ -48,37 +33,27 @@ impl Encoding {
         Ok(result)
     }
 
-    pub fn decode(&self, encoded_data: &[u8]) -> Result<Vec<u8>> {
-        let original_size = u32::from_le_bytes(encoded_data[..LEN_SIZE].try_into()?) as usize;
-        let chunk_size = (encoded_data.len() - LEN_SIZE) / (self.original_count + self.recovery_count);
-        let shard_size = chunk_size - CRC_SIZE;
+    pub fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
+        let original_size = u32::from_le_bytes(data[..LEN_SIZE].try_into()?) as usize;
+        let chunk_size = (data.len() - LEN_SIZE) / (self.original_count + self.recovery_count);
 
-        let mut decoder = ReedSolomonDecoder::new(self.original_count, self.recovery_count, shard_size)?;
-        let mut shards: Vec<Option<&[u8]>> = vec![None; self.original_count];
+        let (original, recovery): (Vec<_>, Vec<_>) = data[LEN_SIZE..]
+            .chunks(chunk_size)
+            .enumerate()
+            .filter_map(|(i, chunk)| {
+                let (crc, shard) = chunk.split_at(CRC_SIZE);
+                bool::from(crc.ct_eq(&crc32fast::hash(shard).to_le_bytes())).then_some((i, shard))
+            })
+            .partition(|(i, _)| *i < self.original_count);
 
-        for (idx, chunk) in encoded_data[LEN_SIZE..].chunks_exact(chunk_size).enumerate() {
-            let (crc, data) = chunk.split_at(CRC_SIZE);
-            let expected_crc = crc32fast::hash(data).to_le_bytes();
-            if bool::from(crc.ct_eq(&expected_crc)) {
-                if idx < self.original_count {
-                    decoder.add_original_shard(idx, data)?;
-                    shards[idx] = Some(data);
-                } else {
-                    decoder.add_recovery_shard(idx - self.original_count, data)?;
-                }
-            }
-        }
+        let restored = if original.len() == self.original_count {
+            original.into_iter().map(|(i, d)| (i, d.to_vec())).collect()
+        } else {
+            let recovery: Vec<_> = recovery.into_iter().map(|(i, d)| (i - self.original_count, d)).collect();
+            reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery)?
+        };
 
-        let restored = decoder.decode()?;
-        let mut result = Vec::with_capacity(original_size);
-        for (idx, shard) in shards.into_iter().enumerate() {
-            if let Some(s) = shard {
-                result.extend_from_slice(s);
-            } else {
-                let restored = restored.restored_original(idx).ok_or_else(|| anyhow::anyhow!("missing shard: {idx}"))?;
-                result.extend_from_slice(restored);
-            }
-        }
+        let mut result: Vec<_> = (0..self.original_count).flat_map(|i| restored[&i].iter().copied()).collect();
         result.truncate(original_size);
 
         Ok(result)
