@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
-use crate::types::ProcessorMode;
+use crate::types::Processing;
 
 pub struct FileMetadata {
     pub filename: String,
@@ -47,7 +47,7 @@ impl Files {
         EXCLUDED_PATTERNS.iter().any(|pat| parts.iter().any(|part| fast_glob::glob_match(pat, part)))
     }
 
-    pub fn is_eligible(&self, mode: ProcessorMode) -> bool {
+    pub fn is_eligible(&self, processing: Processing) -> bool {
         if self.is_hidden() {
             return false;
         }
@@ -56,16 +56,16 @@ impl Files {
             return false;
         }
 
-        match mode {
-            ProcessorMode::Encryption => !self.is_encrypted(),
-            ProcessorMode::Decryption => self.is_encrypted(),
+        match processing {
+            Processing::Encryption => !self.is_encrypted(),
+            Processing::Decryption => self.is_encrypted(),
         }
     }
 
-    pub fn output_path(&self, mode: ProcessorMode) -> PathBuf {
-        match mode {
-            ProcessorMode::Encryption => self.path.with_added_extension(FILE_EXTENSION),
-            ProcessorMode::Decryption => self.path.with_extension(""),
+    pub fn output_path(&self, processing: Processing) -> PathBuf {
+        match processing {
+            Processing::Encryption => self.path.with_added_extension(FILE_EXTENSION),
+            Processing::Decryption => self.path.with_extension(""),
         }
     }
 
@@ -128,13 +128,13 @@ impl Files {
         Ok(FileMetadata { filename, size, hash })
     }
 
-    pub fn discover(root: impl AsRef<Path>, mode: ProcessorMode) -> Vec<Self> {
+    pub fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {
         WalkDir::new(root)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
             .map(|e| Self::new(e.into_path()))
-            .filter(|f| f.is_eligible(mode))
+            .filter(|f| f.is_eligible(processing))
             .collect()
     }
 }

@@ -10,35 +10,33 @@ use crate::worker::pipeline::Pipeline;
 
 pub struct Executor {
     pipeline: Arc<Pipeline>,
-    semaphore: Arc<Semaphore>,
-    join_set: JoinSet<Result<()>>,
+    concurrency: usize,
 }
 
 impl Executor {
     pub fn new(pipeline: Pipeline, concurrency: usize) -> Self {
-        let pipeline = Arc::new(pipeline);
-        let semaphore = Arc::new(Semaphore::new(concurrency));
-        let join_set = JoinSet::new();
-
-        Self { pipeline, semaphore, join_set }
+        Self { pipeline: Arc::new(pipeline), concurrency }
     }
 
-    pub async fn execute(mut self, mut task_rx: Receiver<Task>, result_tx: Sender<TaskResult>) -> Result<()> {
-        while let Some(task) = task_rx.recv().await {
-            let permit = self.semaphore.clone().acquire_owned().await.context("failed to acquire semaphore")?;
-            let pipeline = self.pipeline.clone();
-            let result_tx = result_tx.clone();
+    pub async fn execute(self, mut tasks: Receiver<Task>, results: Sender<TaskResult>) -> Result<()> {
+        let semaphore = Arc::new(Semaphore::new(self.concurrency));
+        let mut workers: JoinSet<Result<()>> = JoinSet::new();
 
-            self.join_set.spawn_blocking(move || {
+        while let Some(task) = tasks.recv().await {
+            let permit = semaphore.clone().acquire_owned().await.context("failed to acquire limiter")?;
+            let pipeline = self.pipeline.clone();
+            let results = results.clone();
+
+            workers.spawn_blocking(move || {
                 let result = pipeline.process(&task)?;
-                result_tx.blocking_send(result).context("failed to send result")?;
+                results.blocking_send(result).context("failed to send result")?;
 
                 drop(permit);
                 Ok(())
             });
         }
 
-        while let Some(join_result) = self.join_set.join_next().await {
+        while let Some(join_result) = workers.join_next().await {
             join_result?.context("executor task panicked")?;
         }
 

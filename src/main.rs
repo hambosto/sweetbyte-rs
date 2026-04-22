@@ -20,7 +20,7 @@ use crate::config::{ARGON_SALT_LEN, NAME_MAX_LEN, PASSWORD_MIN_LENGTH};
 use crate::files::Files;
 use crate::header::{Deserializer, Metadata, Serializer};
 use crate::secret::{SecretBytes, SecretString};
-use crate::types::{FileInfo, ProcessorMode};
+use crate::types::{FileHeader, Processing};
 use crate::ui::display::Display;
 use crate::ui::prompt::Prompt;
 use crate::worker::Worker;
@@ -51,29 +51,27 @@ async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
     display.clear()?;
     display.banner()?;
 
-    let mode = prompt.mode()?;
-    let mut files = Files::discover(".", mode);
+    let processing = prompt.processing_mode()?;
+    let mut files = Files::discover(".", processing);
     anyhow::ensure!(!files.is_empty(), "no eligible files");
 
     display.files(&mut files).await?;
-
     let source = Files::new(prompt.file(&files)?);
-    let target = Files::new(source.output_path(mode));
-
+    let target = Files::new(source.output_path(processing));
     if target.exists() && !prompt.overwrite(target.path())? {
         anyhow::bail!("operation cancelled");
     }
 
-    let secret = SecretString::new(prompt.password(mode)?);
-    let process = match mode {
-        ProcessorMode::Encryption => encrypt_file(&source, &target, &secret).await,
-        ProcessorMode::Decryption => decrypt_file(&source, &target, &secret).await,
-    }?;
+    let secret = SecretString::new(prompt.password(processing)?);
+    let process = match processing {
+        Processing::Encryption => encrypt_file(&source, &target, &secret).await?,
+        Processing::Decryption => decrypt_file(&source, &target, &secret).await?,
+    };
 
-    display.success(mode, target.path())?;
+    display.success(processing, target.path())?;
     display.header(&process.name, process.size, &process.hash)?;
 
-    if prompt.delete(source.path(), mode)? {
+    if prompt.delete(source.path(), processing)? {
         source.delete().await?;
         display.deleted(source.path())?;
     }
@@ -81,7 +79,7 @@ async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
     Ok(())
 }
 
-async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileInfo> {
+async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
     let metadata = source.file_metadata().await?;
     let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
     let key = derive_key(secret, &salt)?;
@@ -91,22 +89,22 @@ async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
     let mut writer = target.writer().await?;
     writer.write_all(&header.serialize(&salt, &key)?).await?;
 
-    Worker::new(&key, ProcessorMode::Encryption)?.process(source.reader().await?, writer, metadata.size).await?;
+    Worker::new(&key, Processing::Encryption)?.process(source.reader().await?, writer, metadata.size).await?;
 
-    Ok(FileInfo { name: filename, size: metadata.size, hash: hex::encode(header.file_hash()) })
+    Ok(FileHeader { name: filename, size: metadata.size, hash: hex::encode(header.file_hash()) })
 }
 
-async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileInfo> {
+async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
     let mut reader = source.reader().await?;
     let header = Deserializer::deserialize(reader.get_mut()).await?;
 
     let key = derive_key(secret, header.salt())?;
     anyhow::ensure!(header.verify(&key)?, "invalid password or corrupted data");
 
-    Worker::new(&key, ProcessorMode::Decryption)?.process(reader, target.writer().await?, header.file_size()).await?;
+    Worker::new(&key, Processing::Decryption)?.process(reader, target.writer().await?, header.file_size()).await?;
     anyhow::ensure!(target.validate_hash(header.file_hash()).await?, "hash mismatch");
 
-    Ok(FileInfo { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+    Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
 }
 
 fn derive_key(secret: &SecretString, salt: &[u8]) -> Result<SecretBytes> {

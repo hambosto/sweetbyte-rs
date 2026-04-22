@@ -10,7 +10,7 @@ use figlet_rs::Toilet;
 
 use crate::config::APP_NAME;
 use crate::files::Files;
-use crate::types::ProcessorMode;
+use crate::types::Processing;
 
 pub struct Display {
     terminal: Term,
@@ -56,10 +56,10 @@ impl Display {
         self.print("")
     }
 
-    pub fn success(&self, mode: ProcessorMode, path: &Path) -> Result<()> {
-        let (icon, verb) = match mode {
-            ProcessorMode::Encryption => ("[E]", "encrypted"),
-            ProcessorMode::Decryption => ("[D]", "decrypted"),
+    pub fn success(&self, processing: Processing, path: &Path) -> Result<()> {
+        let (icon, verb) = match processing {
+            Processing::Encryption => ("[E]", "encrypted"),
+            Processing::Decryption => ("[D]", "decrypted"),
         };
         self.print("")?;
         self.message(icon, format!("File {verb} successfully: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or_default()))

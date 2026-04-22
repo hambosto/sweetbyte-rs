@@ -1,14 +1,16 @@
+use std::cmp::Ordering;
+
 use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
 #[derive(Display, Debug, Clone, Copy, Eq, PartialEq, EnumIter, IntoStaticStr)]
-pub enum ProcessorMode {
+pub enum Processing {
     #[strum(to_string = "Encrypt")]
     Encryption,
     #[strum(to_string = "Decrypt")]
     Decryption,
 }
 
-impl ProcessorMode {
+impl Processing {
     pub fn iter() -> impl Iterator<Item = Self> {
         <Self as IntoEnumIterator>::iter()
     }
@@ -21,11 +23,18 @@ impl ProcessorMode {
     }
 }
 
+pub struct FileHeader {
+    pub name: String,
+    pub size: u64,
+    pub hash: String,
+}
+
 pub struct Task {
     pub data: Vec<u8>,
     pub index: u64,
 }
 
+#[derive(PartialEq, Eq)]
 pub struct TaskResult {
     pub index: u64,
     pub data: Vec<u8>,
@@ -38,8 +47,14 @@ impl TaskResult {
     }
 }
 
-pub struct FileInfo {
-    pub name: String,
-    pub size: u64,
-    pub hash: String,
+impl Ord for TaskResult {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.index.cmp(&self.index)
+    }
+}
+
+impl PartialOrd for TaskResult {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }

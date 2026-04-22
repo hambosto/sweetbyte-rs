@@ -3,22 +3,23 @@ use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
 use crate::config::CHUNK_SIZE;
-use crate::types::{ProcessorMode, Task};
+use crate::types::{Processing, Task};
+
 pub struct Reader {
-    mode: ProcessorMode,
+    processing: Processing,
 }
 
 impl Reader {
-    pub fn new(mode: ProcessorMode) -> Self {
-        Self { mode }
+    pub fn new(processing: Processing) -> Self {
+        Self { processing }
     }
 
     pub async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
         let mut reader = BufReader::new(input);
 
-        match self.mode {
-            ProcessorMode::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
-            ProcessorMode::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
+        match self.processing {
+            Processing::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
+            Processing::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
         }
     }
 

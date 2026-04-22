@@ -2,29 +2,29 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
-use crate::types::{ProcessorMode, TaskResult};
+use crate::types::{Processing, TaskResult};
 use crate::ui::progress::Progress;
 use crate::worker::buffer::Buffer;
 
 pub struct Writer {
-    mode: ProcessorMode,
+    buffer: Buffer,
+    processing: Processing,
 }
 
 impl Writer {
-    pub fn new(mode: ProcessorMode) -> Self {
-        Self { mode }
+    pub fn new(processing: Processing) -> Self {
+        Self { buffer: Buffer::new(0), processing }
     }
 
-    pub async fn write_all<W: AsyncWrite + Unpin>(self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
-        let mut buffer = Buffer::new(0);
+    pub async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
         let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
-            let ready = buffer.add(result);
+            let ready = self.buffer.add(result);
             self.write_batch(&mut writer, &ready, progress).await?;
         }
 
-        let remaining = buffer.flush();
+        let remaining = self.buffer.flush();
         self.write_batch(&mut writer, &remaining, progress).await?;
 
         writer.flush().await.context("failed to flush writer")
@@ -32,7 +32,7 @@ impl Writer {
 
     async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: &Progress) -> Result<()> {
         for result in results {
-            if matches!(self.mode, ProcessorMode::Encryption) {
+            if matches!(self.processing, Processing::Encryption) {
                 writer.write_all(&u32::try_from(result.data.len())?.to_be_bytes()).await.context("failed to write chunk")?;
             }
 

@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use inquire::{Confirm, Password, PasswordDisplayMode, Select};
 
 use crate::files::Files;
-use crate::types::ProcessorMode;
+use crate::types::Processing;
 
 pub struct Prompt {
     min_password_len: usize,
@@ -18,27 +18,24 @@ impl Prompt {
         Self { min_password_len, default_overwrite: false, default_delete: false, starting_cursor: 0 }
     }
 
-    pub fn password(&self, processing: ProcessorMode) -> Result<String> {
-        let message = match processing {
-            ProcessorMode::Encryption => "Enter encryption password",
-            ProcessorMode::Decryption => "Enter decryption password",
+    pub fn password(&self, processing: Processing) -> Result<String> {
+        let (message, confirm) = match processing {
+            Processing::Encryption => ("Enter encryption password", Some(("Confirm password", "Passwords missmatch"))),
+            Processing::Decryption => ("Enter decryption password", None),
         };
 
         let validator = inquire::min_length!(self.min_password_len);
-        let password = Password::new(message).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
-
-        let prompt = match processing {
-            ProcessorMode::Encryption => password
-                .with_custom_confirmation_message("Confirm password")
-                .with_custom_confirmation_error_message("Passwords mismatch"),
-            ProcessorMode::Decryption => password.without_confirmation(),
+        let base = Password::new(message).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
+        let prompt = match confirm {
+            Some((message, error)) => base.with_custom_confirmation_message(message).with_custom_confirmation_error_message(error),
+            None => base.without_confirmation(),
         };
 
         prompt.prompt().context("failed to read password")
     }
 
-    pub fn mode(&self) -> Result<ProcessorMode> {
-        let modes: Vec<ProcessorMode> = ProcessorMode::iter().collect();
+    pub fn processing_mode(&self) -> Result<Processing> {
+        let modes: Vec<Processing> = Processing::iter().collect();
         let labels: Vec<String> = modes.iter().map(|m| m.to_string()).collect();
 
         let choice = Select::new("Select operation", labels)
@@ -71,10 +68,10 @@ impl Prompt {
         Confirm::new(&message).with_default(self.default_overwrite).prompt().context("failed to read confirmation")
     }
 
-    pub fn delete(&self, path: &Path, mode: ProcessorMode) -> Result<bool> {
-        let kind = match mode {
-            ProcessorMode::Encryption => "encrypted",
-            ProcessorMode::Decryption => "decrypted",
+    pub fn delete(&self, path: &Path, processing: Processing) -> Result<bool> {
+        let kind = match processing {
+            Processing::Encryption => "encrypted",
+            Processing::Decryption => "decrypted",
         };
         let message = format!("Delete {} file {}?", kind, filename(path));
         Confirm::new(&message).with_default(self.default_delete).prompt().context("failed to read confirmation")

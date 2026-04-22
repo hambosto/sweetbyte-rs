@@ -6,30 +6,30 @@ use crate::config::{DATA_SHARDS, PARITY_SHARDS};
 use crate::encoding::Encoding;
 use crate::padding::{BlockSize, Pkcs7Padding};
 use crate::secret::SecretBytes;
-use crate::types::{ProcessorMode, Task, TaskResult};
+use crate::types::{Processing, Task, TaskResult};
 
 pub struct Pipeline {
     cipher: Cipher,
     encoder: Encoding,
     compressor: Compressor,
     padding: Pkcs7Padding,
-    mode: ProcessorMode,
+    processing: Processing,
 }
 
 impl Pipeline {
-    pub fn new(key: &SecretBytes, mode: ProcessorMode) -> Result<Self> {
+    pub fn new(key: &SecretBytes, processing: Processing) -> Result<Self> {
         let cipher = Cipher::new(key)?;
         let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
         let compressor = Compressor::new(CompressionLevel::Fast)?;
         let padding = Pkcs7Padding::new(BlockSize::B128)?;
 
-        Ok(Self { cipher, encoder, compressor, padding, mode })
+        Ok(Self { cipher, encoder, compressor, padding, processing })
     }
 
     pub fn process(&self, task: &Task) -> Result<TaskResult> {
-        match self.mode {
-            ProcessorMode::Encryption => self.encrypt_pipeline(task),
-            ProcessorMode::Decryption => self.decrypt_pipeline(task),
+        match self.processing {
+            Processing::Encryption => self.encrypt_pipeline(task),
+            Processing::Decryption => self.decrypt_pipeline(task),
         }
     }
 
