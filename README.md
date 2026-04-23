@@ -135,26 +135,30 @@ CRC32 validates each shard before decoding. Corrupted shards get reconstructed f
 
 ```
 src/
-├── main.rs                 # Entry point, tokio runtime
-├── app.rs                  # CLI parsing, encrypt/decrypt orchestration
+├── main.rs                 # Entry point, CLI parsing, tokio runtime
 ├── config.rs               # All constants in one place
-├── types.rs                # Processing, ProcessorMode, Task, TaskResult
+├── types.rs                # Processing enum, PathName trait, Task, TaskResult
 ├── secret.rs               # Zeroize-based secret handling
 ├── allocator.rs            # MiMalloc as global allocator
+├── files.rs                # File discovery (walkdir), BLAKE3 hashing
+├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
+├── compression.rs          # zstd wrapper
+├── padding.rs              # PKCS7 wrapper
 │
 ├── cipher/
 │   ├── mod.rs              # Cipher struct holding both algorithms
 │   ├── aes_gcm.rs          # AES-256-GCM wrapper
-│   ├── chacha20poly1305.rs # XChaCha20-Poly130 wrapper
+│   ├── chacha20poly1305.rs # XChaCha20-Poly1305 wrapper
 │   ├── derive.rs           # Argon2id key derivation
 │   └── signer.rs           # HMAC-SHA256 with constant-time comparison
 │
 ├── header/
 │   ├── mod.rs              # Header module exports
-│   ├── types.rs            # Metadata, Parameters structs
+│   ├── metadata.rs         # Metadata struct (filename, size, hash)
+│   ├── parameters.rs       # Parameters struct (magic, version)
 │   ├── section.rs          # Packs/unpacks RS-encoded sections
-│   ├── reader.rs           # Async header deserialization
-│   └── writer.rs           # Header serialization
+│   ├── serializer.rs       # Header serialization
+│   └── deserializer.rs     # Header deserialization
 │
 ├── worker/
 │   ├── mod.rs              # Worker, sets up the pipeline
@@ -164,16 +168,12 @@ src/
 │   ├── buffer.rs           # Reordering buffer for out-of-order results
 │   └── pipeline.rs         # The actual encrypt/decrypt stages
 │
-├── ui/
-│   ├── mod.rs              # UI module exports
-│   ├── display.rs          # Tables, banner, success messages
-│   ├── prompt.rs           # Interactive prompts via cliclack
-│   └── progress.rs         # Progress bar via indicatif
-│
-├── file.rs                 # File discovery (walkdir), BLAKE3 hashing
-├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
-├── compression.rs          # zstd wrapper
-└── padding.rs              # PKCS7 wrapper
+└── ui/
+    ├── mod.rs              # UI module exports
+    ├── display.rs          # Tables via comfy-table, banner
+    ├── prompt.rs           # Interactive prompts via cliclack
+    └── progress.rs         # Progress bar via cliclack
+
 ```
 
 ## Security notes
