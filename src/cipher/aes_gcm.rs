@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use ring::aead::{Aad, BoundKey, OpeningKey, SealingKey, UnboundKey, AES_256_GCM, NONCE_LEN};
-use ring::aead::{Nonce, NonceSequence};
+use ring::aead::{AES_256_GCM, Aad, BoundKey, NONCE_LEN, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey};
 use ring::error::Unspecified;
 use ring::rand::{SecureRandom, SystemRandom};
 
