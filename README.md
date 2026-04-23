@@ -167,7 +167,7 @@ src/
 ├── ui/
 │   ├── mod.rs              # UI module exports
 │   ├── display.rs          # Tables, banner, success messages
-│   ├── prompt.rs           # Interactive prompts via inquire
+│   ├── prompt.rs           # Interactive prompts via cliclack
 │   └── progress.rs         # Progress bar via indicatif
 │
 ├── file.rs                 # File discovery (walkdir), BLAKE3 hashing

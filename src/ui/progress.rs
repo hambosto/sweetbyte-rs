@@ -20,3 +20,9 @@ impl Progress {
         self.bar.inc(delta);
     }
 }
+
+impl Drop for Progress {
+    fn drop(&mut self) {
+        self.bar.finish_with_message("Done");
+    }
+}

@@ -1,7 +1,5 @@
-use std::path::{Path, PathBuf};
-
 use anyhow::{Context, Result};
-use inquire::{Confirm, Password, PasswordDisplayMode, Select};
+use std::path::{Path, PathBuf};
 
 use crate::files::Files;
 use crate::types::{PathName, Processing};
@@ -10,62 +8,63 @@ pub struct Prompt {
     min_password_len: usize,
     default_overwrite: bool,
     default_delete: bool,
-    starting_cursor: usize,
+    filter_mode: bool,
 }
 
 impl Prompt {
-    pub fn new(min_password_len: usize) -> Self {
-        Self { min_password_len, default_overwrite: false, default_delete: false, starting_cursor: 0 }
+    pub fn new(min_password_len: usize, filter_mode: bool) -> Self {
+        Self { min_password_len, default_overwrite: false, default_delete: false, filter_mode }
     }
 
     pub fn password(&self, processing: Processing) -> Result<String> {
-        let (message, confirm) = match processing {
-            Processing::Encryption => ("Enter encryption password", Some(("Confirm password", "Passwords mismatch"))),
+        let min = self.min_password_len;
+        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("Password must be at least {} characters", min));
+
+        let (message, confirm_message) = match processing {
+            Processing::Encryption => ("Enter encryption password", Some("Confirm password")),
             Processing::Decryption => ("Enter decryption password", None),
         };
 
-        let validator = inquire::min_length!(self.min_password_len);
-        let base = Password::new(message).with_display_mode(PasswordDisplayMode::Masked).with_validator(validator);
-        let prompt = match confirm {
-            Some((message, error)) => base.with_custom_confirmation_message(message).with_custom_confirmation_error_message(error),
-            None => base.without_confirmation(),
-        };
+        let password = cliclack::password(message).validate(validate).interact().context("password prompt failed")?;
+        if let Some(message) = confirm_message {
+            let confirmed = cliclack::password(message).validate(validate).allow_empty().interact().context("confirmation prompt failed")?;
+            anyhow::ensure!(password == confirmed, "passwords mismatch");
+        }
 
-        prompt.prompt().context("password prompt failed")
+        Ok(password)
     }
 
     pub fn processing_mode(&self) -> Result<Processing> {
-        let modes: Vec<Processing> = Processing::iter().collect();
-        let labels: Vec<String> = modes.iter().map(|m| m.to_string()).collect();
+        let mut select = cliclack::select("Select operation");
+        for m in Processing::iter() {
+            select = select.item(m, m.to_string(), "");
+        }
 
-        let choice = Select::new("Select operation", labels)
-            .with_starting_cursor(self.starting_cursor)
-            .prompt()
-            .context("selection prompt failed")?;
+        if self.filter_mode {
+            select = select.filter_mode();
+        }
 
-        modes.into_iter().find(|m| m.to_string() == choice).context("invalid selection")
+        select.interact().context("selection prompt failed")
     }
 
     pub fn file(&self, files: &[Files]) -> Result<PathBuf> {
-        anyhow::ensure!(!files.is_empty(), "no files available");
+        let mut select = cliclack::select("Select file");
+        for f in files {
+            select = select.item(f.path().to_path_buf(), f.path().name(), "");
+        }
 
-        let labels: Vec<String> = files.iter().map(|f| f.path().name().to_owned()).collect();
-        let choice = Select::new("Select file", labels)
-            .with_starting_cursor(self.starting_cursor)
-            .prompt()
-            .context("selection prompt failed")?;
+        if self.filter_mode {
+            select = select.filter_mode();
+        }
 
-        files
-            .iter()
-            .position(|f| f.path().name() == choice)
-            .and_then(|i| files.get(i))
-            .map(|f| f.path().to_path_buf())
-            .context("invalid selection")
+        select.interact().context("selection prompt failed")
     }
 
     pub fn overwrite(&self, path: &Path) -> Result<bool> {
-        let message = format!("Output file {} already exists. Overwrite?", path.name());
-        Confirm::new(&message).with_default(self.default_overwrite).prompt().context("confirmation prompt failed")
+        cliclack::confirm(format!("Output file {} already exists. Overwrite?", path.name()))
+            .initial_value(self.default_overwrite)
+            .interact()
+            .context("confirmation prompt failed")
     }
 
     pub fn delete(&self, path: &Path, processing: Processing) -> Result<bool> {
@@ -73,7 +72,10 @@ impl Prompt {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",
         };
-        let message = format!("Delete {} file {}?", kind, path.name());
-        Confirm::new(&message).with_default(self.default_delete).prompt().context("confirmation prompt failed")
+
+        cliclack::confirm(format!("Delete {} file {}?", kind, path.name()))
+            .initial_value(self.default_delete)
+            .interact()
+            .context("confirmation prompt failed")
     }
 }

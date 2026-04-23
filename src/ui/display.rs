@@ -62,6 +62,7 @@ impl Display {
             Processing::Decryption => ("[D]", "decrypted"),
         };
         self.print("")?;
+        self.print("")?;
         self.message(icon, format!("File {verb} successfully: {}", path.file_name().and_then(|n| n.to_str()).unwrap_or_default()))
     }
 

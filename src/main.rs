@@ -39,7 +39,7 @@ pub enum Cmd {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let prompt = Prompt::new(PASSWORD_LEN);
+    let prompt = Prompt::new(PASSWORD_LEN, true);
     let display = Display::new(NAME_MAX_LEN);
 
     match Cli::parse().command {
