@@ -1,7 +1,7 @@
 use anyhow::Result;
-use indicatif::{ProgressBar, ProgressStyle};
+use cliclack::ProgressBar;
 
-const TEMPLATE: &str = "{spinner:.green} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})";
+const TEMPLATE: &str = "{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})";
 
 pub struct Progress {
     bar: ProgressBar,
@@ -9,9 +9,8 @@ pub struct Progress {
 
 impl Progress {
     pub fn new(total: u64, msg: impl Into<String>) -> Result<Self> {
-        let bar = ProgressBar::new(total);
-        bar.set_style(ProgressStyle::with_template(TEMPLATE)?.progress_chars("●○"));
-        bar.set_message(msg.into());
+        let bar = cliclack::progress_bar(total).with_template(TEMPLATE);
+        bar.start(msg.into());
 
         Ok(Self { bar })
     }
@@ -23,6 +22,6 @@ impl Progress {
 
 impl Drop for Progress {
     fn drop(&mut self) {
-        self.bar.finish_with_message("Done");
+        self.bar.stop("Done");
     }
 }

@@ -76,6 +76,8 @@ async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
         display.deleted(source.path())?;
     }
 
+    display.exit()?;
+
     Ok(())
 }
 
