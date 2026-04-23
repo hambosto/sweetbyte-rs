@@ -21,8 +21,8 @@ impl Derive {
     pub fn derive_key(&self, salt: &[u8]) -> Result<SecretBytes> {
         let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_PARALLELISM, Some(ARGON_KEY_LEN)).context("invalid parameters")?;
         let argon2 = Argon2::new(Argon2id, V0x13, params);
-        let mut derived_key = vec![0u8; ARGON_KEY_LEN];
 
+        let mut derived_key = vec![0u8; ARGON_KEY_LEN];
         argon2.hash_password_into(self.key.expose_secret(), salt, &mut derived_key).context("key derivation failed")?;
 
         Ok(SecretBytes::new(derived_key))
