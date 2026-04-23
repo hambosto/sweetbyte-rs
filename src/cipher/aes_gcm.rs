@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use ring::aead::{AES_256_GCM, Aad, BoundKey, NONCE_LEN, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey};
+use ring::aead::{Aad, BoundKey, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey, AES_256_GCM, NONCE_LEN};
 use ring::error::Unspecified;
 use ring::rand::{SecureRandom, SystemRandom};
 
@@ -31,7 +31,7 @@ impl AesGcm {
         let mut nonce_bytes = [0u8; NONCE_LEN];
         rng.fill(&mut nonce_bytes).context("nonce generation failed")?;
 
-        let unbound = UnboundKey::new(&AES_256_GCM, &self.key.expose_secret()).context("key setup failed")?;
+        let unbound = UnboundKey::new(&AES_256_GCM, self.key.expose_secret()).context("key setup failed")?;
         let mut sealing_key = SealingKey::new(unbound, OneTimeNonce(Some(nonce_bytes)));
 
         let mut buffer = plaintext.to_vec();
@@ -50,7 +50,7 @@ impl AesGcm {
         let (nonce_bytes, ciphertext) = ciphertext.split_at(NONCE_LEN);
         let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes.try_into().context("invalid nonce")?;
 
-        let unbound = UnboundKey::new(&AES_256_GCM, &self.key.expose_secret()).context("key setup failed")?;
+        let unbound = UnboundKey::new(&AES_256_GCM, self.key.expose_secret()).context("key setup failed")?;
         let mut opening_key = OpeningKey::new(unbound, OneTimeNonce(Some(nonce_bytes)));
 
         let mut buffer = ciphertext.to_vec();

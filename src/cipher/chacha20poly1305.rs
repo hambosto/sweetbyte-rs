@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use ring::aead::{Aad, BoundKey, CHACHA20_POLY1305, NONCE_LEN, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey};
+use ring::aead::{Aad, BoundKey, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey, CHACHA20_POLY1305, NONCE_LEN};
 use ring::error::Unspecified;
 use ring::rand::{SecureRandom, SystemRandom};
 
@@ -30,7 +30,7 @@ impl ChaCha20Poly1305 {
         let mut nonce_bytes = [0u8; NONCE_LEN];
         SystemRandom::new().fill(&mut nonce_bytes).context("nonce generation failed")?;
 
-        let unbound = UnboundKey::new(&CHACHA20_POLY1305, &self.key.expose_secret()).context("key setup failed")?;
+        let unbound = UnboundKey::new(&CHACHA20_POLY1305, self.key.expose_secret()).context("key setup failed")?;
         let mut sealing_key = SealingKey::new(unbound, OneTimeNonce(Some(nonce_bytes)));
 
         let mut buffer = plaintext.to_vec();
@@ -49,7 +49,7 @@ impl ChaCha20Poly1305 {
         let (nonce_bytes, ciphertext) = ciphertext.split_at(NONCE_LEN);
         let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes.try_into().context("invalid nonce")?;
 
-        let unbound = UnboundKey::new(&CHACHA20_POLY1305, &self.key.expose_secret()).context("key setup failed")?;
+        let unbound = UnboundKey::new(&CHACHA20_POLY1305, self.key.expose_secret()).context("key setup failed")?;
         let mut opening_key = OpeningKey::new(unbound, OneTimeNonce(Some(nonce_bytes)));
 
         let mut buffer = ciphertext.to_vec();
