@@ -10,7 +10,7 @@ pub struct Signer {
 
 impl Signer {
     pub fn new(key: &[u8]) -> Result<Self> {
-        anyhow::ensure!(!key.is_empty(), "empty key");
+        anyhow::ensure!(!key.is_empty(), "invalid key length");
 
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }

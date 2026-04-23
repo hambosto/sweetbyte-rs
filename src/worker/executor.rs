@@ -23,13 +23,13 @@ impl Executor {
         let mut workers: JoinSet<Result<()>> = JoinSet::new();
 
         while let Some(task) = tasks.recv().await {
-            let permit = semaphore.clone().acquire_owned().await.context("failed to acquire limiter")?;
+            let permit = semaphore.clone().acquire_owned().await.context("limiter acquire failed")?;
             let pipeline = self.pipeline.clone();
             let results = results.clone();
 
             workers.spawn_blocking(move || {
                 let result = pipeline.process(&task)?;
-                results.blocking_send(result).context("failed to send result")?;
+                results.blocking_send(result).context("result send failed")?;
 
                 drop(permit);
                 Ok(())
@@ -37,7 +37,7 @@ impl Executor {
         }
 
         while let Some(join_result) = workers.join_next().await {
-            join_result?.context("executor task panicked")?;
+            join_result?.context("executor panic")?;
         }
 
         Ok(())

@@ -27,6 +27,7 @@ pub struct Cipher {
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
         anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "invalid key length");
+
         let (aes_key, chacha_key) = key.expose_secret().split_at(KEY_SIZE);
 
         Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })

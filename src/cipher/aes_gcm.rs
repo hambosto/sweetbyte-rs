@@ -1,37 +1,42 @@
 use anyhow::{Context, Result};
-use ring::aead::{AES_256_GCM, Aad, BoundKey, NONCE_LEN, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey};
+use ring::aead::{Aad, BoundKey, OpeningKey, SealingKey, UnboundKey, AES_256_GCM, NONCE_LEN};
+use ring::aead::{Nonce, NonceSequence};
 use ring::error::Unspecified;
 use ring::rand::{SecureRandom, SystemRandom};
 
-pub struct AesGcm {
-    key: Vec<u8>,
-}
+use crate::secret::SecretBytes;
 
-struct OneTimeNonce([u8; NONCE_LEN]);
+struct OneTimeNonce(Option<[u8; NONCE_LEN]>);
 
 impl NonceSequence for OneTimeNonce {
     fn advance(&mut self) -> Result<Nonce, Unspecified> {
-        Ok(Nonce::assume_unique_for_key(self.0))
+        self.0.take().map(Nonce::assume_unique_for_key).ok_or(Unspecified)
     }
+}
+
+pub struct AesGcm {
+    key: SecretBytes,
 }
 
 impl AesGcm {
     pub fn new(key: &[u8]) -> Result<Self> {
-        UnboundKey::new(&AES_256_GCM, key).context("invalid aes-gcm key")?;
+        anyhow::ensure!(key.len() == AES_256_GCM.key_len(), "invalid key length");
 
-        Ok(Self { key: key.to_vec() })
+        Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }
 
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        anyhow::ensure!(!plaintext.is_empty(), "empty plaintext");
+
         let rng = SystemRandom::new();
         let mut nonce_bytes = [0u8; NONCE_LEN];
-        rng.fill(&mut nonce_bytes).context("failed to generate nonce")?;
+        rng.fill(&mut nonce_bytes).context("nonce generation failed")?;
 
-        let unbound = UnboundKey::new(&AES_256_GCM, &self.key).context("failed to create aes-gcm key")?;
-        let mut sealing_key = SealingKey::new(unbound, OneTimeNonce(nonce_bytes));
+        let unbound = UnboundKey::new(&AES_256_GCM, &self.key.expose_secret()).context("key setup failed")?;
+        let mut sealing_key = SealingKey::new(unbound, OneTimeNonce(Some(nonce_bytes)));
+
         let mut buffer = plaintext.to_vec();
-
-        sealing_key.seal_in_place_append_tag(Aad::empty(), &mut buffer).context("failed to encrypt with aes-gcm")?;
+        sealing_key.seal_in_place_append_tag(Aad::empty(), &mut buffer).context("encryption failed")?;
 
         let mut result = Vec::with_capacity(NONCE_LEN + buffer.len());
         result.extend_from_slice(&nonce_bytes);
@@ -41,13 +46,16 @@ impl AesGcm {
     }
 
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        let (nonce_bytes, ciphertext) = ciphertext.split_at(NONCE_LEN);
-        let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes.try_into().context("invalid nonce length")?;
+        anyhow::ensure!(ciphertext.len() >= NONCE_LEN, "ciphertext too short");
 
-        let unbound = UnboundKey::new(&AES_256_GCM, &self.key).context("failed to create aes-gcm key")?;
-        let mut opening_key = OpeningKey::new(unbound, OneTimeNonce(nonce_bytes));
+        let (nonce_bytes, ciphertext) = ciphertext.split_at(NONCE_LEN);
+        let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes.try_into().context("invalid nonce")?;
+
+        let unbound = UnboundKey::new(&AES_256_GCM, &self.key.expose_secret()).context("key setup failed")?;
+        let mut opening_key = OpeningKey::new(unbound, OneTimeNonce(Some(nonce_bytes)));
+
         let mut buffer = ciphertext.to_vec();
-        let plaintext = opening_key.open_in_place(Aad::empty(), &mut buffer).context("failed to decrypt with aes-gcm")?;
+        let plaintext = opening_key.open_in_place(Aad::empty(), &mut buffer).context("decryption failed")?;
 
         Ok(plaintext.to_vec())
     }

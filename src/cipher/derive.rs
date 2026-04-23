@@ -13,17 +13,17 @@ pub struct Derive {
 
 impl Derive {
     pub fn new(key: &[u8]) -> Result<Self> {
-        anyhow::ensure!(!key.is_empty(), "empty key");
+        anyhow::ensure!(!key.is_empty(), "invalid key length");
 
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }
 
     pub fn derive_key(&self, salt: &[u8]) -> Result<SecretBytes> {
-        let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_PARALLELISM, Some(ARGON_KEY_LEN)).context("invalid argon2 parameters")?;
+        let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_PARALLELISM, Some(ARGON_KEY_LEN)).context("invalid parameters")?;
         let argon2 = Argon2::new(Argon2id, V0x13, params);
         let mut derived_key = vec![0u8; ARGON_KEY_LEN];
 
-        argon2.hash_password_into(self.key.expose_secret(), salt, &mut derived_key).context("failed to derive argon2 key")?;
+        argon2.hash_password_into(self.key.expose_secret(), salt, &mut derived_key).context("key derivation failed")?;
 
         Ok(SecretBytes::new(derived_key))
     }
@@ -31,7 +31,7 @@ impl Derive {
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
         let mut bytes = vec![0u8; size];
 
-        SystemRandom::new().fill(&mut bytes).context("failed to generate salt")?;
+        SystemRandom::new().fill(&mut bytes).context("salt generation failed")?;
 
         Ok(bytes)
     }

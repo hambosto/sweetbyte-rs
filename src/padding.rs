@@ -35,13 +35,13 @@ pub struct Pkcs7Padding {
 
 impl Pkcs7Padding {
     pub fn new(block_size: BlockSize) -> Result<Self> {
-        anyhow::ensure!(block_size.is_valid(), "invalid pkcs7 block size");
+        anyhow::ensure!(block_size.is_valid(), "invalid block size");
 
         Ok(Self { block_size })
     }
 
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!data.is_empty(), "cannot pad empty data");
+        anyhow::ensure!(!data.is_empty(), "empty data");
 
         match self.block_size {
             BlockSize::B16 => Self::pad_with::<U16>(data),
@@ -53,7 +53,7 @@ impl Pkcs7Padding {
 
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         let block_size: usize = self.block_size.into();
-        anyhow::ensure!(!data.is_empty() && data.len().is_multiple_of(block_size), "invalid pkcs7 data length must be multiple of {block_size}");
+        anyhow::ensure!(!data.is_empty() && data.len().is_multiple_of(block_size), "invalid data length");
 
         match self.block_size {
             BlockSize::B16 => Self::unpad_with::<U16>(data),
@@ -82,7 +82,7 @@ impl Pkcs7Padding {
                 }
                 Ok(result)
             }
-            block_padding::PaddedData::Error => anyhow::bail!("pkcs7 padding failed"),
+            block_padding::PaddedData::Error => anyhow::bail!("padding failed"),
         }
     }
 

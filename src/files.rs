@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
-use crate::types::Processing;
+use crate::types::{PathName, Processing};
 
 pub struct FileMetadata {
     pub filename: String,
@@ -34,7 +34,7 @@ impl Files {
     }
 
     pub fn is_encrypted(&self) -> bool {
-        self.path.extension().and_then(|e| e.to_str()) == Some(FILE_EXTENSION)
+        self.path.extension().and_then(|e| e.to_str()).is_some_and(|e| e == FILE_EXTENSION)
     }
 
     pub fn is_hidden(&self) -> bool {
@@ -42,9 +42,11 @@ impl Files {
     }
 
     pub fn is_excluded(&self) -> bool {
-        let parts: Vec<&str> = self.path.to_str().into_iter().chain(self.path.iter().filter_map(|c| c.to_str())).collect();
-
-        EXCLUDED_PATTERNS.iter().any(|pat| parts.iter().any(|part| fast_glob::glob_match(pat, part)))
+        self.path
+            .to_str()
+            .into_iter()
+            .chain(self.path.iter().filter_map(|c| c.to_str()))
+            .any(|part| EXCLUDED_PATTERNS.iter().any(|p| fast_glob::glob_match(p, part)))
     }
 
     pub fn is_eligible(&self, processing: Processing) -> bool {
@@ -70,12 +72,12 @@ impl Files {
     }
 
     pub async fn reader(&self) -> Result<BufReader<File>> {
-        tokio::fs::File::open(&self.path).await.map(BufReader::new).context("failed to open file")
+        tokio::fs::File::open(&self.path).await.map(BufReader::new).context("file open failed")
     }
 
     pub async fn writer(&self) -> Result<BufWriter<File>> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
+            tokio::fs::create_dir_all(parent).await.context("directory creation failed")?;
         }
 
         tokio::fs::OpenOptions::new()
@@ -85,17 +87,17 @@ impl Files {
             .open(&self.path)
             .await
             .map(BufWriter::new)
-            .context("failed to create file")
+            .context("file creation failed")
     }
 
     pub async fn delete(&self) -> Result<()> {
-        anyhow::ensure!(self.exists(), "file not found {}", self.path.display());
+        anyhow::ensure!(self.exists(), "file not found");
 
-        tokio::fs::remove_file(&self.path).await.context("failed to delete file")
+        tokio::fs::remove_file(&self.path).await.context("file deletion failed")
     }
 
     pub async fn size(&self) -> Result<u64> {
-        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to read metadata")
+        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("metadata read failed")
     }
 
     pub async fn hash(&self) -> Result<Vec<u8>> {
@@ -104,7 +106,7 @@ impl Files {
         let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
-            let n = reader.read(&mut buffer).await.context("failed to hash file")?;
+            let n = reader.read(&mut buffer).await.context("hash computation failed")?;
             if n == 0 {
                 break;
             }
@@ -121,7 +123,7 @@ impl Files {
     }
 
     pub async fn file_metadata(&self) -> Result<FileMetadata> {
-        let filename = self.path.file_name().context("invalid path")?.to_string_lossy().into();
+        let filename = self.path.name().to_owned();
         let size = self.size().await?;
         let hash = self.hash().await?;
 

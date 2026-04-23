@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::path::Path;
 
 use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
@@ -56,5 +57,15 @@ impl Ord for TaskResult {
 impl PartialOrd for TaskResult {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+pub trait PathName {
+    fn name(&self) -> &str;
+}
+
+impl PathName for Path {
+    fn name(&self) -> &str {
+        self.file_name().and_then(|n| n.to_str()).unwrap_or_default()
     }
 }

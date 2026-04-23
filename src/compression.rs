@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 #[derive(Default)]
 pub enum CompressionLevel {
@@ -38,14 +38,14 @@ impl Compressor {
     }
 
     pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!data.is_empty(), "cannot compress empty data");
+        anyhow::ensure!(!data.is_empty(), "empty data");
 
-        zstd::stream::encode_all(data, self.level).map_err(|e| anyhow::anyhow!("compression failed: {e}"))
+        zstd::stream::encode_all(data, self.level).context("compression failed")
     }
 
     pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!data.is_empty(), "cannot decompress empty data");
+        anyhow::ensure!(!data.is_empty(), "empty data");
 
-        zstd::stream::decode_all(data).map_err(|e| anyhow::anyhow!("decompression failed: {e}"))
+        zstd::stream::decode_all(data).context("decompression failed")
     }
 }

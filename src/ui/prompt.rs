@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use inquire::{Confirm, Password, PasswordDisplayMode, Select};
 
 use crate::files::Files;
-use crate::types::Processing;
+use crate::types::{PathName, Processing};
 
 pub struct Prompt {
     min_password_len: usize,
@@ -20,7 +20,7 @@ impl Prompt {
 
     pub fn password(&self, processing: Processing) -> Result<String> {
         let (message, confirm) = match processing {
-            Processing::Encryption => ("Enter encryption password", Some(("Confirm password", "Passwords missmatch"))),
+            Processing::Encryption => ("Enter encryption password", Some(("Confirm password", "Passwords mismatch"))),
             Processing::Decryption => ("Enter decryption password", None),
         };
 
@@ -31,7 +31,7 @@ impl Prompt {
             None => base.without_confirmation(),
         };
 
-        prompt.prompt().context("failed to read password")
+        prompt.prompt().context("password prompt failed")
     }
 
     pub fn processing_mode(&self) -> Result<Processing> {
@@ -41,7 +41,7 @@ impl Prompt {
         let choice = Select::new("Select operation", labels)
             .with_starting_cursor(self.starting_cursor)
             .prompt()
-            .context("failed to read selection")?;
+            .context("selection prompt failed")?;
 
         modes.into_iter().find(|m| m.to_string() == choice).context("invalid selection")
     }
@@ -49,23 +49,23 @@ impl Prompt {
     pub fn file(&self, files: &[Files]) -> Result<PathBuf> {
         anyhow::ensure!(!files.is_empty(), "no files available");
 
-        let labels: Vec<String> = files.iter().map(|f| filename(f.path())).collect();
+        let labels: Vec<String> = files.iter().map(|f| f.path().name().to_owned()).collect();
         let choice = Select::new("Select file", labels)
             .with_starting_cursor(self.starting_cursor)
             .prompt()
-            .context("failed to read selection")?;
+            .context("selection prompt failed")?;
 
         files
             .iter()
-            .position(|f| filename(f.path()) == choice)
+            .position(|f| f.path().name() == choice)
             .and_then(|i| files.get(i))
             .map(|f| f.path().to_path_buf())
             .context("invalid selection")
     }
 
     pub fn overwrite(&self, path: &Path) -> Result<bool> {
-        let message = format!("Output file {} already exists. Overwrite?", filename(path));
-        Confirm::new(&message).with_default(self.default_overwrite).prompt().context("failed to read confirmation")
+        let message = format!("Output file {} already exists. Overwrite?", path.name());
+        Confirm::new(&message).with_default(self.default_overwrite).prompt().context("confirmation prompt failed")
     }
 
     pub fn delete(&self, path: &Path, processing: Processing) -> Result<bool> {
@@ -73,11 +73,7 @@ impl Prompt {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",
         };
-        let message = format!("Delete {} file {}?", kind, filename(path));
-        Confirm::new(&message).with_default(self.default_delete).prompt().context("failed to read confirmation")
+        let message = format!("Delete {} file {}?", kind, path.name());
+        Confirm::new(&message).with_default(self.default_delete).prompt().context("confirmation prompt failed")
     }
-}
-
-fn filename(path: &Path) -> String {
-    path.file_name().unwrap_or(path.as_os_str()).to_string_lossy().into()
 }

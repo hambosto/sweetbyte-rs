@@ -22,11 +22,11 @@ pub const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
 
 pub const CURRENT_VERSION: u16 = 0x0002;
 
-pub const MAX_FILENAME_LENGTH: usize = 256;
+pub const MAX_FILENAME_LEN: usize = 256;
 
 pub const KEY_SIZE: usize = 32;
 
-pub const PASSWORD_MIN_LENGTH: usize = 8;
+pub const PASSWORD_LEN: usize = 8;
 
 pub const NAME_MAX_LEN: usize = 35;
 

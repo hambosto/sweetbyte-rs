@@ -16,7 +16,7 @@ use clap::{Parser, Subcommand};
 use tokio::io::AsyncWriteExt;
 
 use crate::cipher::Derive;
-use crate::config::{ARGON_SALT_LEN, NAME_MAX_LEN, PASSWORD_MIN_LENGTH};
+use crate::config::{ARGON_SALT_LEN, NAME_MAX_LEN, PASSWORD_LEN};
 use crate::files::Files;
 use crate::header::{Deserializer, Metadata, Serializer};
 use crate::secret::{SecretBytes, SecretString};
@@ -39,7 +39,7 @@ pub enum Cmd {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let prompt = Prompt::new(PASSWORD_MIN_LENGTH);
+    let prompt = Prompt::new(PASSWORD_LEN);
     let display = Display::new(NAME_MAX_LEN);
 
     match Cli::parse().command {
@@ -99,7 +99,7 @@ async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
     let header = Deserializer::deserialize(reader.get_mut()).await?;
 
     let key = derive_key(secret, header.salt())?;
-    anyhow::ensure!(header.verify(&key)?, "invalid password or corrupted data");
+    anyhow::ensure!(header.verify(&key)?, "invalid password");
 
     Worker::new(&key, Processing::Decryption)?.process(reader, target.writer().await?, header.file_size()).await?;
     anyhow::ensure!(target.validate_hash(header.file_hash()).await?, "hash mismatch");

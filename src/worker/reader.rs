@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use byteorder::{BigEndian, ByteOrder};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
@@ -28,13 +29,13 @@ impl Reader {
 
         loop {
             let mut buffer = Vec::with_capacity(CHUNK_SIZE);
-            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut buffer).await.context("failed to read chunk")?;
+            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut buffer).await.context("chunk read failed")?;
 
             if bytes_read == 0 {
                 break;
             }
 
-            sender.send(Task { data: buffer, index }).await.context("failed to send chunk")?;
+            sender.send(Task { data: buffer, index }).await.context("chunk send failed")?;
             index += 1;
         }
 
@@ -50,14 +51,14 @@ impl Reader {
                 break;
             }
 
-            let chunk_len = u32::from_be_bytes(buffer_len) as usize;
+            let chunk_len = BigEndian::read_u32(&buffer_len) as usize;
             if chunk_len == 0 {
                 continue;
             }
 
             let mut data = vec![0u8; chunk_len];
-            reader.read_exact(&mut data).await.context("failed to read chunk")?;
-            sender.send(Task { data, index }).await.context("failed to send chunk")?;
+            reader.read_exact(&mut data).await.context("chunk read failed")?;
+            sender.send(Task { data, index }).await.context("chunk send failed")?;
             index += 1;
         }
 

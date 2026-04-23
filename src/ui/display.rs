@@ -10,7 +10,7 @@ use figlet_rs::Toilet;
 
 use crate::config::APP_NAME;
 use crate::files::Files;
-use crate::types::Processing;
+use crate::types::{PathName, Processing};
 
 pub struct Display {
     terminal: Term,
@@ -23,7 +23,7 @@ impl Display {
     }
 
     fn print(&self, s: impl Into<String>) -> Result<()> {
-        self.terminal.write_line(&s.into()).context("failed to write")
+        self.terminal.write_line(&s.into()).context("write failed")
     }
 
     fn message(&self, icon: &str, text: impl std::fmt::Display) -> Result<()> {
@@ -45,7 +45,7 @@ impl Display {
         table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
-            let filename = file.path().file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            let filename = file.path().name();
             let name = if filename.len() > self.name_len { &filename[..self.name_len.saturating_sub(1)] } else { filename };
             let size = ByteSize(file.size().await?).to_string();
             let (status, color) = if file.is_encrypted() { ("[E] encrypted", Color::Cyan) } else { ("[D] unencrypted", Color::Green) };
@@ -86,11 +86,11 @@ impl Display {
 
     pub fn banner(&self) -> Result<()> {
         let toilet = Toilet::future().map_err(|e| anyhow::anyhow!("font error: {e}"))?;
-        let figure = toilet.convert(APP_NAME).context("failed to render")?;
+        let figure = toilet.convert(APP_NAME).context("render failed")?;
         self.print(Style::new().green().bright().apply_to(figure).to_string())
     }
 
     pub fn clear(&self) -> Result<()> {
-        self.terminal.clear_screen().context("failed to clear")
+        self.terminal.clear_screen().context("clear failed")
     }
 }
