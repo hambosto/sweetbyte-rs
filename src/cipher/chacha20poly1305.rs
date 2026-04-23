@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use ring::aead::{Aad, BoundKey, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey, CHACHA20_POLY1305, NONCE_LEN};
+use ring::aead::{Aad, BoundKey, CHACHA20_POLY1305, NONCE_LEN, Nonce, NonceSequence, OpeningKey, SealingKey, UnboundKey};
 use ring::error::Unspecified;
 use ring::rand::{SecureRandom, SystemRandom};
 
