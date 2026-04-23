@@ -26,9 +26,9 @@ impl Prompt {
             Processing::Decryption => ("Enter decryption password", None),
         };
 
-        let password = cliclack::password(message).validate(validate).interact().context("password prompt failed")?;
+        let password = cliclack::password(message).validate(validate).interact().context("password input failed")?;
         if let Some(message) = confirm_message {
-            let confirmed = cliclack::password(message).validate(validate).allow_empty().interact().context("confirmation prompt failed")?;
+            let confirmed = cliclack::password(message).validate(validate).interact().context("password confirm failed")?;
             anyhow::ensure!(password == confirmed, "passwords mismatch");
         }
 
@@ -45,7 +45,7 @@ impl Prompt {
             select = select.filter_mode();
         }
 
-        select.interact().context("selection prompt failed")
+        select.interact().context("operation selection failed")
     }
 
     pub fn file(&self, files: &[Files]) -> Result<PathBuf> {
@@ -58,14 +58,14 @@ impl Prompt {
             select = select.filter_mode();
         }
 
-        select.interact().context("selection prompt failed")
+        select.interact().context("file selection failed")
     }
 
     pub fn overwrite(&self, path: &Path) -> Result<bool> {
         cliclack::confirm(format!("Output file {} already exists. Overwrite?", path.name()))
             .initial_value(self.default_overwrite)
             .interact()
-            .context("confirmation prompt failed")
+            .context("overwrite confirmation failed")
     }
 
     pub fn delete(&self, path: &Path, processing: Processing) -> Result<bool> {
@@ -77,6 +77,6 @@ impl Prompt {
         cliclack::confirm(format!("Delete {} file {}?", kind, path.name()))
             .initial_value(self.default_delete)
             .interact()
-            .context("confirmation prompt failed")
+            .context("delete confirmation failed")
     }
 }
