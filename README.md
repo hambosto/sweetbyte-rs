@@ -4,7 +4,7 @@
 
 **File encryption that doesn't suck.**
 
-[![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/code-quality.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
+[![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/build.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 </div>
