@@ -12,13 +12,10 @@ let
       day = builtins.substring 6 2 raw;
     in
     "${year}-${month}-${day}";
-
-  date = fmtDate (self.lastModifiedDate or "19700101");
-  shortRev = self.shortRev or "dirty";
 in
 rustPlatform.buildRustPackage {
   pname = "sweetbyte-rs";
-  version = "unstable-${date}-${shortRev}";
+  version = "unstable-${fmtDate self.lastModifiedDate}-${self.shortRev or "dirty"}";
 
   src = lib.fileset.toSource {
     root = ../.;
@@ -30,6 +27,9 @@ rustPlatform.buildRustPackage {
   };
 
   cargoLock.lockFile = ../Cargo.lock;
+  doCheck = false;
+
+  SWEETBYTE_BUILD_VERSION = "unstable ${fmtDate self.lastModifiedDate} (commit ${self.rev or "dirty"})";
 
   meta = {
     description = "A very small, very simple, yet very secure encryption tool written in rust.";

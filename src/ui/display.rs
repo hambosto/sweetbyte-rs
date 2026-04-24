@@ -71,7 +71,8 @@ impl Display {
     }
 
     pub fn banner(&self) -> Result<()> {
-        cliclack::intro(APP_NAME).context("intro failed")
+        let version = option_env!("SWEETBYTE_BUILD_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
+        cliclack::intro(format!("{APP_NAME} {version}")).context("intro failed")
     }
 
     pub fn exit(&self) -> Result<()> {
