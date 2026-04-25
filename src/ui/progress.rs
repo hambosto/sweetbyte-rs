@@ -8,9 +8,9 @@ pub struct Progress {
 }
 
 impl Progress {
-    pub fn new(total: u64, msg: impl Into<String>) -> Result<Self> {
+    pub fn new(total: u64, message: impl Into<String>) -> Result<Self> {
         let bar = cliclack::progress_bar(total).with_template(TEMPLATE);
-        bar.start(msg.into());
+        bar.start(message.into());
 
         Ok(Self { bar })
     }
