@@ -12,7 +12,6 @@ mod ui;
 mod worker;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
 use tokio::io::AsyncWriteExt;
 
 use crate::cipher::Derive;
@@ -25,26 +24,12 @@ use crate::ui::display::Display;
 use crate::ui::prompt::Prompt;
 use crate::worker::Worker;
 
-#[derive(Parser)]
-#[command(name = "sweetbyte-rs", version = "26.1.0", about = "Encrypt files using AES-256-GCM and XChaCha20-Poly1305 with Reed-Solomon error correction.")]
-pub struct Cli {
-    #[command(subcommand)]
-    pub command: Option<Cmd>,
-}
-
-#[derive(Subcommand)]
-pub enum Cmd {
-    Interactive,
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let prompt = Prompt::new(PASSWORD_LEN, true);
     let display = Display::new(NAME_MAX_LEN);
 
-    match Cli::parse().command {
-        Some(Cmd::Interactive) | None => run_interactive(&prompt, &display).await,
-    }
+    run_interactive(&prompt, &display).await
 }
 
 async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {

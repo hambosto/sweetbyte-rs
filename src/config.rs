@@ -30,4 +30,4 @@ pub const PASSWORD_LEN: usize = 8;
 
 pub const NAME_MAX_LEN: usize = 35;
 
-pub const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go"];
+pub const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go", "*.nix", "*.toml", "*.lock"];

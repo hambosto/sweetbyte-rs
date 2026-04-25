@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{CURRENT_VERSION, MAGIC_BYTES};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct Parameters {
     pub magic: u32,
     pub version: u16,

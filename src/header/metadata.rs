@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::MAX_FILENAME_LEN;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct Metadata {
     name: String,
     size: u64,

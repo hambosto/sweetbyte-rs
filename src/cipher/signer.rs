@@ -19,7 +19,11 @@ impl Signer {
         let key = Key::new(HMAC_SHA256, self.key.expose_secret());
         let mut ctx = Context::with_key(&key);
 
-        parts.iter().copied().filter(|p| !p.is_empty()).for_each(|part| ctx.update(part));
+        for part in parts {
+            if !part.is_empty() {
+                ctx.update(part);
+            }
+        }
 
         ctx.sign().as_ref().to_vec()
     }
