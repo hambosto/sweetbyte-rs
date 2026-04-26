@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use anyhow::{Context, Result};
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
@@ -8,7 +6,7 @@ use humansize::DECIMAL;
 
 use crate::config::APP_NAME;
 use crate::files::Files;
-use crate::types::{PathName, Processing};
+use crate::types::Processing;
 
 pub struct Display {
     name_len: usize,
@@ -29,12 +27,7 @@ impl Display {
         table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
-            let file_name = if file.path().name().len() > self.name_len {
-                &file.path().name()[..self.name_len.saturating_sub(1)]
-            } else {
-                file.path().name()
-            };
-
+            let file_name = if file.name().len() > self.name_len { &file.name()[..self.name_len.saturating_sub(1)] } else { file.name() };
             let file_size = humansize::format_size(file.size().await?, DECIMAL);
             let file_status = if file.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
             let status_color = if file.is_encrypted() { Color::Cyan } else { Color::Green };
@@ -45,17 +38,17 @@ impl Display {
         cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("files display failed")
     }
 
-    pub fn success(&self, processing: Processing, file_path: &Path) -> Result<()> {
+    pub fn success(&self, processing: Processing, file: &Files) -> Result<()> {
         let verb = match processing {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",
         };
 
-        cliclack::log::success(format!("File {verb} successfully: {}", file_path.name())).context("success display failed")
+        cliclack::log::success(format!("File {verb} successfully: {}", file.name())).context("success display failed")
     }
 
-    pub fn deleted(&self, file_path: &Path) -> Result<()> {
-        cliclack::log::success(format!("Source file deleted: {}", file_path.name())).context("deleted display failed")
+    pub fn deleted(&self, file: &Files) -> Result<()> {
+        cliclack::log::success(format!("Source file deleted: {}", file.name())).context("deleted display failed")
     }
 
     pub fn header(&self, file_name: &str, file_size: u64, file_hash: &str) -> Result<()> {

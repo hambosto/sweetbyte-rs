@@ -18,13 +18,13 @@ impl Executor {
         Self { pipeline: Arc::new(pipeline), concurrency }
     }
 
-    pub async fn execute(self, mut tasks: Receiver<Task>, results: Sender<TaskResult>) -> Result<()> {
+    pub async fn execute(&self, mut tasks: Receiver<Task>, results: Sender<TaskResult>) -> Result<()> {
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
         let mut workers: JoinSet<Result<()>> = JoinSet::new();
 
         while let Some(task) = tasks.recv().await {
-            let permit = semaphore.clone().acquire_owned().await.context("limiter acquire failed")?;
-            let pipeline = self.pipeline.clone();
+            let permit = Arc::clone(&semaphore).acquire_owned().await.context("limiter acquire failed")?;
+            let pipeline = Arc::clone(&self.pipeline);
             let results = results.clone();
 
             workers.spawn_blocking(move || {

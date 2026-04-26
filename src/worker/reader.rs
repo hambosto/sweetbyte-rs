@@ -19,12 +19,12 @@ impl Reader {
         let mut reader = BufReader::new(input);
 
         match self.processing {
-            Processing::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
+            Processing::Encryption => Self::read_fixed_chunks(&mut reader, sender).await,
             Processing::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
         }
     }
 
-    async fn read_fixed_chunks<R: AsyncRead + Unpin>(&self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
+    async fn read_fixed_chunks<R: AsyncRead + Unpin>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         let mut index = 0u64;
 
         loop {

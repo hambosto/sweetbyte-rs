@@ -3,7 +3,7 @@ use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
 use crate::types::{Processing, TaskResult};
-use crate::ui::progress::Progress;
+use crate::ui::Progress;
 use crate::worker::buffer::Buffer;
 
 pub struct Writer {

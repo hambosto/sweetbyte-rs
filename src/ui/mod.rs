@@ -1,3 +1,6 @@
 pub mod display;
-pub mod progress;
-pub mod prompt;
+mod progress;
+mod prompt;
+
+pub use progress::Progress;
+pub use prompt::Prompt;

@@ -20,8 +20,8 @@ use crate::files::Files;
 use crate::header::{Deserializer, Metadata, Serializer};
 use crate::secret::{SecretBytes, SecretString};
 use crate::types::{FileHeader, Processing};
+use crate::ui::Prompt;
 use crate::ui::display::Display;
-use crate::ui::prompt::Prompt;
 use crate::worker::Worker;
 
 #[tokio::main]
@@ -43,7 +43,7 @@ async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
     display.files(&mut files).await?;
     let source = Files::new(prompt.file(&files)?);
     let target = Files::new(source.output_path(processing));
-    if target.exists() && !prompt.overwrite(target.path())? {
+    if target.exists() && !prompt.overwrite(&target)? {
         anyhow::bail!("operation cancelled");
     }
 
@@ -53,12 +53,12 @@ async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
         Processing::Decryption => decrypt_file(&source, &target, &secret).await?,
     };
 
-    display.success(processing, target.path())?;
+    display.success(processing, &target)?;
     display.header(&process.name, process.size, &process.hash)?;
 
-    if prompt.delete(source.path(), processing)? {
+    if prompt.delete(&source, processing)? {
         source.delete().await?;
-        display.deleted(source.path())?;
+        display.deleted(&source)?;
     }
 
     display.exit()?;
@@ -70,8 +70,8 @@ async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
     let metadata = source.file_metadata().await?;
     let salt = Derive::generate_salt(ARGON_SALT_LEN)?;
     let key = derive_key(secret, &salt)?;
-    let filename = metadata.filename.clone();
-    let header = Serializer::new(Metadata::new(metadata.filename, metadata.size, metadata.hash)?)?;
+    let filename = metadata.file_name.clone();
+    let header = Serializer::new(Metadata::new(metadata.file_name, metadata.size, metadata.hash)?)?;
 
     let mut writer = target.writer().await?;
     writer.write_all(&header.serialize(&salt, &key)?).await?;

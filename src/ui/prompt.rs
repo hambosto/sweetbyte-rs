@@ -1,9 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
 use crate::files::Files;
-use crate::types::{PathName, Processing};
+use crate::types::Processing;
 
 pub struct Prompt {
     min_password_len: usize,
@@ -19,7 +19,7 @@ impl Prompt {
 
     pub fn password(&self, processing: Processing) -> Result<String> {
         let min = self.min_password_len;
-        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("Password must be at least {} characters", min));
+        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("Password must be at least {min} characters"));
 
         let (message, confirm_message) = match processing {
             Processing::Encryption => ("Enter encryption password", Some("Confirm password")),
@@ -51,7 +51,7 @@ impl Prompt {
     pub fn file(&self, files: &[Files]) -> Result<PathBuf> {
         let mut select = cliclack::select("Select file");
         for f in files {
-            select = select.item(f.path().to_path_buf(), f.path().name(), "");
+            select = select.item(f.path().to_path_buf(), f.name(), "");
         }
 
         if self.filter_mode {
@@ -61,20 +61,20 @@ impl Prompt {
         select.interact().context("file selection failed")
     }
 
-    pub fn overwrite(&self, path: &Path) -> Result<bool> {
-        cliclack::confirm(format!("Output file {} already exists. Overwrite?", path.name()))
+    pub fn overwrite(&self, file: &Files) -> Result<bool> {
+        cliclack::confirm(format!("Output file {} already exists. Overwrite?", file.name()))
             .initial_value(self.default_overwrite)
             .interact()
             .context("overwrite confirmation failed")
     }
 
-    pub fn delete(&self, path: &Path, processing: Processing) -> Result<bool> {
+    pub fn delete(&self, file: &Files, processing: Processing) -> Result<bool> {
         let kind = match processing {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",
         };
 
-        cliclack::confirm(format!("Delete {} file {}?", kind, path.name()))
+        cliclack::confirm(format!("Delete {} file {}?", kind, file.name()))
             .initial_value(self.default_delete)
             .interact()
             .context("delete confirmation failed")

@@ -8,10 +8,10 @@ use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
-use crate::types::{PathName, Processing};
+use crate::types::Processing;
 
 pub struct FileMetadata {
-    pub filename: String,
+    pub file_name: String,
     pub size: u64,
     pub hash: Vec<u8>,
 }
@@ -27,6 +27,10 @@ impl Files {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn name(&self) -> &str {
+        self.path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
     }
 
     pub fn exists(&self) -> bool {
@@ -123,11 +127,11 @@ impl Files {
     }
 
     pub async fn file_metadata(&self) -> Result<FileMetadata> {
-        let filename = self.path.name().to_owned();
+        let file_name = self.name().to_owned();
         let size = self.size().await?;
         let hash = self.hash().await?;
 
-        Ok(FileMetadata { filename, size, hash })
+        Ok(FileMetadata { file_name, size, hash })
     }
 
     pub fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {

@@ -3,7 +3,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::secret::SecretBytes;
 use crate::types::{Processing, Task, TaskResult};
-use crate::ui::progress::Progress;
+use crate::ui::Progress;
 use crate::worker::executor::Executor;
 use crate::worker::pipeline::Pipeline;
 use crate::worker::reader::Reader;
@@ -33,7 +33,7 @@ impl Worker {
         W: AsyncWrite + Unpin + Send + 'static,
     {
         let channel_size = std::thread::available_parallelism().map(|p| p.get())?;
-        let progress_bar = Progress::new(total_size, self.processing.label()).context("progress init failed")?;
+        let progress_bar = Progress::new(total_size, self.processing.label());
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);
         let (result_tx, result_rx) = tokio::sync::mpsc::channel::<TaskResult>(channel_size);
