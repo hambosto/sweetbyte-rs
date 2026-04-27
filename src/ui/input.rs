@@ -5,14 +5,14 @@ use anyhow::{Context, Result};
 use crate::files::Files;
 use crate::types::Processing;
 
-pub struct Prompt {
+pub struct Input {
     min_password_len: usize,
     default_overwrite: bool,
     default_delete: bool,
     filter_mode: bool,
 }
 
-impl Prompt {
+impl Input {
     pub fn new(min_password_len: usize, filter_mode: bool) -> Self {
         Self { min_password_len, default_overwrite: false, default_delete: false, filter_mode }
     }

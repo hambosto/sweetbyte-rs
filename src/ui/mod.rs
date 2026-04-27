@@ -1,6 +1,7 @@
-pub mod display;
+mod display;
+mod input;
 mod progress;
-mod prompt;
 
+pub use display::Display;
+pub use input::Input;
 pub use progress::Progress;
-pub use prompt::Prompt;

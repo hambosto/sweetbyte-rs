@@ -1,53 +1,38 @@
-mod allocator;
-mod cipher;
-mod compression;
-mod config;
-mod encoding;
-mod files;
-mod header;
-mod padding;
-mod secret;
-mod types;
-mod ui;
-mod worker;
-
 use anyhow::Result;
+use sweetbyte_rs::cipher::Derive;
+use sweetbyte_rs::config::{ARGON_SALT_LEN, NAME_MAX_LEN, PASSWORD_LEN};
+use sweetbyte_rs::files::Files;
+use sweetbyte_rs::header::{Deserializer, Metadata, Serializer};
+use sweetbyte_rs::secret::{SecretBytes, SecretString};
+use sweetbyte_rs::types::{FileHeader, Processing};
+use sweetbyte_rs::ui::{Display, Input};
+use sweetbyte_rs::worker::Worker;
 use tokio::io::AsyncWriteExt;
-
-use crate::cipher::Derive;
-use crate::config::{ARGON_SALT_LEN, NAME_MAX_LEN, PASSWORD_LEN};
-use crate::files::Files;
-use crate::header::{Deserializer, Metadata, Serializer};
-use crate::secret::{SecretBytes, SecretString};
-use crate::types::{FileHeader, Processing};
-use crate::ui::Prompt;
-use crate::ui::display::Display;
-use crate::worker::Worker;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let prompt = Prompt::new(PASSWORD_LEN, true);
+    let input = Input::new(PASSWORD_LEN, true);
     let display = Display::new(NAME_MAX_LEN);
 
-    run_interactive(&prompt, &display).await
+    run_interactive(&input, &display).await
 }
 
-async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
+async fn run_interactive(input: &Input, display: &Display) -> Result<()> {
     display.clear()?;
     display.banner()?;
 
-    let processing = prompt.processing_mode()?;
+    let processing = input.processing_mode()?;
     let mut files = Files::discover(".", processing);
     anyhow::ensure!(!files.is_empty(), "no eligible files");
 
     display.files(&mut files).await?;
-    let source = Files::new(prompt.file(&files)?);
+    let source = Files::new(input.file(&files)?);
     let target = Files::new(source.output_path(processing));
-    if target.exists() && !prompt.overwrite(&target)? {
+    if target.exists() && !input.overwrite(&target)? {
         anyhow::bail!("operation cancelled");
     }
 
-    let secret = SecretString::new(prompt.password(processing)?);
+    let secret = SecretString::new(input.password(processing)?);
     let process = match processing {
         Processing::Encryption => encrypt_file(&source, &target, &secret).await?,
         Processing::Decryption => decrypt_file(&source, &target, &secret).await?,
@@ -56,7 +41,7 @@ async fn run_interactive(prompt: &Prompt, display: &Display) -> Result<()> {
     display.success(processing, &target)?;
     display.header(&process.name, process.size, &process.hash)?;
 
-    if prompt.delete(&source, processing)? {
+    if input.delete(&source, processing)? {
         source.delete().await?;
         display.deleted(&source)?;
     }
