@@ -13,16 +13,23 @@ pub struct Encoding {
 impl Encoding {
     pub fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
         anyhow::ensure!(reed_solomon_simd::ReedSolomonEncoder::supports(original_count, recovery_count), "unsupported shard config");
+
         Ok(Self { original_count, recovery_count })
     }
 
     pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let shard_size = data.len().div_ceil(self.original_count).next_multiple_of(2);
 
-        let mut padded = data.to_vec();
-        padded.resize(shard_size * self.original_count, 0);
+        let mut shards: Vec<Vec<u8>> = data
+            .chunks(shard_size)
+            .map(|chunk| {
+                let mut shard = chunk.to_vec();
+                shard.resize(shard_size, 0);
+                shard
+            })
+            .collect();
+        shards.resize_with(self.original_count, || vec![0; shard_size]);
 
-        let shards: Vec<Vec<u8>> = padded.chunks(shard_size).map(|s| s.to_vec()).collect();
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, &shards)?;
 
         let mut result = (data.len() as u32).to_le_bytes().to_vec();

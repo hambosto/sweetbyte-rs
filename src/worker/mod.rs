@@ -9,11 +9,11 @@ use crate::worker::pipeline::Pipeline;
 use crate::worker::reader::Reader;
 use crate::worker::writer::Writer;
 
-pub mod buffer;
-pub mod executor;
-pub mod pipeline;
-pub mod reader;
-pub mod writer;
+mod buffer;
+mod executor;
+mod pipeline;
+mod reader;
+mod writer;
 
 pub struct Worker {
     processing: Processing,
