@@ -7,7 +7,9 @@ pub mod types;
 pub mod ui;
 pub mod worker;
 
-pub(crate) mod allocator;
 pub(crate) mod compression;
 pub(crate) mod encoding;
 pub(crate) mod padding;
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

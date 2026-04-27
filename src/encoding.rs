@@ -31,7 +31,6 @@ impl Encoding {
         shards.resize_with(self.original_count, || vec![0; shard_size]);
 
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, &shards)?;
-
         let mut result = (data.len() as u32).to_le_bytes().to_vec();
         for shard in shards.iter().chain(&recovery) {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());

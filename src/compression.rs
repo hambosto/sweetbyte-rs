@@ -43,7 +43,7 @@ impl Compressor {
         zstd::stream::encode_all(data, self.level).context("compression failed")
     }
 
-    pub fn decompress(data: &[u8]) -> Result<Vec<u8>> {
+    pub fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
         anyhow::ensure!(!data.is_empty(), "empty data");
 
         zstd::stream::decode_all(data).context("decompression failed")

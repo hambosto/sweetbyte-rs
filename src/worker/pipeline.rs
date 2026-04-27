@@ -53,7 +53,7 @@ impl Pipeline {
             .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::ChaCha20Poly1305, &data))
             .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &data))
             .and_then(|data| self.padding.unpad(&data))
-            .and_then(|data| Compressor::decompress(&data))?;
+            .and_then(|data| self.compressor.decompress(&data))?;
 
         let size = data.len();
         Ok(TaskResult::new(task.index, data, size))
