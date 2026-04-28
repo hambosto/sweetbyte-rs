@@ -21,7 +21,7 @@ Most encryption tools do one thing: encrypt. SweetByte does more:
 
 - **Cascading encryption.** AES-256-GCM then XChaCha20-Poly1305. An attacker would need to break both ciphers, not just one.
 - **Error correction.** Reed-Solomon encoding (4 data + 10 parity shards) means your encrypted file can survive some bit rot and still decrypt.
-- **Proper key derivation.** Argon2id with 64MB memory cost. Brute-forcing your password won't be practical.
+- **Proper key derivation.** scrypt with 256MB memory cost. Brute-forcing your password won't be practical.
 
 ## Not compatible with the Go version
 
@@ -57,22 +57,6 @@ sweetbyte-rs
 
 You'll get prompts for everything. Pick encrypt or decrypt, choose a file, enter your password. Done.
 
-### CLI mode
-
-For scripts:
-
-```sh
-# Encrypt
-sweetbyte-rs encrypt -i secret.txt -o secret.swx
-
-# Decrypt
-sweetbyte-rs decrypt -i secret.swx -o secret.txt
-
-# Output path is optional - it figures it out from the extension
-sweetbyte-rs encrypt -i secret.txt      # creates secret.txt.swx
-sweetbyte-rs decrypt -i secret.swx      # creates secret.txt
-```
-
 ## How it works
 
 The encryption pipeline, in order:
@@ -92,20 +76,20 @@ Each encrypted file starts with a header. Everything in the header gets Reed-Sol
 | Field | Size | Notes |
 |-------|------|-------|
 | Lengths | 16 bytes | Four u32 LE values for encoded section sizes |
-| Salt | 32 bytes | Random, for Argon2id |
-| Parameters | 6 bytes | Magic `0xDEADBEEF` + version `0x0002` |
-| Metadata | variable | Original filename, size, BLAKE3 hash |
+| Salt | 32 bytes | Random, for scrypt |
+| Parameters | 6 bytes | Magic `0xDEADBEEF` + version `0x0002` (serialized with postcard) |
+| Metadata | variable | Original filename, size, BLAKE3 hash (serialized with postcard) |
 | MAC | 32 bytes | HMAC-SHA256 of (salt + parameters + metadata) |
 
 The HMAC uses constant-time comparison via the `subtle` crate. Header deserialization fails fast if magic bytes or version don't match.
 
 ### Key derivation
 
-Argon2id with these parameters:
+scrypt with these parameters:
 
-- Memory: 64 MiB
-- Iterations: 3
-- Parallelism: 4 lanes
+- log_N: 18 (256 MiB memory)
+- r: 8
+- p: 1
 - Output: 64 bytes
 
 The 64-byte output gets split: first 32 bytes for AES key, last 32 bytes for ChaCha20 key.
@@ -135,21 +119,21 @@ CRC32 validates each shard before decoding. Corrupted shards get reconstructed f
 
 ```
 src/
-├── main.rs                 # Entry point, CLI parsing, tokio runtime
+├── main.rs                 # Entry point, interactive mode, tokio runtime
+├── lib.rs                  # Library root, MiMalloc global allocator
 ├── config.rs               # All constants in one place
-├── types.rs                # Processing enum, PathName trait, Task, TaskResult
-├── secret.rs               # Zeroize-based secret handling
-├── allocator.rs            # MiMalloc as global allocator
+├── types.rs                # Processing enum, Task, TaskResult
+├── secret.rs               # SecretBytes/SecretString via secrecy crate
 ├── files.rs                # File discovery (walkdir), BLAKE3 hashing
 ├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
-├── compression.rs          # zstd wrapper
-├── padding.rs              # PKCS7 wrapper
+├── compression.rs          # zstd wrapper with compression levels
+├── padding.rs              # PKCS7 wrapper with configurable block size
 │
-├── cipher/
+├── core/
 │   ├── mod.rs              # Cipher struct holding both algorithms
 │   ├── aes_gcm.rs          # AES-256-GCM wrapper
 │   ├── chacha20poly1305.rs # XChaCha20-Poly1305 wrapper
-│   ├── derive.rs           # Argon2id key derivation
+│   ├── key.rs              # scrypt key derivation
 │   └── signer.rs           # HMAC-SHA256 with constant-time comparison
 │
 ├── header/
@@ -171,7 +155,7 @@ src/
 └── ui/
     ├── mod.rs              # UI module exports
     ├── display.rs          # Tables via comfy-table, banner
-    ├── prompt.rs           # Interactive prompts via cliclack
+    ├── input.rs            # Interactive prompts via cliclack
     └── progress.rs         # Progress bar via cliclack
 
 ```
@@ -180,7 +164,7 @@ src/
 
 - Your password matters. Use something strong (minimum 8 characters enforced).
 - Constant-time MAC comparison via `subtle` crate.
-- Keys and passwords use `zeroize` for secure memory handling.
+- Keys and passwords use `secrecy` crate with `Zeroize` support for secure memory handling.
 - "Delete source file" in interactive mode calls `remove_file`. That's it. SSDs and journaling filesystems may retain data.
 - Not hardened against hardware side-channels. If that's your threat model, look elsewhere.
 
