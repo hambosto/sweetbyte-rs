@@ -12,7 +12,9 @@ pub struct Encoding {
 
 impl Encoding {
     pub fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
-        anyhow::ensure!(reed_solomon_simd::ReedSolomonEncoder::supports(original_count, recovery_count), "unsupported shard config");
+        if !reed_solomon_simd::ReedSolomonEncoder::supports(original_count, recovery_count) {
+            anyhow::bail!("unsupported shard config");
+        }
 
         Ok(Self { original_count, recovery_count })
     }

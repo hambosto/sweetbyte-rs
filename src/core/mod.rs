@@ -25,7 +25,9 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        anyhow::ensure!(key.expose_secret().len() == SCRYPT_KEY_LEN, "invalid key length");
+        if key.expose_secret().len() != SCRYPT_KEY_LEN {
+            anyhow::bail!("invalid key length");
+        }
 
         let (aes_key, chacha_key) = key.expose_secret().split_at(KEY_SIZE);
 

@@ -13,10 +13,18 @@ pub struct Metadata {
 impl Metadata {
     pub fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
         let name = name.into();
-        anyhow::ensure!(!name.is_empty(), "empty filename");
-        anyhow::ensure!(name.len() <= MAX_FILENAME_LEN, "filename too long");
-        anyhow::ensure!(size > 0, "invalid size");
-        anyhow::ensure!(!hash.is_empty(), "empty hash");
+        if name.is_empty() {
+            anyhow::bail!("filename must not be empty");
+        }
+        if name.len() > MAX_FILENAME_LEN {
+            anyhow::bail!("filename too long: max {MAX_FILENAME_LEN} characters");
+        }
+        if size == 0 {
+            anyhow::bail!("file size must be greater than zero");
+        }
+        if hash.is_empty() {
+            anyhow::bail!("hash must not be empty");
+        }
 
         Ok(Self { name, size, hash })
     }

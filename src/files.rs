@@ -76,12 +76,12 @@ impl Files {
     }
 
     pub async fn reader(&self) -> Result<BufReader<File>> {
-        tokio::fs::File::open(&self.path).await.map(BufReader::new).context("file open failed")
+        tokio::fs::File::open(&self.path).await.map(BufReader::new).context("failed to open file")
     }
 
     pub async fn writer(&self) -> Result<BufWriter<File>> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            tokio::fs::create_dir_all(parent).await.context("directory creation failed")?;
+            tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
         }
 
         tokio::fs::OpenOptions::new()
@@ -91,17 +91,19 @@ impl Files {
             .open(&self.path)
             .await
             .map(BufWriter::new)
-            .context("file creation failed")
+            .context("failed to create file")
     }
 
     pub async fn delete(&self) -> Result<()> {
-        anyhow::ensure!(self.exists(), "file not found");
+        if !self.exists() {
+            anyhow::bail!("file does not exist: {}", self.path.display());
+        }
 
-        tokio::fs::remove_file(&self.path).await.context("file deletion failed")
+        tokio::fs::remove_file(&self.path).await.context("failed to delete file")
     }
 
     pub async fn size(&self) -> Result<u64> {
-        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("metadata read failed")
+        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to read metadata")
     }
 
     pub async fn hash(&self) -> Result<Vec<u8>> {
@@ -110,7 +112,7 @@ impl Files {
         let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
-            let n = reader.read(&mut buffer).await.context("hash computation failed")?;
+            let n = reader.read(&mut buffer).await.context("failed to compute hash")?;
             if n == 0 {
                 break;
             }

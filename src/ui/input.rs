@@ -19,17 +19,19 @@ impl Input {
 
     pub fn password(&self, processing: Processing) -> Result<String> {
         let min = self.min_password_len;
-        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("Password must be at least {min} characters"));
+        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("password must be at least {min} characters"));
 
         let (message, confirm_message) = match processing {
             Processing::Encryption => ("Enter encryption password", Some("Confirm password")),
             Processing::Decryption => ("Enter decryption password", None),
         };
 
-        let password = cliclack::password(message).validate(validate).interact().context("password input failed")?;
+        let password = cliclack::password(message).validate(validate).interact().context("failed to read password")?;
         if let Some(message) = confirm_message {
-            let confirmed = cliclack::password(message).validate(validate).interact().context("password confirm failed")?;
-            anyhow::ensure!(password == confirmed, "passwords mismatch");
+            let confirmed = cliclack::password(message).validate(validate).interact().context("failed to confirm password")?;
+            if password != confirmed {
+                anyhow::bail!("passwords do not match");
+            }
         }
 
         Ok(password)
@@ -45,7 +47,7 @@ impl Input {
             select = select.filter_mode();
         }
 
-        select.interact().context("operation selection failed")
+        select.interact().context("failed to select operation")
     }
 
     pub fn file(&self, files: &[Files]) -> Result<PathBuf> {
@@ -58,14 +60,14 @@ impl Input {
             select = select.filter_mode();
         }
 
-        select.interact().context("file selection failed")
+        select.interact().context("failed to select file")
     }
 
     pub fn overwrite(&self, file: &Files) -> Result<bool> {
         cliclack::confirm(format!("Output file {} already exists. Overwrite?", file.name()))
             .initial_value(self.default_overwrite)
             .interact()
-            .context("overwrite confirmation failed")
+            .context("failed to confirm overwrite")
     }
 
     pub fn delete(&self, file: &Files, processing: Processing) -> Result<bool> {
@@ -77,6 +79,6 @@ impl Input {
         cliclack::confirm(format!("Delete {} file {}?", kind, file.name()))
             .initial_value(self.default_delete)
             .interact()
-            .context("delete confirmation failed")
+            .context("failed to confirm deletion")
     }
 }

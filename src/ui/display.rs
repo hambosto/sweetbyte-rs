@@ -19,7 +19,7 @@ impl Display {
 
     pub async fn files(&self, items: &mut [Files]) -> Result<()> {
         if items.is_empty() {
-            return cliclack::log::warning("No files found").context("files display failed");
+            return cliclack::log::warning("No files found").context("failed to display files");
         }
 
         let mut table = Table::new();
@@ -35,7 +35,7 @@ impl Display {
             table.add_row([Cell::new(i + 1).fg(Color::Green), Cell::new(file_name).fg(Color::Green), Cell::new(file_size).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
         }
 
-        cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("files display failed")
+        cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("failed to display files")
     }
 
     pub fn success(&self, processing: Processing, file: &Files) -> Result<()> {
@@ -44,11 +44,11 @@ impl Display {
             Processing::Decryption => "decrypted",
         };
 
-        cliclack::log::success(format!("File {verb} successfully: {}", file.name())).context("success display failed")
+        cliclack::log::success(format!("File {verb} successfully: {}", file.name())).context("failed to display success message")
     }
 
     pub fn deleted(&self, file: &Files) -> Result<()> {
-        cliclack::log::success(format!("Source file deleted: {}", file.name())).context("deleted display failed")
+        cliclack::log::success(format!("Source file deleted: {}", file.name())).context("failed to display deletion message")
     }
 
     pub fn header(&self, file_name: &str, file_size: u64, file_hash: &str) -> Result<()> {
@@ -60,19 +60,19 @@ impl Display {
         table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(&file_size).fg(Color::White)]);
         table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(file_hash).fg(Color::White)]);
 
-        cliclack::note("Header Information", table.to_string()).context("header display failed")
+        cliclack::note("Header Information", table.to_string()).context("failed to display header")
     }
 
     pub fn banner(&self) -> Result<()> {
         let version = option_env!("SWEETBYTE_BUILD_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
-        cliclack::intro(format!("{APP_NAME} {version}")).context("intro failed")
+        cliclack::intro(format!("{APP_NAME} {version}")).context("failed to display banner")
     }
 
     pub fn exit(&self) -> Result<()> {
-        cliclack::outro("Exiting").context("exit display failed")
+        cliclack::outro("Exiting").context("failed to display exit message")
     }
 
     pub fn clear(&self) -> Result<()> {
-        cliclack::clear_screen().context("clear display failed")
+        cliclack::clear_screen().context("failed to clear screen")
     }
 }

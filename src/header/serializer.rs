@@ -24,8 +24,12 @@ impl Serializer {
     }
 
     pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {
-        anyhow::ensure!(salt.len() == SCRYPT_SALT_LEN, "invalid salt length");
-        anyhow::ensure!(key.expose_secret().len() == SCRYPT_KEY_LEN, "invalid key length");
+        if salt.len() != SCRYPT_SALT_LEN {
+            anyhow::bail!("invalid salt length: expected {SCRYPT_SALT_LEN} bytes, found {}", salt.len());
+        }
+        if key.expose_secret().len() != SCRYPT_KEY_LEN {
+            anyhow::bail!("invalid key length: expected {SCRYPT_KEY_LEN} bytes, found {}", key.expose_secret().len());
+        }
 
         let params_bytes = postcard::to_allocvec(&self.params)?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata)?;

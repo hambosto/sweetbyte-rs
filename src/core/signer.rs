@@ -13,13 +13,15 @@ pub struct Signer {
 
 impl Signer {
     pub fn new(key: &[u8]) -> Result<Self> {
-        anyhow::ensure!(!key.is_empty(), "invalid key length");
+        if key.is_empty() {
+            anyhow::bail!("key must not be empty");
+        }
 
         Ok(Self { key: SecretBytes::new(key.to_vec()) })
     }
 
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
-        let mut mac = HmacSha256::new_from_slice(self.key.expose_secret()).context("signer initialization failed")?;
+        let mut mac = HmacSha256::new_from_slice(self.key.expose_secret()).context("failed to initialize signer")?;
 
         for part in parts {
             if !part.is_empty() {

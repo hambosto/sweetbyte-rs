@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sweetbyte_rs::config::{SCRYPT_SALT_LEN, NAME_MAX_LEN, PASSWORD_LEN};
+use sweetbyte_rs::config::{NAME_MAX_LEN, PASSWORD_LEN, SCRYPT_SALT_LEN};
 use sweetbyte_rs::core::Key;
 use sweetbyte_rs::files::Files;
 use sweetbyte_rs::header::{Deserializer, Metadata, Serializer};
@@ -23,13 +23,15 @@ async fn run_interactive(input: &Input, display: &Display) -> Result<()> {
 
     let processing = input.processing_mode()?;
     let mut files = Files::discover(".", processing);
-    anyhow::ensure!(!files.is_empty(), "no eligible files");
+    if files.is_empty() {
+        anyhow::bail!("no files available for processing");
+    }
 
     display.files(&mut files).await?;
     let source = Files::new(input.file(&files)?);
     let target = Files::new(source.output_path(processing));
     if target.exists() && !input.overwrite(&target)? {
-        anyhow::bail!("operation cancelled");
+        anyhow::bail!("operation canceled");
     }
 
     let secret = SecretString::new(input.password(processing)?);
@@ -71,10 +73,14 @@ async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
     let header = Deserializer::deserialize(reader.get_mut()).await?;
 
     let key = derive_key(secret, header.salt())?;
-    anyhow::ensure!(header.verify(&key)?, "invalid password");
+    if !header.verify(&key)? {
+        anyhow::bail!("incorrect password");
+    }
 
     Worker::new(&key, Processing::Decryption)?.process(reader, target.writer().await?, header.file_size()).await?;
-    anyhow::ensure!(target.validate_hash(header.file_hash()).await?, "hash mismatch");
+    if !target.validate_hash(header.file_hash()).await? {
+        anyhow::bail!("hash verification failed");
+    }
 
     Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
 }

@@ -29,13 +29,13 @@ impl Reader {
 
         loop {
             let mut buffer = Vec::with_capacity(CHUNK_SIZE);
-            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut buffer).await.context("chunk read failed")?;
+            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut buffer).await.context("failed to read chunk")?;
 
             if bytes_read == 0 {
                 break;
             }
 
-            sender.send(Task { data: buffer, index }).await.context("chunk send failed")?;
+            sender.send(Task { data: buffer, index }).await.context("failed to send chunk")?;
             index += 1;
         }
 
@@ -57,8 +57,8 @@ impl Reader {
             }
 
             let mut data = vec![0u8; chunk_len];
-            reader.read_exact(&mut data).await.context("chunk read failed")?;
-            sender.send(Task { data, index }).await.context("chunk send failed")?;
+            reader.read_exact(&mut data).await.context("failed to read chunk")?;
+            sender.send(Task { data, index }).await.context("failed to send chunk")?;
             index += 1;
         }
 

@@ -22,7 +22,7 @@ pub struct Worker {
 
 impl Worker {
     pub fn new(key: &SecretBytes, processing: Processing) -> Result<Self> {
-        let pipeline = Pipeline::new(key, processing).context("pipeline init failed")?;
+        let pipeline = Pipeline::new(key, processing).context("failed to initialize pipeline")?;
 
         Ok(Self { processing, pipeline })
     }
@@ -44,9 +44,9 @@ impl Worker {
 
         let (reader_result, executor_result, writer_result) = tokio::join!(reader_handle, executor_handle, writer_handle);
 
-        reader_result.context("reader panic")?.context("reader failed")?;
-        executor_result.context("executor panic")?.context("executor failed")?;
-        writer_result.context("writer panic")?.context("writer failed")?;
+        reader_result.context("reader panicked")?.context("failed to read")?;
+        executor_result.context("executor panicked")?.context("failed to execute")?;
+        writer_result.context("writer panicked")?.context("failed to write")?;
 
         Ok(())
     }
