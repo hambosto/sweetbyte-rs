@@ -1,14 +1,13 @@
 use anyhow::Result;
-use ring::aead::NONCE_LEN;
 
 mod aes_gcm;
 mod chacha20poly1305;
-mod derive;
+mod key;
 mod signer;
 
 pub use aes_gcm::AesGcm;
 pub use chacha20poly1305::ChaCha20Poly1305;
-pub use derive::Derive;
+pub use key::Key;
 pub use signer::Signer;
 
 use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
@@ -34,8 +33,6 @@ impl Cipher {
     }
 
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(!plaintext.is_empty(), "empty plaintext");
-
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.encrypt(plaintext),
             CipherAlgorithm::ChaCha20Poly1305 => self.chacha.encrypt(plaintext),
@@ -43,8 +40,6 @@ impl Cipher {
     }
 
     pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        anyhow::ensure!(ciphertext.len() >= NONCE_LEN, "ciphertext too short");
-
         match algo {
             CipherAlgorithm::Aes256Gcm => self.aes.decrypt(ciphertext),
             CipherAlgorithm::ChaCha20Poly1305 => self.chacha.decrypt(ciphertext),

@@ -1,5 +1,5 @@
-pub mod cipher;
 pub mod config;
+pub mod core;
 pub mod files;
 pub mod header;
 pub mod secret;

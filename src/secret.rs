@@ -1,20 +1,24 @@
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use secrecy::{ExposeSecret, SecretBox};
 
-pub struct Secret<T: Zeroize> {
-    inner: T,
-}
+pub struct SecretBytes(SecretBox<Vec<u8>>);
+pub struct SecretString(SecretBox<String>);
 
-impl<T: Zeroize> Secret<T> {
-    pub fn new(data: T) -> Self {
-        Self { inner: data }
+impl SecretBytes {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self(SecretBox::new(Box::new(data)))
     }
 
-    pub fn expose_secret(&self) -> &T {
-        &self.inner
+    pub fn expose_secret(&self) -> &[u8] {
+        self.0.expose_secret()
     }
 }
 
-impl<T: Zeroize + ZeroizeOnDrop> ZeroizeOnDrop for Secret<T> {}
+impl SecretString {
+    pub fn new(data: String) -> Self {
+        Self(SecretBox::new(Box::new(data)))
+    }
 
-pub type SecretBytes = Secret<Vec<u8>>;
-pub type SecretString = Secret<String>;
+    pub fn expose_secret(&self) -> &String {
+        self.0.expose_secret()
+    }
+}

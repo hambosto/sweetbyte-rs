@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use crate::cipher::Signer;
 use crate::config::{ARGON_KEY_LEN, ARGON_SALT_LEN, CURRENT_VERSION, DATA_SHARDS, MAGIC_BYTES, PARITY_SHARDS};
+use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
 use crate::header::section::SectionShield;
@@ -29,7 +29,7 @@ impl Serializer {
 
         let params_bytes = postcard::to_allocvec(&self.params)?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata)?;
-        let mac = Signer::new(key.expose_secret())?.compute_parts(&[salt, &params_bytes, &metadata_bytes]);
+        let mac = Signer::new(key.expose_secret())?.compute_parts(&[salt, &params_bytes, &metadata_bytes])?;
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
 
         shield.pack(salt, &params_bytes, &metadata_bytes, &mac)

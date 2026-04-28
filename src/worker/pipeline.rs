@@ -1,8 +1,8 @@
 use anyhow::Result;
 
-use crate::cipher::{Cipher, CipherAlgorithm};
 use crate::compression::{CompressionLevel, Compressor};
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
+use crate::core::{Cipher, CipherAlgorithm};
 use crate::encoding::Encoding;
 use crate::padding::{BlockSize, Pkcs7Padding};
 use crate::secret::SecretBytes;

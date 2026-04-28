@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use tokio::io::AsyncRead;
 
-use crate::cipher::Signer;
 use crate::config::{ARGON_KEY_LEN, DATA_SHARDS, PARITY_SHARDS};
+use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
 use crate::header::section::{PackedSections, SectionShield};
