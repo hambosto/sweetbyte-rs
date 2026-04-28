@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use tokio::io::AsyncRead;
 
-use crate::config::{ARGON_KEY_LEN, DATA_SHARDS, PARITY_SHARDS};
+use crate::config::{SCRYPT_KEY_LEN, DATA_SHARDS, PARITY_SHARDS};
 use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
@@ -45,7 +45,7 @@ impl Deserializer {
 
     pub fn verify(&self, key: &SecretBytes) -> Result<bool> {
         let key_bytes = key.expose_secret();
-        anyhow::ensure!(key_bytes.len() == ARGON_KEY_LEN, "invalid key length");
+        anyhow::ensure!(key_bytes.len() == SCRYPT_KEY_LEN, "invalid key length");
 
         let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;

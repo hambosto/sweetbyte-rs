@@ -1,11 +1,8 @@
 use anyhow::{Context, Result};
-use argon2::Algorithm::Argon2id;
-use argon2::Version::V0x13;
-use argon2::{Argon2, Params};
 use rand::rngs::SysRng;
 use rand::TryRng;
 
-use crate::config::{ARGON_KEY_LEN, ARGON_MEMORY, ARGON_PARALLELISM, ARGON_TIME};
+use crate::config::{SCRYPT_KEY_LEN, SCRYPT_LOG_N, SCRYPT_P, SCRYPT_R};
 use crate::secret::SecretBytes;
 
 pub struct Key {
@@ -20,11 +17,10 @@ impl Key {
     }
 
     pub fn derive_key(&self, salt: &[u8]) -> Result<SecretBytes> {
-        let params = Params::new(ARGON_MEMORY, ARGON_TIME, ARGON_PARALLELISM, Some(ARGON_KEY_LEN)).context("invalid parameters")?;
-        let argon2 = Argon2::new(Argon2id, V0x13, params);
+        let params = scrypt::Params::new(SCRYPT_LOG_N, SCRYPT_R, SCRYPT_P).context("invalid parameters")?;
 
-        let mut derived_key = vec![0u8; ARGON_KEY_LEN];
-        argon2.hash_password_into(self.key.expose_secret(), salt, &mut derived_key).context("key derivation failed")?;
+        let mut derived_key = vec![0u8; SCRYPT_KEY_LEN];
+        scrypt::scrypt(self.key.expose_secret(), salt, &params, &mut derived_key).context("key derivation failed")?;
 
         Ok(SecretBytes::new(derived_key))
     }

@@ -10,7 +10,7 @@ pub use chacha20poly1305::ChaCha20Poly1305;
 pub use key::Key;
 pub use signer::Signer;
 
-use crate::config::{ARGON_KEY_LEN, KEY_SIZE};
+use crate::config::{KEY_SIZE, SCRYPT_KEY_LEN};
 use crate::secret::SecretBytes;
 
 pub enum CipherAlgorithm {
@@ -25,7 +25,7 @@ pub struct Cipher {
 
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        anyhow::ensure!(key.expose_secret().len() == ARGON_KEY_LEN, "invalid key length");
+        anyhow::ensure!(key.expose_secret().len() == SCRYPT_KEY_LEN, "invalid key length");
 
         let (aes_key, chacha_key) = key.expose_secret().split_at(KEY_SIZE);
 

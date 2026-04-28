@@ -2,15 +2,15 @@ pub const APP_NAME: &str = "SweetByte";
 
 pub const FILE_EXTENSION: &str = "swx";
 
-pub const ARGON_TIME: u32 = 3;
+pub const SCRYPT_LOG_N: u8 = 18;
 
-pub const ARGON_MEMORY: u32 = 64 * 1024;
+pub const SCRYPT_R: u32 = 8;
 
-pub const ARGON_PARALLELISM: u32 = 4;
+pub const SCRYPT_P: u32 = 1;
 
-pub const ARGON_KEY_LEN: usize = 64;
+pub const SCRYPT_KEY_LEN: usize = 64;
 
-pub const ARGON_SALT_LEN: usize = 32;
+pub const SCRYPT_SALT_LEN: usize = 32;
 
 pub const CHACHA_NONCE_SIZE: usize = 24;
 
