@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
-use rand::TryRng;
 use rand::rngs::SysRng;
+use rand::TryRng;
 
 use crate::config::{SCRYPT_KEY_LEN, SCRYPT_LOG_N, SCRYPT_P, SCRYPT_R};
 use crate::secret::SecretBytes;
+use crate::validation::NonEmptyBytes;
 
 pub struct Key {
     key: SecretBytes,
@@ -11,11 +12,9 @@ pub struct Key {
 
 impl Key {
     pub fn new(key: &[u8]) -> Result<Self> {
-        if key.is_empty() {
-            anyhow::bail!("key must not be empty");
-        }
+        let key = NonEmptyBytes::try_new(key.to_vec()).context("key must not be empty")?;
 
-        Ok(Self { key: SecretBytes::new(key.to_vec()) })
+        Ok(Self { key: SecretBytes::new(key.as_ref().to_vec()) })
     }
 
     pub fn derive_key(&self, salt: &[u8]) -> Result<SecretBytes> {

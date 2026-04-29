@@ -4,12 +4,7 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::encoding::Encoding;
 use crate::secret::SecretBytes;
-
-#[nutype::nutype(
-    validate(predicate = |&v| v > 0),
-    derive(Debug, Clone, Copy, Deref)
-)]
-struct NonZeroU32(u32);
+use crate::validation::NonZeroU32;
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]

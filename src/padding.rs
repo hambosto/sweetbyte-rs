@@ -1,5 +1,6 @@
-use anyhow::Result;
-use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
+use crate::validation::NonEmptyBytes;
+use anyhow::{Context, Result};
+use block_padding::array::typenum::{Unsigned, U128, U16, U32, U64};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{Padding, Pkcs7};
 
@@ -43,29 +44,24 @@ impl Pkcs7Padding {
     }
 
     pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            anyhow::bail!("data must not be empty");
-        }
+        let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         match self.block_size {
-            BlockSize::B16 => Self::pad_with::<U16>(data),
-            BlockSize::B32 => Self::pad_with::<U32>(data),
-            BlockSize::B64 => Self::pad_with::<U64>(data),
-            BlockSize::B128 => Self::pad_with::<U128>(data),
+            BlockSize::B16 => Self::pad_with::<U16>(data.as_ref()),
+            BlockSize::B32 => Self::pad_with::<U32>(data.as_ref()),
+            BlockSize::B64 => Self::pad_with::<U64>(data.as_ref()),
+            BlockSize::B128 => Self::pad_with::<U128>(data.as_ref()),
         }
     }
 
     pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let block_size: usize = self.block_size.into();
-        if data.is_empty() || !data.len().is_multiple_of(block_size) {
-            anyhow::bail!("data length must be a multiple of {block_size}");
-        }
+        let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         match self.block_size {
-            BlockSize::B16 => Self::unpad_with::<U16>(data),
-            BlockSize::B32 => Self::unpad_with::<U32>(data),
-            BlockSize::B64 => Self::unpad_with::<U64>(data),
-            BlockSize::B128 => Self::unpad_with::<U128>(data),
+            BlockSize::B16 => Self::unpad_with::<U16>(data.as_ref()),
+            BlockSize::B32 => Self::unpad_with::<U32>(data.as_ref()),
+            BlockSize::B64 => Self::unpad_with::<U64>(data.as_ref()),
+            BlockSize::B128 => Self::unpad_with::<U128>(data.as_ref()),
         }
     }
 

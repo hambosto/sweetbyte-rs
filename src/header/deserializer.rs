@@ -18,7 +18,6 @@ impl Deserializer {
     pub async fn deserialize<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
         let packed = shield.unpack(reader).await?;
-
         let params: Parameters = postcard::from_bytes(&packed.params).context("failed to deserialize params")?;
         let metadata: Metadata = postcard::from_bytes(&packed.metadata).context("failed to deserialize metadata")?;
 

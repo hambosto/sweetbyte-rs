@@ -1,22 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::config::MAX_FILENAME_LEN;
-
-#[nutype::nutype(
-    validate(not_empty, len_char_max = MAX_FILENAME_LEN),
-    derive(Debug, Clone, AsRef, Serialize, Deserialize)
-)]
-pub struct Filename(String);
-
-#[nutype::nutype(validate(greater = 0), derive(Debug, Clone, AsRef, Serialize, Deserialize))]
-pub struct FileSize(u64);
-
-#[nutype::nutype(
-    validate(predicate = |v| !v.is_empty()),
-    derive(Debug, Clone, AsRef, Serialize, Deserialize)
-)]
-pub struct FileHash(Vec<u8>);
+use crate::validation::{FileHash, FileSize, Filename};
 
 #[derive(Serialize, Deserialize)]
 pub struct Metadata {
