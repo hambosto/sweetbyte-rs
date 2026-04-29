@@ -59,15 +59,10 @@ impl SectionShield {
 
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<PackedSections> {
         let frame = self.read_frame(reader).await?;
-        let salt_len = *NonZeroU32::try_new(frame.salt).context("salt must not be empty")?;
-        let params_len = *NonZeroU32::try_new(frame.params).context("params must not be empty")?;
-        let metadata_len = *NonZeroU32::try_new(frame.metadata).context("metadata must not be empty")?;
-        let mac_len = *NonZeroU32::try_new(frame.mac).context("mac must not be empty")?;
-
-        let salt = self.read_section(reader, salt_len).await?;
-        let params = self.read_section(reader, params_len).await?;
-        let metadata = self.read_section(reader, metadata_len).await?;
-        let mac = self.read_section(reader, mac_len).await?;
+        let salt = self.read_section(reader, frame.salt).await?;
+        let params = self.read_section(reader, frame.params).await?;
+        let metadata = self.read_section(reader, frame.metadata).await?;
+        let mac = self.read_section(reader, frame.mac).await?;
 
         Ok(PackedSections { salt: SecretBytes::new(salt), params, metadata, mac: SecretBytes::new(mac) })
     }
@@ -75,6 +70,11 @@ impl SectionShield {
     async fn read_frame<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Frame> {
         let mut frame = Frame::zeroed();
         reader.read_exact(bytemuck::bytes_of_mut(&mut frame)).await.context("failed to read frame")?;
+
+        NonZeroU32::try_new(frame.salt).context("salt must not be empty")?;
+        NonZeroU32::try_new(frame.params).context("params must not be empty")?;
+        NonZeroU32::try_new(frame.metadata).context("metadata must not be empty")?;
+        NonZeroU32::try_new(frame.mac).context("mac must not be empty")?;
 
         Ok(frame)
     }
