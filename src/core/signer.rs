@@ -22,12 +22,7 @@ impl Signer {
 
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
         let mut mac = HmacSha256::new_from_slice(self.key.expose_secret()).context("failed to initialize signer")?;
-
-        for part in parts {
-            if !part.is_empty() {
-                mac.update(part);
-            }
-        }
+        parts.iter().filter(|p| !p.is_empty()).for_each(|p| mac.update(p));
 
         Ok(mac.finalize().into_bytes().to_vec())
     }
