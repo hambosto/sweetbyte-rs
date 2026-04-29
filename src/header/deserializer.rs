@@ -19,10 +19,8 @@ impl Deserializer {
         let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
         let packed = shield.unpack(reader).await?;
 
-        let (magic, version): (u32, u16) = postcard::from_bytes(&packed.params).context("failed to deserialize params")?;
-        let (name, size, hash): (String, u64, Vec<u8>) = postcard::from_bytes(&packed.metadata).context("failed to deserialize metadata")?;
-        let metadata = Metadata::new(name, size, hash)?;
-        let params = Parameters::new(magic, version)?;
+        let params: Parameters = postcard::from_bytes(&packed.params).context("failed to deserialize params")?;
+        let metadata: Metadata = postcard::from_bytes(&packed.metadata).context("failed to deserialize metadata")?;
 
         Ok(Self { params, metadata, packed })
     }
@@ -44,14 +42,13 @@ impl Deserializer {
     }
 
     pub fn verify(&self, key: &SecretBytes) -> Result<bool> {
-        let key_bytes = key.expose_secret();
-        if key_bytes.len() != SCRYPT_KEY_LEN {
-            anyhow::bail!("invalid key length: expected {SCRYPT_KEY_LEN} bytes, found {}", key_bytes.len());
+        if key.expose_secret().len() != SCRYPT_KEY_LEN {
+            anyhow::bail!("invalid key length: expected {SCRYPT_KEY_LEN} bytes, found {}", key.expose_secret().len());
         }
 
         let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
-        let signer = Signer::new(key_bytes).context("failed to create signer")?;
+        let signer = Signer::new(key.expose_secret()).context("failed to create signer")?;
 
         Ok(signer.verify_parts(self.packed.mac.expose_secret(), &[self.packed.salt.expose_secret(), &params_bytes, &metadata_bytes]))
     }
