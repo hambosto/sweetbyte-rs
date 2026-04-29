@@ -1,4 +1,4 @@
-name: Rust CI
+name: Build Package
 
 on:
   pull_request:

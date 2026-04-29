@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   update:
-    name: Update Dependencies (Flake Lock)
+    name: Update Dependencies
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
