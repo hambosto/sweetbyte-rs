@@ -57,7 +57,6 @@ async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
     let metadata = source.file_metadata().await?;
     let salt = Key::generate_salt(SCRYPT_SALT_LEN)?;
     let key = derive_key(secret, &salt)?;
-    let filename = metadata.file_name.clone();
     let header = Serializer::new(Metadata::new(metadata.file_name, metadata.size, metadata.hash)?)?;
 
     let mut writer = target.writer().await?;
@@ -65,7 +64,7 @@ async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
 
     Worker::new(&key, Processing::Encryption)?.process(source.reader().await?, writer, metadata.size).await?;
 
-    Ok(FileHeader { name: filename, size: metadata.size, hash: hex::encode(header.file_hash()) })
+    Ok(FileHeader { name: header.file_name(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
 }
 
 async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {

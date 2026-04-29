@@ -7,24 +7,24 @@ use crate::ui::Progress;
 use crate::worker::buffer::Buffer;
 
 pub struct Writer {
-    buffer: Buffer,
     processing: Processing,
 }
 
 impl Writer {
     pub fn new(processing: Processing) -> Self {
-        Self { buffer: Buffer::new(0), processing }
+        Self { processing }
     }
 
     pub async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
+        let mut buffer = Buffer::new(0);
         let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
-            let ready = self.buffer.add(result);
+            let ready = buffer.add(result);
             self.write_batch(&mut writer, &ready, progress).await?;
         }
 
-        let remaining = self.buffer.flush();
+        let remaining = buffer.flush();
         self.write_batch(&mut writer, &remaining, progress).await?;
 
         writer.flush().await.context("failed to flush")

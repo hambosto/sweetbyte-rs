@@ -11,8 +11,8 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
-        Ok(Self { name: Filename::try_new(name.into())?, size: FileSize::try_new(size)?, hash: FileHash::try_new(hash)? })
+    pub fn new(name: String, size: u64, hash: Vec<u8>) -> Result<Self> {
+        Ok(Self { name: Filename::try_new(name)?, size: FileSize::try_new(size)?, hash: FileHash::try_new(hash)? })
     }
 
     pub fn name(&self) -> &str {
