@@ -5,6 +5,12 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use crate::encoding::Encoding;
 use crate::secret::SecretBytes;
 
+#[nutype::nutype(
+    validate(predicate = |&v| v > 0),
+    derive(Debug, Clone, Copy, Deref)
+)]
+struct NonZeroU32(u32);
+
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 struct Frame {
@@ -31,19 +37,6 @@ impl SectionShield {
     }
 
     pub fn pack(&self, salt: &[u8], params: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
-        if salt.is_empty() {
-            anyhow::bail!("salt must not be empty");
-        }
-        if params.is_empty() {
-            anyhow::bail!("params must not be empty");
-        }
-        if metadata.is_empty() {
-            anyhow::bail!("metadata must not be empty");
-        }
-        if mac.is_empty() {
-            anyhow::bail!("mac must not be empty");
-        }
-
         let salt = self.encoder.encode(salt).context("failed to encode salt")?;
         let params = self.encoder.encode(params).context("failed to encode params")?;
         let metadata = self.encoder.encode(metadata).context("failed to encode metadata")?;
@@ -66,24 +59,15 @@ impl SectionShield {
 
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<PackedSections> {
         let frame = self.read_frame(reader).await?;
+        let salt_len = *NonZeroU32::try_new(frame.salt).context("salt must not be empty")?;
+        let params_len = *NonZeroU32::try_new(frame.params).context("params must not be empty")?;
+        let metadata_len = *NonZeroU32::try_new(frame.metadata).context("metadata must not be empty")?;
+        let mac_len = *NonZeroU32::try_new(frame.mac).context("mac must not be empty")?;
 
-        if frame.salt == 0 {
-            anyhow::bail!("salt must not be empty");
-        }
-        if frame.params == 0 {
-            anyhow::bail!("params must not be empty");
-        }
-        if frame.metadata == 0 {
-            anyhow::bail!("metadata must not be empty");
-        }
-        if frame.mac == 0 {
-            anyhow::bail!("mac must not be empty");
-        }
-
-        let salt = self.read_section(reader, frame.salt).await?;
-        let params = self.read_section(reader, frame.params).await?;
-        let metadata = self.read_section(reader, frame.metadata).await?;
-        let mac = self.read_section(reader, frame.mac).await?;
+        let salt = self.read_section(reader, salt_len).await?;
+        let params = self.read_section(reader, params_len).await?;
+        let metadata = self.read_section(reader, metadata_len).await?;
+        let mac = self.read_section(reader, mac_len).await?;
 
         Ok(PackedSections { salt: SecretBytes::new(salt), params, metadata, mac: SecretBytes::new(mac) })
     }

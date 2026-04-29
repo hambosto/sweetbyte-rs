@@ -3,21 +3,26 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{CURRENT_VERSION, MAGIC_BYTES};
 
+#[nutype::nutype(
+    validate(predicate = |&m| m == MAGIC_BYTES),
+    derive(Debug, Clone, Copy, AsRef, Serialize, Deserialize)
+)]
+pub struct Magic(u32);
+
+#[nutype::nutype(
+    validate(predicate = |&v| v == CURRENT_VERSION),
+    derive(Debug, Clone, Copy, AsRef, Serialize, Deserialize)
+)]
+pub struct Version(u16);
+
 #[derive(Serialize, Deserialize)]
 pub struct Parameters {
-    pub magic: u32,
-    pub version: u16,
+    pub magic: Magic,
+    pub version: Version,
 }
 
 impl Parameters {
     pub fn new(magic: u32, version: u16) -> Result<Self> {
-        if magic != MAGIC_BYTES {
-            anyhow::bail!("invalid magic bytes: expected {MAGIC_BYTES:#x}, found {magic:#x}");
-        }
-        if version != CURRENT_VERSION {
-            anyhow::bail!("unsupported version: expected {CURRENT_VERSION}, found {version}");
-        }
-
-        Ok(Self { magic, version })
+        Ok(Self { magic: Magic::try_new(magic)?, version: Version::try_new(version)? })
     }
 }
