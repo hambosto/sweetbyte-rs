@@ -1,5 +1,4 @@
-use crate::config::MAX_FILENAME_LEN;
-use crate::config::{CURRENT_VERSION, MAGIC_BYTES};
+use crate::config::{CURRENT_VERSION, MAGIC_BYTES, MAX_FILENAME_LEN};
 
 #[nutype::nutype(
     validate(not_empty, len_char_max = MAX_FILENAME_LEN),

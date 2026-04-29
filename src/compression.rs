@@ -1,5 +1,6 @@
-use crate::validation::NonEmptyBytes;
 use anyhow::{Context, Result};
+
+use crate::validation::NonEmptyBytes;
 
 #[derive(Default)]
 pub enum CompressionLevel {

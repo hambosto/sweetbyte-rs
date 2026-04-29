@@ -1,8 +1,9 @@
-use crate::validation::NonEmptyBytes;
 use anyhow::{Context, Result};
-use block_padding::array::typenum::{Unsigned, U128, U16, U32, U64};
+use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{Padding, Pkcs7};
+
+use crate::validation::NonEmptyBytes;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum BlockSize {
