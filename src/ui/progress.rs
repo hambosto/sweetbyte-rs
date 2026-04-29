@@ -21,6 +21,7 @@ impl Progress {
 
 impl Drop for Progress {
     fn drop(&mut self) {
+        #[cfg(not(debug_assertions))]
         self.bar.stop("Done");
     }
 }
