@@ -16,7 +16,7 @@ pub const CHACHA_NONCE_SIZE: usize = 24;
 
 pub const AES_NONCE_SIZE: usize = 12;
 
-pub const KEY_SIZE: usize = 32;
+pub const KEY_LEN: usize = 32;
 
 pub const DATA_SHARDS: usize = 4;
 

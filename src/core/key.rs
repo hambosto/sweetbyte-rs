@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use rand::TryRng;
 use rand::rngs::SysRng;
+use rand::TryRng;
 
 use crate::config::{SCRYPT_KEY_LEN, SCRYPT_LOG_N, SCRYPT_P, SCRYPT_R};
 use crate::secret::SecretBytes;
-use crate::validation::KeyBytes32;
+use crate::validation::NonEmptyKey;
 
 pub struct Key {
     key: SecretBytes,
@@ -12,7 +12,7 @@ pub struct Key {
 
 impl Key {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+        let key = NonEmptyKey::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 
         Ok(Self { key: key.into_secret() })
     }

@@ -4,7 +4,7 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use crate::secret::SecretBytes;
-use crate::validation::KeyBytes32;
+use crate::validation::NonEmptyKey;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -14,7 +14,7 @@ pub struct Signer {
 
 impl Signer {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+        let key = NonEmptyKey::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 
         Ok(Self { key: key.into_secret() })
     }
