@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 mod aes_gcm;
 mod chacha20poly1305;
@@ -10,8 +10,8 @@ pub use chacha20poly1305::ChaCha20Poly1305;
 pub use key::Key;
 pub use signer::Signer;
 
-use crate::config::{KEY_SIZE, SCRYPT_KEY_LEN};
 use crate::secret::SecretBytes;
+use crate::validation::KeyBytes64;
 
 pub enum CipherAlgorithm {
     Aes256Gcm,
@@ -19,32 +19,29 @@ pub enum CipherAlgorithm {
 }
 
 pub struct Cipher {
-    aes: AesGcm,
-    chacha: ChaCha20Poly1305,
+    first: AesGcm,
+    second: ChaCha20Poly1305,
 }
 
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        if key.expose_secret().len() != SCRYPT_KEY_LEN {
-            anyhow::bail!("invalid key length");
-        }
+        let key = KeyBytes64::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+        let (aes_secret, chacha_secret) = key.split()?;
 
-        let (aes_key, chacha_key) = key.expose_secret().split_at(KEY_SIZE);
-
-        Ok(Self { aes: AesGcm::new(aes_key)?, chacha: ChaCha20Poly1305::new(chacha_key)? })
+        Ok(Self { first: AesGcm::new(&aes_secret.into_secret())?, second: ChaCha20Poly1305::new(&chacha_secret.into_secret())? })
     }
 
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
         match algo {
-            CipherAlgorithm::Aes256Gcm => self.aes.encrypt(plaintext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.chacha.encrypt(plaintext),
+            CipherAlgorithm::Aes256Gcm => self.first.encrypt(plaintext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.second.encrypt(plaintext),
         }
     }
 
     pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
         match algo {
-            CipherAlgorithm::Aes256Gcm => self.aes.decrypt(ciphertext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.chacha.decrypt(ciphertext),
+            CipherAlgorithm::Aes256Gcm => self.first.decrypt(ciphertext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.second.decrypt(ciphertext),
         }
     }
 }

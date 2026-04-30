@@ -4,17 +4,17 @@ use rand::rngs::SysRng;
 
 use crate::config::{SCRYPT_KEY_LEN, SCRYPT_LOG_N, SCRYPT_P, SCRYPT_R};
 use crate::secret::SecretBytes;
-use crate::validation::NonEmptyBytes;
+use crate::validation::KeyBytes32;
 
 pub struct Key {
     key: SecretBytes,
 }
 
 impl Key {
-    pub fn new(key: &[u8]) -> Result<Self> {
-        let key = NonEmptyBytes::try_new(key.to_vec()).context("key must not be empty")?;
+    pub fn new(key: &SecretBytes) -> Result<Self> {
+        let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 
-        Ok(Self { key: SecretBytes::new(key.as_ref().to_vec()) })
+        Ok(Self { key: key.into_secret() })
     }
 
     pub fn derive_key(&self, salt: &[u8]) -> Result<SecretBytes> {

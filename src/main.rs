@@ -85,7 +85,8 @@ async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
 }
 
 fn derive_key(secret: &SecretString, salt: &[u8]) -> Result<SecretBytes> {
-    Key::new(secret.expose_secret().as_bytes())?.derive_key(salt)
+    let key_bytes = SecretBytes::new(secret.expose_secret().as_bytes().to_vec());
+    Key::new(&key_bytes)?.derive_key(salt)
 }
 
 #[cfg(test)]
