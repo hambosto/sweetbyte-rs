@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use rand::rngs::SysRng;
 use rand::TryRng;
+use rand::rngs::SysRng;
 
 use crate::config::{SCRYPT_KEY_LEN, SCRYPT_LOG_N, SCRYPT_P, SCRYPT_R};
 use crate::secret::SecretBytes;
