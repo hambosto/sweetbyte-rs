@@ -20,9 +20,6 @@ pub struct Magic(u32);
 #[nutype::nutype(validate(predicate = |&v| v == CURRENT_VERSION), derive(Serialize, Deserialize))]
 pub struct Version(u16);
 
-#[nutype::nutype(validate(predicate = |&v| v > 0))]
-pub struct NonZeroU32(u32);
-
 #[nutype::nutype(validate(predicate = |v| !v.is_empty()), derive(AsRef))]
 pub struct NonEmptyBytes(Vec<u8>);
 

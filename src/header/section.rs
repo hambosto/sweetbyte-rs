@@ -4,7 +4,6 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::encoding::Encoding;
 use crate::secret::SecretBytes;
-use crate::validation::NonZeroU32;
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -65,11 +64,6 @@ impl SectionShield {
     async fn read_frame<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Frame> {
         let mut frame = Frame::zeroed();
         reader.read_exact(bytemuck::bytes_of_mut(&mut frame)).await.context("failed to read frame")?;
-
-        NonZeroU32::try_new(frame.salt).context("salt must not be empty")?;
-        NonZeroU32::try_new(frame.params).context("params must not be empty")?;
-        NonZeroU32::try_new(frame.metadata).context("metadata must not be empty")?;
-        NonZeroU32::try_new(frame.mac).context("mac must not be empty")?;
 
         Ok(frame)
     }

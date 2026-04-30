@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::config::{CURRENT_VERSION, DATA_SHARDS, MAGIC_BYTES, PARITY_SHARDS};
 use crate::core::Signer;
@@ -14,7 +14,7 @@ pub struct Serializer {
 
 impl Serializer {
     pub fn new(metadata: Metadata) -> Result<Self> {
-        let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION)?;
+        let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION).context("failed to initialize params")?;
 
         Ok(Self { params, metadata })
     }
@@ -32,11 +32,12 @@ impl Serializer {
     }
 
     pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {
-        let params_bytes = postcard::to_allocvec(&self.params)?;
-        let metadata_bytes = postcard::to_allocvec(&self.metadata)?;
-        let mac = Signer::new(key)?.compute_parts(&[salt, &params_bytes, &metadata_bytes])?;
-        let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS)?;
+        let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
+        let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
+        let signer = Signer::new(key).context("failed to initialize signer")?;
+        let mac = signer.compute_parts(&[salt, &params_bytes, &metadata_bytes]).context("failed to compute mac")?;
+        let shield = SectionShield::new(DATA_SHARDS, PARITY_SHARDS).context("failed to initialize shield")?;
 
-        shield.pack(salt, &params_bytes, &metadata_bytes, &mac)
+        shield.pack(salt, &params_bytes, &metadata_bytes, &mac).context("failed to pack header sections")
     }
 }

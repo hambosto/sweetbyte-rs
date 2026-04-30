@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::validation::{Magic, Version};
@@ -11,6 +11,9 @@ pub struct Parameters {
 
 impl Parameters {
     pub fn new(magic: u32, version: u16) -> Result<Self> {
-        Ok(Self { magic: Magic::try_new(magic)?, version: Version::try_new(version)? })
+        let magic = Magic::try_new(magic).context("invalid magic bytes")?;
+        let version = Version::try_new(version).context("invalid version")?;
+
+        Ok(Self { magic, version })
     }
 }

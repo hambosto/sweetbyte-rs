@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use byteorder::{ByteOrder, LittleEndian};
 use subtle::ConstantTimeEq;
 
@@ -32,7 +32,7 @@ impl Encoding {
             .collect();
         shards.resize_with(self.original_count, || vec![0; shard_size]);
 
-        let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, &shards)?;
+        let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, &shards).context("failed to encode reed-solomon shards")?;
         let mut result = (data.len() as u32).to_le_bytes().to_vec();
         for shard in shards.iter().chain(&recovery) {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
@@ -59,7 +59,7 @@ impl Encoding {
             original.into_iter().map(|(i, d)| (i, d.to_vec())).collect()
         } else {
             let recovery: Vec<(usize, &[u8])> = recovery.into_iter().map(|(i, d)| (i - self.original_count, d)).collect();
-            reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery)?
+            reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode reed-solomon shards")?
         };
 
         let mut result: Vec<u8> = (0..self.original_count).flat_map(|i| restored[&i].iter().copied()).collect();

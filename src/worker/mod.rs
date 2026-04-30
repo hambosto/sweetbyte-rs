@@ -32,7 +32,8 @@ impl Worker {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let channel_size = std::thread::available_parallelism().map(|p| p.get())?;
+        let parallelism = std::thread::available_parallelism().context("failed to get available parallelism")?;
+        let channel_size = parallelism.get();
         let progress_bar = Progress::new(total_size, self.processing.label());
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);
@@ -44,9 +45,14 @@ impl Worker {
 
         let (reader_result, executor_result, writer_result) = tokio::join!(reader_handle, executor_handle, writer_handle);
 
-        reader_result.context("reader panicked")?.context("failed to read")?;
-        executor_result.context("executor panicked")?.context("failed to execute")?;
-        writer_result.context("writer panicked")?.context("failed to write")?;
+        let reader_inner = reader_result.context("reader panicked")?;
+        reader_inner.context("failed to read")?;
+
+        let executor_inner = executor_result.context("executor panicked")?;
+        executor_inner.context("failed to execute")?;
+
+        let writer_inner = writer_result.context("writer panicked")?;
+        writer_inner.context("failed to write")?;
 
         Ok(())
     }

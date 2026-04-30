@@ -98,7 +98,8 @@ impl Pkcs7Padding {
             arr.copy_from_slice(chunk);
             blocks.push(arr);
         }
+        let unpadded = Pkcs7::unpad_blocks::<B>(&blocks).context("failed to unpad data: invalid padding")?;
 
-        Ok(Pkcs7::unpad_blocks::<B>(&blocks)?.to_vec())
+        Ok(unpadded.to_vec())
     }
 }

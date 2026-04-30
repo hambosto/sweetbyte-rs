@@ -28,7 +28,7 @@ impl Executor {
             let results = results.clone();
 
             workers.spawn_blocking(move || {
-                let result = pipeline.process(&task)?;
+                let result = pipeline.process(&task).context("failed to process task")?;
                 results.blocking_send(result).context("failed to send result")?;
 
                 drop(permit);

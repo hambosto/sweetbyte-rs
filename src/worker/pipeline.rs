@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::compression::{CompressionLevel, Compressor};
 use crate::config::{DATA_SHARDS, PARITY_SHARDS};
@@ -18,10 +18,10 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new(key: &SecretBytes, processing: Processing) -> Result<Self> {
-        let cipher = Cipher::new(key)?;
-        let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS)?;
-        let compressor = Compressor::new(CompressionLevel::Fast)?;
-        let padding = Pkcs7Padding::new(BlockSize::B128)?;
+        let cipher = Cipher::new(key).context("failed to initialize cipher")?;
+        let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS).context("failed to initialize encoder")?;
+        let compressor = Compressor::new(CompressionLevel::Fast).context("failed to initialize compressor")?;
+        let padding = Pkcs7Padding::new(BlockSize::B128).context("failed to initialize padding")?;
 
         Ok(Self { cipher, encoder, compressor, padding, processing })
     }
@@ -34,26 +34,22 @@ impl Pipeline {
     }
 
     fn encrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
-        let encoded_data = self
-            .compressor
-            .compress(&task.data)
-            .and_then(|data| self.padding.pad(&data))
-            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &data))
-            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::ChaCha20Poly1305, &data))
-            .and_then(|data| self.encoder.encode(&data))?;
+        let data = self.compressor.compress(&task.data).context("failed to compress data")?;
+        let data = self.padding.pad(&data).context("failed to pad data")?;
+        let data = self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &data).context("failed to encrypt with AES-256-GCM")?;
+        let data = self.cipher.encrypt(&CipherAlgorithm::ChaCha20Poly1305, &data).context("failed to encrypt with ChaCha20Poly1305")?;
+        let encoded_data = self.encoder.encode(&data).context("failed to encode data")?;
 
         let size = task.data.len();
         Ok(TaskResult::new(task.index, encoded_data, size))
     }
 
     fn decrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
-        let data = self
-            .encoder
-            .decode(&task.data)
-            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::ChaCha20Poly1305, &data))
-            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &data))
-            .and_then(|data| self.padding.unpad(&data))
-            .and_then(|data| self.compressor.decompress(&data))?;
+        let data = self.encoder.decode(&task.data).context("failed to decode data")?;
+        let data = self.cipher.decrypt(&CipherAlgorithm::ChaCha20Poly1305, &data).context("failed to decrypt with ChaCha20Poly1305")?;
+        let data = self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &data).context("failed to decrypt with AES-256-GCM")?;
+        let data = self.padding.unpad(&data).context("failed to unpad data")?;
+        let data = self.compressor.decompress(&data).context("failed to decompress data")?;
 
         let size = data.len();
         Ok(TaskResult::new(task.index, data, size))

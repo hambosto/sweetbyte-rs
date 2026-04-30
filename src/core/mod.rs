@@ -29,10 +29,13 @@ impl Cipher {
         let key = KeyBytes64::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
         let key_bytes = key.into_inner();
         let (first_key, second_key) = key_bytes.split_at(KEY_LEN);
-        let aes_secret = KeyBytes32::try_new(first_key.to_vec()).context("failed to create AES secret")?;
-        let chacha_secret = KeyBytes32::try_new(second_key.to_vec()).context("failed to create ChaCha secret")?;
+        let aes_secret = KeyBytes32::try_new(first_key.to_vec()).context("failed to create AES-256-GCM secret")?;
+        let chacha_secret = KeyBytes32::try_new(second_key.to_vec()).context("failed to create ChaCha20Poly1305 secret")?;
 
-        Ok(Self { first: AesGcm::new(&aes_secret.into_secret())?, second: ChaCha20Poly1305::new(&chacha_secret.into_secret())? })
+        let first = AesGcm::new(&aes_secret.into_secret()).context("failed to initialize AES-256-GCM cipher")?;
+        let second = ChaCha20Poly1305::new(&chacha_secret.into_secret()).context("failed to initialize ChaCha20Poly1305 cipher")?;
+
+        Ok(Self { first, second })
     }
 
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
