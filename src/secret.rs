@@ -19,6 +19,6 @@ impl SecretString {
     }
 
     pub fn expose_secret(&self) -> &str {
-        self.0.expose_secret().as_str()
+        self.0.expose_secret()
     }
 }
