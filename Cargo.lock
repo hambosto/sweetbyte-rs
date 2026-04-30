@@ -1249,7 +1249,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "walkdir",
- "zeroize",
  "zstd",
 ]
 

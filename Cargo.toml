@@ -39,7 +39,6 @@ strum = { version = "0.28.0", features = ["derive"] }
 subtle = "2.6.1"
 tokio = { version = "1.52.1", features = ["full"] }
 walkdir = "2.5.0"
-zeroize = "1.8.2"
 zstd = { version = "0.13.3", features = ["thin"] }
 
 [profile.release]
