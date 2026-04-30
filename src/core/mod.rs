@@ -10,8 +10,9 @@ pub use chacha20poly1305::ChaCha20Poly1305;
 pub use key::Key;
 pub use signer::Signer;
 
+use crate::config::KEY_LEN;
 use crate::secret::SecretBytes;
-use crate::validation::KeyBytes64;
+use crate::validation::{IntoSecretBytes, KeyBytes32, KeyBytes64};
 
 pub enum CipherAlgorithm {
     Aes256Gcm,
@@ -26,7 +27,10 @@ pub struct Cipher {
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
         let key = KeyBytes64::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
-        let (aes_secret, chacha_secret) = key.split()?;
+        let key_bytes = key.into_inner();
+        let (first_key, second_key) = key_bytes.split_at(KEY_LEN);
+        let aes_secret = KeyBytes32::try_new(first_key.to_vec()).context("failed to create AES secret")?;
+        let chacha_secret = KeyBytes32::try_new(second_key.to_vec()).context("failed to create ChaCha secret")?;
 
         Ok(Self { first: AesGcm::new(&aes_secret.into_secret())?, second: ChaCha20Poly1305::new(&chacha_secret.into_secret())? })
     }

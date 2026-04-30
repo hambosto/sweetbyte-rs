@@ -4,7 +4,7 @@ use chacha20poly1305::{AeadCore, XChaCha20Poly1305, XNonce};
 
 use crate::config::CHACHA_NONCE_SIZE;
 use crate::secret::SecretBytes;
-use crate::validation::{KeyBytes32, NonEmptyBytes};
+use crate::validation::{IntoSecretBytes, KeyBytes32, NonEmptyBytes};
 
 pub struct ChaCha20Poly1305 {
     key: SecretBytes,

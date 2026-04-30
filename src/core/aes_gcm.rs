@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 
 use crate::config::AES_NONCE_SIZE;
 use crate::secret::SecretBytes;
-use crate::validation::{KeyBytes32, NonEmptyBytes};
+use crate::validation::{IntoSecretBytes, KeyBytes32, NonEmptyBytes};
 
 pub struct AesGcm {
     key: SecretBytes,

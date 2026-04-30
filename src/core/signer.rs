@@ -4,7 +4,7 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use crate::secret::SecretBytes;
-use crate::validation::NonEmptyKey;
+use crate::validation::{IntoSecretBytes, NonEmptyKey};
 
 type HmacSha256 = Hmac<Sha256>;
 

@@ -4,7 +4,7 @@ use rand::rngs::SysRng;
 
 use crate::config::{SCRYPT_KEY_LEN, SCRYPT_LOG_N, SCRYPT_P, SCRYPT_R};
 use crate::secret::SecretBytes;
-use crate::validation::NonEmptyKey;
+use crate::validation::{IntoSecretBytes, NonEmptyKey};
 
 pub struct Key {
     key: SecretBytes,
