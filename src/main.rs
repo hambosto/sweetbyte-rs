@@ -64,7 +64,7 @@ async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> 
 
     Worker::new(&key, Processing::Encryption)?.process(source.reader().await?, writer, metadata.size).await?;
 
-    Ok(FileHeader { name: header.file_name(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+    Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
 }
 
 async fn decrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
@@ -107,7 +107,7 @@ mod tests {
         let source = Files::new(&source_path);
         let encrypted = Files::new(&encrypted_path);
         let decrypted = Files::new(&decrypted_path);
-        let secret = SecretString::new("password123".into());
+        let secret = SecretString::new("password123");
 
         encrypt_file(&source, &encrypted, &secret).await.unwrap();
         assert!(encrypted.exists());

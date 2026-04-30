@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use byteorder::{BigEndian, ByteOrder};
+use byteorder::{ByteOrder, LittleEndian};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
@@ -51,7 +51,7 @@ impl Reader {
                 break;
             }
 
-            let chunk_len = BigEndian::read_u32(&buffer_len) as usize;
+            let chunk_len = LittleEndian::read_u32(&buffer_len) as usize;
             if chunk_len == 0 {
                 continue;
             }

@@ -19,8 +19,8 @@ impl Serializer {
         Ok(Self { params, metadata })
     }
 
-    pub fn file_name(&self) -> String {
-        self.metadata.name().into()
+    pub fn file_name(&self) -> &str {
+        self.metadata.name()
     }
 
     pub fn file_size(&self) -> u64 {

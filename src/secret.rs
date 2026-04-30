@@ -14,11 +14,11 @@ impl SecretBytes {
 }
 
 impl SecretString {
-    pub fn new(data: String) -> Self {
-        Self(SecretBox::new(Box::new(data)))
+    pub fn new(data: impl Into<String>) -> Self {
+        Self(SecretBox::new(Box::new(data.into())))
     }
 
-    pub fn expose_secret(&self) -> &String {
-        self.0.expose_secret()
+    pub fn expose_secret(&self) -> &str {
+        self.0.expose_secret().as_str()
     }
 }
