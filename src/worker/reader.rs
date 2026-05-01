@@ -36,7 +36,7 @@ impl Reader {
             }
 
             sender.send(Task { data: buffer, index }).await.context("failed to send chunk")?;
-            index += 1;
+            index = index.saturating_add(1);
         }
 
         Ok(())
@@ -59,7 +59,7 @@ impl Reader {
             let mut data = vec![0u8; chunk_len];
             reader.read_exact(&mut data).await.context("failed to read chunk")?;
             sender.send(Task { data, index }).await.context("failed to send chunk")?;
-            index += 1;
+            index = index.saturating_add(1);
         }
 
         Ok(())

@@ -27,12 +27,16 @@ impl Display {
         table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
         for (i, file) in items.iter_mut().enumerate() {
-            let file_name = if file.name().len() > self.name_len { &file.name()[..self.name_len.saturating_sub(1)] } else { file.name() };
+            let file_name = if file.name().len() > self.name_len {
+                file.name().get(..self.name_len.saturating_sub(1)).unwrap_or(file.name())
+            } else {
+                file.name()
+            };
             let file_size = humansize::format_size(file.size().await?, DECIMAL);
             let file_status = if file.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
             let status_color = if file.is_encrypted() { Color::Cyan } else { Color::Green };
 
-            table.add_row([Cell::new(i + 1).fg(Color::Green), Cell::new(file_name).fg(Color::Green), Cell::new(file_size).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
+            table.add_row([Cell::new(i.saturating_add(1)).fg(Color::Green), Cell::new(file_name).fg(Color::Green), Cell::new(file_size).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
         }
 
         cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("failed to display files")

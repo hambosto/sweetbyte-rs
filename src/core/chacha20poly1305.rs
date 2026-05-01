@@ -23,7 +23,7 @@ impl ChaCha20Poly1305 {
         let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
         let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref().as_slice()).context("failed to encrypt")?;
 
-        let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE + ciphertext.len());
+        let mut result = Vec::with_capacity(CHACHA_NONCE_SIZE.saturating_add(ciphertext.len()));
         result.extend_from_slice(&nonce);
         result.extend_from_slice(&ciphertext);
 

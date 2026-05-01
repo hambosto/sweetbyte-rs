@@ -33,7 +33,8 @@ impl Encoding {
         shards.resize_with(self.original_count, || vec![0; shard_size]);
 
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, &shards).context("failed to encode reed-solomon shards")?;
-        let mut result = (data.len() as u32).to_le_bytes().to_vec();
+        let len = u32::try_from(data.len()).context("data too large, maximum size is 4GB")?;
+        let mut result = len.to_le_bytes().to_vec();
         for shard in shards.iter().chain(&recovery) {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
             result.extend_from_slice(shard);
@@ -44,25 +45,38 @@ impl Encoding {
 
     pub fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let original_size = LittleEndian::read_u32(data) as usize;
-        let chunk_size = (data.len() - LEN_SIZE) / (self.original_count + self.recovery_count);
+        let total_shards = self.original_count.checked_add(self.recovery_count).context("too many shards")?;
+        let payload = data.get(LEN_SIZE..).context("data too short")?;
+        let chunk_size = payload.len().checked_div(total_shards).context("invalid shard configuration")?;
 
-        let (original, recovery) = data[LEN_SIZE..]
+        let (original, recovery) = payload
             .chunks(chunk_size)
             .enumerate()
             .filter_map(|(i, chunk)| {
                 let (crc, shard) = chunk.split_at(CRC_SIZE);
                 bool::from(crc.ct_eq(&crc32fast::hash(shard).to_le_bytes())).then_some((i, shard))
             })
-            .partition::<Vec<(usize, &[u8])>, _>(|(i, _)| *i < self.original_count);
+            .partition::<Vec<_>, _>(|(i, _)| *i < self.original_count);
 
         let restored = if original.len() == self.original_count {
             original.into_iter().map(|(i, d)| (i, d.to_vec())).collect()
         } else {
-            let recovery: Vec<(usize, &[u8])> = recovery.into_iter().map(|(i, d)| (i - self.original_count, d)).collect();
+            let recovery: Vec<_> = recovery
+                .into_iter()
+                .map(|(i, d)| {
+                    let new_i = i.checked_sub(self.original_count).context("invalid recovery index")?;
+                    Ok((new_i, d))
+                })
+                .collect::<Result<_>>()?;
             reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode reed-solomon shards")?
         };
 
-        let mut result: Vec<u8> = (0..self.original_count).flat_map(|i| restored[&i].iter().copied()).collect();
+        let mut result: Vec<_> = (0..self.original_count)
+            .map(|i| restored.get(&i).context(format!("missing shard {}", i)))
+            .collect::<Result<Vec<_>>>()?
+            .iter()
+            .flat_map(|v| v.iter().copied())
+            .collect();
         result.truncate(original_size);
 
         Ok(result)

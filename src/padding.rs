@@ -69,7 +69,7 @@ impl Pkcs7Padding {
     fn pad_with<B: ArraySize>(data: &[u8]) -> Result<Vec<u8>> {
         match Pkcs7::pad_detached::<B>(data) {
             block_padding::PaddedData::Pad { blocks, tail_block } => {
-                let total_len = blocks.len() * B::USIZE + B::USIZE;
+                let total_len = blocks.len().saturating_mul(B::USIZE).saturating_add(B::USIZE);
                 let mut result = Vec::with_capacity(total_len);
                 for block in blocks {
                     result.extend_from_slice(block.as_slice());
@@ -78,7 +78,7 @@ impl Pkcs7Padding {
                 Ok(result)
             }
             block_padding::PaddedData::NoPad { blocks } => {
-                let total_len = blocks.len() * B::USIZE;
+                let total_len = blocks.len().saturating_mul(B::USIZE);
                 let mut result = Vec::with_capacity(total_len);
                 for block in blocks {
                     result.extend_from_slice(block.as_slice());
@@ -90,7 +90,7 @@ impl Pkcs7Padding {
     }
 
     fn unpad_with<B: ArraySize + Unsigned>(data: &[u8]) -> Result<Vec<u8>> {
-        let num_blocks = data.len() / B::USIZE;
+        let num_blocks = data.len().checked_div(B::USIZE).unwrap_or(0);
         let mut blocks = Vec::with_capacity(num_blocks);
 
         for chunk in data.chunks_exact(B::USIZE) {

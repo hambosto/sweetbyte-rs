@@ -20,7 +20,7 @@ impl Buffer {
             if let Some(result) = self.buffer.pop() {
                 ready.push(result);
             }
-            self.index += 1;
+            self.index = self.index.saturating_add(1);
         }
 
         ready

@@ -116,7 +116,9 @@ impl Files {
             if n == 0 {
                 break;
             }
-            hasher.update(&buffer[..n]);
+            if let Some(chunk) = buffer.get(..n) {
+                hasher.update(chunk);
+            }
         }
 
         Ok(hasher.finalize().as_bytes().to_vec())
