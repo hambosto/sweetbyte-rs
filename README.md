@@ -21,7 +21,7 @@ Most encryption tools do one thing: encrypt. SweetByte does more:
 
 - **Cascading encryption.** AES-256-GCM then XChaCha20-Poly1305. An attacker would need to break both ciphers, not just one.
 - **Error correction.** Reed-Solomon encoding (4 data + 10 parity shards) means your encrypted file can survive some bit rot and still decrypt.
-- **Proper key derivation.** scrypt with 256MB memory cost. Brute-forcing your password won't be practical.
+- **Proper key derivation.** Argon2id with 64MB memory cost. Brute-forcing your password won't be practical.
 
 ## Not compatible with the Go version
 
@@ -76,7 +76,7 @@ Each encrypted file starts with a header. Everything in the header gets Reed-Sol
 | Field | Size | Notes |
 |-------|------|-------|
 | Lengths | 16 bytes | Four u32 LE values for encoded section sizes |
-| Salt | 32 bytes | Random, for scrypt |
+| Salt | 32 bytes | Random, for Argon2id |
 | Parameters | 6 bytes | Magic `0xDEADBEEF` + version `0x0002` (serialized with postcard) |
 | Metadata | variable | Original filename, size, BLAKE3 hash (serialized with postcard) |
 | MAC | 32 bytes | HMAC-SHA256 of (salt + parameters + metadata) |
@@ -85,11 +85,11 @@ The HMAC uses constant-time comparison via the `subtle` crate. Header deserializ
 
 ### Key derivation
 
-scrypt with these parameters:
+Argon2id with these parameters:
 
-- log_N: 18 (256 MiB memory)
-- r: 8
-- p: 1
+- Memory: 64 MiB (65536 KiB)
+- Time cost: 3 iterations
+- Parallelism: 4 threads
 - Output: 64 bytes
 
 The 64-byte output gets split: first 32 bytes for AES key, last 32 bytes for ChaCha20 key.
@@ -124,6 +124,7 @@ src/
 ├── config.rs               # All constants in one place
 ├── types.rs                # Processing enum, Task, TaskResult
 ├── secret.rs               # SecretBytes/SecretString via secrecy crate
+├── validation.rs           # Validated newtypes via nutype (Filename, FileSize, etc.)
 ├── files.rs                # File discovery (walkdir), BLAKE3 hashing
 ├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
 ├── compression.rs          # zstd wrapper with compression levels
@@ -133,7 +134,7 @@ src/
 │   ├── mod.rs              # Cipher struct holding both algorithms
 │   ├── aes_gcm.rs          # AES-256-GCM wrapper
 │   ├── chacha20poly1305.rs # XChaCha20-Poly1305 wrapper
-│   ├── key.rs              # scrypt key derivation
+│   ├── key.rs              # Argon2id key derivation
 │   └── signer.rs           # HMAC-SHA256 with constant-time comparison
 │
 ├── header/
@@ -157,7 +158,6 @@ src/
     ├── display.rs          # Tables via comfy-table, banner
     ├── input.rs            # Interactive prompts via cliclack
     └── progress.rs         # Progress bar via cliclack
-
 ```
 
 ## Security notes
@@ -176,7 +176,7 @@ cargo clippy  # pedantic lint level
 cargo test
 ```
 
-CI runs on Ubuntu, Windows, and macOS via GitHub Actions.
+CI runs on Ubuntu via GitHub Actions.
 
 ## License
 
