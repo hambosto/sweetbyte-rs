@@ -1,4 +1,4 @@
-use crate::config::{CURRENT_VERSION, KEY_LEN, MAGIC_BYTES, MAX_FILENAME_LEN, SCRYPT_KEY_LEN};
+use crate::config::{ARGON2_KEY_LEN, CURRENT_VERSION, KEY_LEN, MAGIC_BYTES, MAX_FILENAME_LEN};
 use crate::secret::SecretBytes;
 
 pub trait IntoSecretBytes {
@@ -47,7 +47,7 @@ impl IntoSecretBytes for KeyBytes32 {
     }
 }
 
-#[nutype::nutype(validate(predicate = |b| b.len() == SCRYPT_KEY_LEN))]
+#[nutype::nutype(validate(predicate = |b| b.len() == ARGON2_KEY_LEN))]
 pub struct KeyBytes64(Vec<u8>);
 
 impl IntoSecretBytes for KeyBytes64 {

@@ -38,10 +38,10 @@ impl Pipeline {
         let data = self.padding.pad(&data).context("failed to pad data")?;
         let data = self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &data).context("failed to encrypt with AES-256-GCM")?;
         let data = self.cipher.encrypt(&CipherAlgorithm::ChaCha20Poly1305, &data).context("failed to encrypt with ChaCha20Poly1305")?;
-        let encoded_data = self.encoder.encode(&data).context("failed to encode data")?;
+        let data = self.encoder.encode(&data).context("failed to encode data")?;
 
         let size = task.data.len();
-        Ok(TaskResult::new(task.index, encoded_data, size))
+        Ok(TaskResult::new(task.index, data, size))
     }
 
     fn decrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {

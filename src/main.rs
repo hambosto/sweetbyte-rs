@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sweetbyte_rs::config::{NAME_MAX_LEN, PASSWORD_LEN, SCRYPT_SALT_LEN};
+use sweetbyte_rs::config::{ARGON2_SALT_LEN, NAME_MAX_LEN, PASSWORD_LEN};
 use sweetbyte_rs::core::Key;
 use sweetbyte_rs::files::Files;
 use sweetbyte_rs::header::{Deserializer, Metadata, Serializer};
@@ -55,7 +55,7 @@ async fn run_interactive(input: &Input, display: &Display) -> Result<()> {
 
 async fn encrypt_file(source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
     let metadata = source.file_metadata().await?;
-    let salt = Key::generate_salt(SCRYPT_SALT_LEN)?;
+    let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
     let key = derive_key(secret, &salt)?;
     let header = Serializer::new(Metadata::new(metadata.file_name, metadata.size, metadata.hash)?)?;
 
