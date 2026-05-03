@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use byteorder::{ByteOrder, LittleEndian};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
@@ -45,13 +44,9 @@ impl Reader {
     async fn read_length_prefixed<R: AsyncRead + Unpin>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         let mut index = 0u64;
 
-        loop {
-            let mut buffer_len = [0u8; 4];
-            if reader.read_exact(&mut buffer_len).await.is_err() {
-                break;
-            }
+        while let Ok(chunk_len) = reader.read_u32_le().await {
+            let chunk_len = chunk_len as usize;
 
-            let chunk_len = LittleEndian::read_u32(&buffer_len) as usize;
             if chunk_len == 0 {
                 continue;
             }
