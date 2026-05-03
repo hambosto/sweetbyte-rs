@@ -47,12 +47,12 @@ impl SectionEncoder {
     }
 
     pub async fn decode<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Header> {
-        let serialized_len = reader.read_u32_le().await.context("failed to read section length")?;
+        let buffer_len = reader.read_u32_le().await.context("failed to read section length")?;
 
-        let mut serialized = vec![0u8; serialized_len as usize];
-        reader.read_exact(&mut serialized).await.context("failed to read section")?;
+        let mut buffer = vec![0u8; buffer_len as usize];
+        reader.read_exact(&mut buffer).await.context("failed to read section")?;
 
-        let encoded_section: EncodedSection = postcard::from_bytes(&serialized).context("failed to deserialize section")?;
+        let encoded_section: EncodedSection = postcard::from_bytes(&buffer).context("failed to deserialize section")?;
 
         Ok(Header {
             salt: SecretBytes::new(self.encoder.decode(&encoded_section.salt).context("failed to decode salt")?),
