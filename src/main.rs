@@ -98,7 +98,6 @@ impl App {
         }
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
-
     }
 }
 
