@@ -40,10 +40,10 @@ impl SectionEncoder {
         let serialized = postcard::to_allocvec(&encoded_section).context("failed to serialize section")?;
         let serialized_len = u32::try_from(serialized.len()).context("section too large")?;
 
-        let mut output = serialized_len.to_le_bytes().to_vec();
-        output.extend_from_slice(&serialized);
+        let mut result = serialized_len.to_le_bytes().to_vec();
+        result.extend_from_slice(&serialized);
 
-        Ok(output)
+        Ok(result)
     }
 
     pub async fn decode<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Header> {
