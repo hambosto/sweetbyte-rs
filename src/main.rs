@@ -70,7 +70,7 @@ impl App {
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
         let key = derive_key(secret, &salt)?;
-        let header = Serializer::new(metadata.file_name, metadata.size, metadata.hash)?;
+        let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
 
         writer.write_all(&header.serialize(&salt, &key)?).await.context("failed to write header")?;
 

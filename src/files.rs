@@ -11,7 +11,7 @@ use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::types::Processing;
 
 pub struct FileMetadata {
-    pub file_name: String,
+    pub name: String,
     pub size: u64,
     pub hash: Vec<u8>,
 }
@@ -131,11 +131,11 @@ impl Files {
     }
 
     pub async fn file_metadata(&self) -> Result<FileMetadata> {
-        let file_name = self.name().to_owned();
+        let name = self.name().to_owned();
         let size = self.size().await?;
         let hash = self.hash().await?;
 
-        Ok(FileMetadata { file_name, size, hash })
+        Ok(FileMetadata { name, size, hash })
     }
 
     pub fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {
