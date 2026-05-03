@@ -17,7 +17,6 @@ anyhow = "1.0.102"
 argon2 = { version = "0.5.3", features = ["std"] }
 blake3 = "1.8.5"
 block-padding = "0.4.2"
-bytemuck = { version = "1.25.0", features = ["derive"] }
 byteorder = "1.5.0"
 chacha20poly1305 = { version = "0.10.1", features = ["std"] }
 cliclack = "0.5.4"

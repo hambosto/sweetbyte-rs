@@ -1,76 +1,64 @@
 use anyhow::{Context, Result};
-use bytemuck::{Pod, Zeroable};
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::encoding::Encoding;
 use crate::secret::SecretBytes;
 
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-struct Frame {
-    salt: u32,
-    params: u32,
-    metadata: u32,
-    mac: u32,
+#[derive(Serialize, Deserialize)]
+struct EncodedSection {
+    salt: Vec<u8>,
+    params: Vec<u8>,
+    metadata: Vec<u8>,
+    mac: Vec<u8>,
 }
 
-pub struct PackedSections {
+pub struct Header {
     pub salt: SecretBytes,
     pub params: Vec<u8>,
     pub metadata: Vec<u8>,
     pub mac: SecretBytes,
 }
 
-pub struct SectionShield {
+pub struct SectionEncoder {
     encoder: Encoding,
 }
 
-impl SectionShield {
-    pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self> {
-        Ok(Self { encoder: Encoding::new(data_shards, parity_shards)? })
+impl SectionEncoder {
+    pub fn new(data: usize, parity: usize) -> Result<Self> {
+        Ok(Self { encoder: Encoding::new(data, parity)? })
     }
 
-    pub fn pack(&self, salt: &[u8], params: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
-        let salt = self.encoder.encode(salt).context("failed to encode salt")?;
-        let params = self.encoder.encode(params).context("failed to encode params")?;
-        let metadata = self.encoder.encode(metadata).context("failed to encode metadata")?;
-        let mac = self.encoder.encode(mac).context("failed to encode mac")?;
-        let frame = Frame {
-            salt: u32::try_from(salt.len()).context("salt length exceeds maximum")?,
-            params: u32::try_from(params.len()).context("params length exceeds maximum")?,
-            metadata: u32::try_from(metadata.len()).context("metadata length exceeds maximum")?,
-            mac: u32::try_from(mac.len()).context("mac length exceeds maximum")?,
+    pub fn encode(&self, salt: &[u8], params: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
+        let encoded_section = EncodedSection {
+            salt: self.encoder.encode(salt).context("failed to encode salt")?,
+            params: self.encoder.encode(params).context("failed to encode params")?,
+            metadata: self.encoder.encode(metadata).context("failed to encode metadata")?,
+            mac: self.encoder.encode(mac).context("failed to encode mac")?,
         };
 
-        let mut result = bytemuck::bytes_of(&frame).to_vec();
-        result.extend_from_slice(&salt);
-        result.extend_from_slice(&params);
-        result.extend_from_slice(&metadata);
-        result.extend_from_slice(&mac);
+        let serialized = postcard::to_allocvec(&encoded_section).context("failed to serialize section")?;
+        let serialized_len = u32::try_from(serialized.len()).context("section too large")?;
 
-        Ok(result)
+        let mut output = serialized_len.to_le_bytes().to_vec();
+        output.extend_from_slice(&serialized);
+
+        Ok(output)
     }
 
-    pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<PackedSections> {
-        let frame = self.read_frame(reader).await?;
-        let salt = self.read_section(reader, frame.salt).await?;
-        let params = self.read_section(reader, frame.params).await?;
-        let metadata = self.read_section(reader, frame.metadata).await?;
-        let mac = self.read_section(reader, frame.mac).await?;
+    pub async fn decode<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Header> {
+        let serialized_len = reader.read_u32_le().await.context("failed to read section length")?;
 
-        Ok(PackedSections { salt: SecretBytes::new(salt), params, metadata, mac: SecretBytes::new(mac) })
-    }
+        let mut serialized = vec![0u8; serialized_len as usize];
+        reader.read_exact(&mut serialized).await.context("failed to read section")?;
 
-    async fn read_frame<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Frame> {
-        let mut frame = Frame::zeroed();
-        reader.read_exact(bytemuck::bytes_of_mut(&mut frame)).await.context("failed to read frame")?;
+        let encoded_section: EncodedSection = postcard::from_bytes(&serialized).context("failed to deserialize section")?;
 
-        Ok(frame)
-    }
-
-    async fn read_section<R: AsyncRead + Unpin>(&self, reader: &mut R, len: u32) -> Result<Vec<u8>> {
-        let mut buffer = vec![0u8; len as usize];
-        reader.read_exact(&mut buffer).await.context("failed to read section")?;
-        self.encoder.decode(&buffer).context("failed to decode section")
+        Ok(Header {
+            salt: SecretBytes::new(self.encoder.decode(&encoded_section.salt).context("failed to decode salt")?),
+            params: self.encoder.decode(&encoded_section.params).context("failed to decode params")?,
+            metadata: self.encoder.decode(&encoded_section.metadata).context("failed to decode metadata")?,
+            mac: SecretBytes::new(self.encoder.decode(&encoded_section.mac).context("failed to decode mac")?),
+        })
     }
 }
