@@ -13,8 +13,9 @@ pub struct Serializer {
 }
 
 impl Serializer {
-    pub fn new(metadata: Metadata) -> Result<Self> {
+    pub fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
         let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION).context("failed to initialize params")?;
+        let metadata = Metadata::new(name, size, hash).context("failed to initialize metadata")?;
 
         Ok(Self { params, metadata })
     }

@@ -40,8 +40,7 @@ impl Pipeline {
         let data = self.cipher.encrypt(&CipherAlgorithm::ChaCha20Poly1305, &data).context("failed to encrypt with ChaCha20Poly1305")?;
         let data = self.encoder.encode(&data).context("failed to encode data")?;
 
-        let size = task.data.len();
-        Ok(TaskResult::new(task.index, data, size))
+        Ok(TaskResult::new(task.index, data, task.data.len()))
     }
 
     fn decrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
@@ -51,7 +50,6 @@ impl Pipeline {
         let data = self.padding.unpad(&data).context("failed to unpad data")?;
         let data = self.compressor.decompress(&data).context("failed to decompress data")?;
 
-        let size = data.len();
-        Ok(TaskResult::new(task.index, data, size))
+        Ok(TaskResult::new(task.index, data, task.data.len()))
     }
 }
