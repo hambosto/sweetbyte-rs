@@ -34,22 +34,28 @@ impl Pipeline {
     }
 
     fn encrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
-        let data = self.compressor.compress(&task.data).context("failed to compress data")?;
-        let data = self.padding.pad(&data).context("failed to pad data")?;
-        let data = self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &data).context("failed to encrypt with AES-256-GCM")?;
-        let data = self.cipher.encrypt(&CipherAlgorithm::ChaCha20Poly1305, &data).context("failed to encrypt with ChaCha20Poly1305")?;
-        let data = self.encoder.encode(&data).context("failed to encode data")?;
-
-        Ok(TaskResult::new(task.index, data, task.data.len()))
+        self.compressor
+            .compress(&task.data)
+            .and_then(|data| self.padding.pad(&data))
+            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::Aes256Gcm, &data))
+            .and_then(|data| self.cipher.encrypt(&CipherAlgorithm::ChaCha20Poly1305, &data))
+            .and_then(|data| self.encoder.encode(&data))
+            .map(|data| {
+                let size = task.data.len();
+                TaskResult::new(task.index, data, size)
+            })
     }
 
     fn decrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
-        let data = self.encoder.decode(&task.data).context("failed to decode data")?;
-        let data = self.cipher.decrypt(&CipherAlgorithm::ChaCha20Poly1305, &data).context("failed to decrypt with ChaCha20Poly1305")?;
-        let data = self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &data).context("failed to decrypt with AES-256-GCM")?;
-        let data = self.padding.unpad(&data).context("failed to unpad data")?;
-        let data = self.compressor.decompress(&data).context("failed to decompress data")?;
-
-        Ok(TaskResult::new(task.index, data, task.data.len()))
+        self.encoder
+            .decode(&task.data)
+            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::ChaCha20Poly1305, &data))
+            .and_then(|data| self.cipher.decrypt(&CipherAlgorithm::Aes256Gcm, &data))
+            .and_then(|data| self.padding.unpad(&data))
+            .and_then(|data| self.compressor.decompress(&data))
+            .map(|data| {
+                let size = data.len();
+                TaskResult::new(task.index, data, size)
+            })
     }
 }

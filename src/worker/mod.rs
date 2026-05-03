@@ -32,8 +32,7 @@ impl Worker {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let parallelism = std::thread::available_parallelism().context("failed to get available parallelism")?;
-        let channel_size = parallelism.get();
+        let channel_size = std::thread::available_parallelism().map(|p| p.get()).context("failed to get available parallelism")?;
         let progress_bar = Progress::new(total_size, self.processing.label());
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);

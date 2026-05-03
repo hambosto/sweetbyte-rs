@@ -45,13 +45,11 @@ impl Reader {
         let mut index = 0u64;
 
         while let Ok(chunk_len) = reader.read_u32_le().await {
-            let chunk_len = chunk_len as usize;
-
             if chunk_len == 0 {
                 continue;
             }
 
-            let mut data = vec![0u8; chunk_len];
+            let mut data = vec![0u8; chunk_len as usize];
             reader.read_exact(&mut data).await.context("failed to read chunk")?;
             sender.send(Task { data, index }).await.context("failed to send chunk")?;
             index = index.saturating_add(1);

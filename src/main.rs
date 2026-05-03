@@ -11,8 +11,7 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let app = App::new(Input::new(PASSWORD_LEN, true), Display::new(NAME_MAX_LEN));
-    app.run().await
+    App::new(Input::new(PASSWORD_LEN, true), Display::new(NAME_MAX_LEN)).run().await
 }
 
 struct App {
@@ -37,6 +36,7 @@ impl App {
         }
 
         self.display.files(&mut files).await?;
+
         let source = Files::new(self.input.file(&files)?);
         let target = Files::new(source.output_path(processing));
 
@@ -46,8 +46,8 @@ impl App {
 
         let secret = SecretString::new(self.input.password(processing)?);
         let header = match processing {
-            Processing::Encryption => self.encrypt_file(&source, &target, &secret).await?,
-            Processing::Decryption => self.decrypt_file(&source, &target, &secret).await?,
+            Processing::Encryption => self.encrypt(&source, &target, &secret).await?,
+            Processing::Decryption => self.decrypt(&source, &target, &secret).await?,
         };
 
         self.display.success(processing, &target)?;
@@ -58,12 +58,10 @@ impl App {
             self.display.deleted(&source)?;
         }
 
-        self.display.exit()?;
-
-        Ok(())
+        self.display.exit()
     }
 
-    async fn encrypt_file(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
+    async fn encrypt(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
         let mut writer = target.writer().await.context("failed to create target file")?;
         let reader = source.reader().await.context("failed to open source file")?;
         let metadata = source.file_metadata().await.context("failed to read metadata")?;
@@ -71,18 +69,19 @@ impl App {
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
         let key = derive_key(secret, &salt)?;
         let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
+        let serialized = header.serialize(&salt, &key)?;
 
-        writer.write_all(&header.serialize(&salt, &key)?).await.context("failed to write header")?;
+        writer.write_all(&serialized).await.context("failed to write header")?;
 
-        Worker::new(&key, Processing::Encryption)?.process(reader, writer, metadata.size).await.context("encryption failed")?;
+        let worker = Worker::new(&key, Processing::Encryption)?;
+        worker.process(reader, writer, metadata.size).await?;
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
 
-    async fn decrypt_file(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
+    async fn decrypt(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
         let mut reader = source.reader().await.context("failed to open source file")?;
         let writer = target.writer().await.context("failed to create target file")?;
-        let size = source.size().await.context("failed to read source file size")?;
 
         let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to read header")?;
 
@@ -91,12 +90,15 @@ impl App {
             anyhow::bail!("incorrect password");
         }
 
-        Worker::new(&key, Processing::Decryption)?.process(reader, writer, size).await.context("decryption failed")?;
+        let worker = Worker::new(&key, Processing::Decryption)?;
+        worker.process(reader, writer, header.file_size()).await?;
+
         if !target.validate_hash(header.file_hash()).await? {
             anyhow::bail!("hash verification failed");
         }
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+
     }
 }
 
@@ -121,16 +123,17 @@ mod tests {
 
         fs::write(&source_path, b"test content").await.unwrap();
 
-        let source = Files::new(&source_path);
-        let encrypted = Files::new(&encrypted_path);
-        let decrypted = Files::new(&decrypted_path);
         let secret = SecretString::new("password123");
         let app = App::new(Input::new(PASSWORD_LEN, true), Display::new(NAME_MAX_LEN));
 
-        app.encrypt_file(&source, &encrypted, &secret).await.unwrap();
+        let source = Files::new(&source_path);
+        let encrypted = Files::new(&encrypted_path);
+        let decrypted = Files::new(&decrypted_path);
+
+        app.encrypt(&source, &encrypted, &secret).await.unwrap();
         assert!(encrypted.exists());
 
-        app.decrypt_file(&encrypted, &decrypted, &secret).await.unwrap();
+        app.decrypt(&encrypted, &decrypted, &secret).await.unwrap();
         assert!(decrypted.exists());
 
         assert_eq!(fs::read(&decrypted_path).await.unwrap(), b"test content");
