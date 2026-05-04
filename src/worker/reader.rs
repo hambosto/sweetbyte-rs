@@ -46,7 +46,7 @@ impl Reader {
 
         while let Ok(chunk_len) = reader.read_u32_le().await {
             if chunk_len == 0 {
-                continue;
+                break;
             }
 
             let mut data = vec![0u8; chunk_len as usize];
