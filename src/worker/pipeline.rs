@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 use crate::compression::{CompressionLevel, Compressor};
-use crate::config::{DATA_SHARDS, PARITY_SHARDS};
+use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::{Cipher, CipherAlgorithm};
 use crate::encoding::Encoding;
 use crate::padding::{BlockSize, Pkcs7Padding};
@@ -19,7 +19,7 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new(key: &SecretBytes, processing: Processing) -> Result<Self> {
         let cipher = Cipher::new(key).context("failed to initialize cipher")?;
-        let encoder = Encoding::new(DATA_SHARDS, PARITY_SHARDS).context("failed to initialize encoder")?;
+        let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize encoder")?;
         let compressor = Compressor::new(CompressionLevel::Fast).context("failed to initialize compressor")?;
         let padding = Pkcs7Padding::new(BlockSize::B128).context("failed to initialize padding")?;
 

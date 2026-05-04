@@ -18,9 +18,9 @@ pub const AES_NONCE_SIZE: usize = 12;
 
 pub const KEY_LEN: usize = 32;
 
-pub const DATA_SHARDS: usize = 4;
+pub const ORIGINAL_COUNT: usize = 4;
 
-pub const PARITY_SHARDS: usize = 10;
+pub const RECOVERY_COUNT: usize = 10;
 
 pub const CHUNK_SIZE: usize = 256 * 1024;
 

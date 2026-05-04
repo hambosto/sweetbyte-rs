@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-use crate::config::{CURRENT_VERSION, DATA_SHARDS, MAGIC_BYTES, PARITY_SHARDS};
+use crate::config::{CURRENT_VERSION, MAGIC_BYTES, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
@@ -37,7 +37,7 @@ impl Serializer {
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
         let signer = Signer::new(key).context("failed to initialize signer")?;
         let mac = signer.compute_parts(&[salt, &params_bytes, &metadata_bytes]).context("failed to compute mac")?;
-        let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS).context("failed to initialize section encoder")?;
+        let encoder = SectionEncoder::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
 
         encoder.encode(salt, &params_bytes, &metadata_bytes, &mac).context("failed to encode header sections")
     }

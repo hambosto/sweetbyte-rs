@@ -25,8 +25,8 @@ pub struct SectionEncoder {
 }
 
 impl SectionEncoder {
-    pub fn new(data: usize, parity: usize) -> Result<Self> {
-        Ok(Self { encoder: Encoding::new(data, parity)? })
+    pub fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
+        Ok(Self { encoder: Encoding::new(original_count, recovery_count)? })
     }
 
     pub fn encode(&self, salt: &[u8], params: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {

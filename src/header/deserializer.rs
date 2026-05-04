@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use tokio::io::AsyncRead;
 
-use crate::config::{DATA_SHARDS, PARITY_SHARDS};
+use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
@@ -16,7 +16,7 @@ pub struct Deserializer {
 
 impl Deserializer {
     pub async fn deserialize<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
-        let encoder = SectionEncoder::new(DATA_SHARDS, PARITY_SHARDS).context("failed to initialize section encoder")?;
+        let encoder = SectionEncoder::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
         let header = encoder.decode(reader).await.context("failed to decode header sections")?;
         let params: Parameters = postcard::from_bytes(&header.params).context("failed to deserialize params")?;
         let metadata: Metadata = postcard::from_bytes(&header.metadata).context("failed to deserialize metadata")?;
