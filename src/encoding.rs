@@ -64,15 +64,15 @@ impl Encoding {
             let recovery: Vec<_> = recovery
                 .into_iter()
                 .map(|(i, d)| {
-                    let new_i = i.checked_sub(self.original_count).context("invalid recovery index")?;
-                    Ok((new_i, d))
+                    let idx = i.checked_sub(self.original_count).context("invalid recovery index")?;
+                    Ok((idx, d))
                 })
                 .collect::<Result<_>>()?;
             reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode reed-solomon shards")?
         };
 
         let mut result: Vec<_> = (0..self.original_count)
-            .map(|i| restored.get(&i).context(format!("missing shard {}", i)))
+            .map(|i| restored.get(&i).with_context(|| format!("missing shard {}", i)))
             .collect::<Result<Vec<_>>>()?
             .iter()
             .flat_map(|v| v.iter().copied())
