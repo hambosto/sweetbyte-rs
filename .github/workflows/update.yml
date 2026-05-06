@@ -32,18 +32,18 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Checkout PR branch
-        if: steps.update.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr checkout ${{ steps.update.outputs.pull-request-number }}
-
-      - name: Build and push artifacts to Cachix cache
-        if: steps.update.outputs.pull-request-number != ''
-        run: nix build --no-link --print-out-paths .#default | cachix push ${{ secrets.CACHIX_CACHE_NAME }}
-
       - name: Auto-merge dependency update PR
         if: ${{ steps.update.outputs.pull-request-number != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr merge ${{ steps.update.outputs.pull-request-number }} --squash --delete-branch
+
+      - name: Checkout main after merge
+        if: steps.update.outputs.pull-request-number != ''
+        run: |
+          git fetch origin main
+          git checkout main
+
+      - name: Build and push artifacts to Cachix cache
+        if: steps.update.outputs.pull-request-number != ''
+        run: nix build --no-link --print-out-paths .#default | cachix push ${{ secrets.CACHIX_CACHE_NAME }}
