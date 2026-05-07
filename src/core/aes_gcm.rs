@@ -1,8 +1,9 @@
-use crate::secret::SecretBytes;
-use crate::validation::{IntoSecretBytes, KeyBytes32, NonEmptyBytes};
 use anyhow::{Context, Result};
 use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 use ring::rand::{SecureRandom, SystemRandom};
+
+use crate::secret::SecretBytes;
+use crate::validation::{IntoSecretBytes, KeyBytes32, NonEmptyBytes};
 
 pub struct AesGcm {
     key: SecretBytes,
@@ -11,6 +12,7 @@ pub struct AesGcm {
 impl AesGcm {
     pub fn new(key: &SecretBytes) -> Result<Self> {
         let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+        
         Ok(Self { key: key.into_secret() })
     }
 

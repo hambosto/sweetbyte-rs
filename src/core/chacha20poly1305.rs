@@ -1,8 +1,9 @@
-use crate::secret::SecretBytes;
-use crate::validation::{IntoSecretBytes, KeyBytes32, NonEmptyBytes};
 use anyhow::{Context, Result};
 use ring::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 use ring::rand::{SecureRandom, SystemRandom};
+
+use crate::secret::SecretBytes;
+use crate::validation::{IntoSecretBytes, KeyBytes32, NonEmptyBytes};
 
 pub struct ChaCha20Poly1305 {
     key: SecretBytes,
