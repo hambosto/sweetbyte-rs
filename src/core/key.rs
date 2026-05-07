@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
-use rand::TryRng;
-use rand::rngs::SysRng;
+use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST};
 use crate::secret::SecretBytes;
@@ -14,6 +13,7 @@ pub struct Key {
 impl Key {
     pub fn new(key: &SecretBytes) -> Result<Self> {
         let key = NonEmptyKey::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+
         Ok(Self { key: key.into_secret() })
     }
 
@@ -30,7 +30,7 @@ impl Key {
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
         let mut bytes = vec![0u8; size];
 
-        SysRng.try_fill_bytes(&mut bytes).context("failed to generate salt")?;
+        SystemRandom::new().fill(&mut bytes).context("failed to generate salt")?;
 
         Ok(bytes)
     }

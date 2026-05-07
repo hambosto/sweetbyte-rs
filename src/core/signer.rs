@@ -1,12 +1,9 @@
 use anyhow::{Context, Result};
-use hmac::{Hmac, KeyInit, Mac};
-use sha2::Sha256;
+use ring::hmac::{Context as HmacContext, HMAC_SHA256, Key};
 use subtle::ConstantTimeEq;
 
 use crate::secret::SecretBytes;
 use crate::validation::{IntoSecretBytes, NonEmptyKey};
-
-type HmacSha256 = Hmac<Sha256>;
 
 pub struct Signer {
     key: SecretBytes,
@@ -20,10 +17,12 @@ impl Signer {
     }
 
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
-        let mut mac = HmacSha256::new_from_slice(self.key.expose_secret()).context("failed to initialize signer")?;
-        parts.iter().filter(|p| !p.is_empty()).for_each(|p| mac.update(p));
+        let key = Key::new(HMAC_SHA256, self.key.expose_secret());
 
-        Ok(mac.finalize().into_bytes().to_vec())
+        let mut ctx = HmacContext::with_key(&key);
+        parts.iter().filter(|p| !p.is_empty()).for_each(|p| ctx.update(p));
+
+        Ok(ctx.sign().as_ref().to_vec())
     }
 
     pub fn verify_parts(&self, expected: &[u8], parts: &[&[u8]]) -> bool {
