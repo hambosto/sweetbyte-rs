@@ -1,6 +1,3 @@
-#![allow(clippy::arithmetic_side_effects, reason = "bounds and sizes are validated manually")]
-#![allow(clippy::indexing_slicing, reason = "slices are guaranteed valid by construction")]
-
 use anyhow::{Context, Result};
 use subtle::ConstantTimeEq;
 
@@ -23,18 +20,22 @@ impl Encoding {
 
     pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let shard_size = data.len().div_ceil(self.original_count).next_multiple_of(2);
-        let total_shards = self.original_count + self.recovery_count;
+        let total_shards = self.original_count.saturating_add(self.recovery_count);
 
-        let mut buffer = vec![0u8; shard_size * self.original_count];
+        let mut buffer = vec![0u8; shard_size.saturating_mul(self.original_count)];
         for (i, chunk) in data.chunks(shard_size).enumerate() {
-            buffer[i * shard_size..][..chunk.len()].copy_from_slice(chunk);
+            let start = i.saturating_mul(shard_size);
+            let end = start.saturating_add(chunk.len());
+            if let Some(target) = buffer.get_mut(start..end) {
+                target.copy_from_slice(chunk);
+            }
         }
 
         let shards: Vec<&[u8]> = buffer.chunks_exact(shard_size).collect();
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, &shards).context("failed to encode reed-solomon shards")?;
         let len = u32::try_from(data.len()).context("data too large, maximum size is 4GB")?;
 
-        let mut result = Vec::with_capacity(LEN_SIZE + (CRC_SIZE + shard_size) * total_shards);
+        let mut result = Vec::with_capacity(LEN_SIZE.saturating_add(CRC_SIZE.saturating_add(shard_size).saturating_mul(total_shards)));
         result.extend_from_slice(&len.to_le_bytes());
 
         for shard in shards.iter().chain(recovery.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>().iter()) {
@@ -46,7 +47,8 @@ impl Encoding {
     }
 
     pub fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let original_size = u32::from_le_bytes(data[..LEN_SIZE].try_into()?) as usize;
+        let len_bytes = data.get(..LEN_SIZE).context("data too short")?;
+        let original_size = u32::from_le_bytes(len_bytes.try_into()?) as usize;
         let total_shards = self.original_count.checked_add(self.recovery_count).context("too many shards")?;
         let payload = data.get(LEN_SIZE..).context("data too short")?;
         let chunk_size = payload.len().checked_div(total_shards).context("invalid shard configuration")?;
@@ -60,7 +62,7 @@ impl Encoding {
                 if i < self.original_count {
                     original.push((i, shard));
                 } else {
-                    recovery.push((i - self.original_count, shard));
+                    recovery.push((i.saturating_sub(self.original_count), shard));
                 }
             }
         }
