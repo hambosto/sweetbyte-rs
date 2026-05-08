@@ -1,18 +1,6 @@
 use crate::config::{ARGON2_KEY_LEN, CURRENT_VERSION, KEY_LEN, MAGIC_BYTES, MAX_FILENAME_LEN};
 use crate::secret::SecretBytes;
 
-macro_rules! impl_into_secret {
-    ($($t:ty),* $(,)?) => {
-        $(
-            impl $t {
-                pub fn into_secret(self) -> SecretBytes {
-                    SecretBytes::new(self.into_inner())
-                }
-            }
-        )*
-    };
-}
-
 #[nutype::nutype(validate(predicate = |v| !v.is_empty()), derive(AsRef))]
 pub struct NonEmptyBytes(Vec<u8>);
 
@@ -39,5 +27,17 @@ pub struct Magic(u32);
 
 #[nutype::nutype(validate(predicate = |&v| v == CURRENT_VERSION), derive(Serialize, Deserialize))]
 pub struct Version(u16);
+
+macro_rules! impl_into_secret {
+    ($($t:ty),* $(,)?) => {
+        $(
+            impl $t {
+                pub fn into_secret(self) -> SecretBytes {
+                    SecretBytes::new(self.into_inner())
+                }
+            }
+        )*
+    };
+}
 
 impl_into_secret!(NonEmptyKey, KeyBytes32);

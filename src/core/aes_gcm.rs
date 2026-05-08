@@ -38,7 +38,7 @@ impl AesGcm {
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let ciphertext = NonEmptyBytes::try_new(ciphertext.to_vec()).context("ciphertext must not be empty")?;
         let (nonce_bytes, body) = ciphertext.as_ref().split_at(NONCE_LEN);
-        
+
         let nonce = Nonce::assume_unique_for_key(nonce_bytes.try_into().context("invalid nonce")?);
         let key = LessSafeKey::new(UnboundKey::new(&AES_256_GCM, self.key.expose_secret()).context("failed to setup key")?);
 
