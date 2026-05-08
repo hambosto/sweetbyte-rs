@@ -14,7 +14,7 @@ repository = "https://github.com/hambosto/sweetbyte-rs"
 [dependencies]
 anyhow = "1.0.102"
 argon2 = { version = "0.5.3", features = ["std"] }
-blake3 = "1.8.5"
+blake3 = { version = "1.8.5", features = ["mmap", "rayon"] }
 block-padding = "0.4.2"
 cliclack = "0.5.4"
 comfy-table = "7.2.2"
@@ -34,7 +34,7 @@ serde = "1.0.228"
 sha2 = "0.11.0"
 strum = { version = "0.28.0", features = ["derive"] }
 subtle = "2.6.1"
-tokio = { version = "1.52.2", features = ["full"] }
+tokio = { version = "1.52.3", features = ["full"] }
 walkdir = "2.5.0"
 zstd = { version = "0.13.3", features = ["thin"] }
 

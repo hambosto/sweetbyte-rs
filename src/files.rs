@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use blake3::Hasher;
 use subtle::ConstantTimeEq;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, BufReader, BufWriter};
+use tokio::io::{BufReader, BufWriter};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
@@ -107,19 +107,8 @@ impl Files {
     }
 
     pub async fn hash(&self) -> Result<Vec<u8>> {
-        let mut reader = self.reader().await?;
         let mut hasher = Hasher::new();
-        let mut buffer = vec![0u8; 64 * 1024];
-
-        loop {
-            let n = reader.read(&mut buffer).await.context("failed to compute hash")?;
-            if n == 0 {
-                break;
-            }
-            if let Some(chunk) = buffer.get(..n) {
-                hasher.update(chunk);
-            }
-        }
+        hasher.update_mmap_rayon(&self.path).context("failed to memory-map file for hashing")?;
 
         Ok(hasher.finalize().as_bytes().to_vec())
     }
