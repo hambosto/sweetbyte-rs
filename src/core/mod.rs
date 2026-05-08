@@ -12,7 +12,7 @@ pub use signer::Signer;
 
 use crate::config::KEY_LEN;
 use crate::secret::SecretBytes;
-use crate::validation::{IntoSecretBytes, KeyBytes32, KeyBytes64};
+use crate::validation::{KeyBytes32, KeyBytes64};
 
 pub enum CipherAlgorithm {
     Aes256Gcm,

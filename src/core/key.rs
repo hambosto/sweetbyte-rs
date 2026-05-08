@@ -4,7 +4,7 @@ use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST};
 use crate::secret::SecretBytes;
-use crate::validation::{IntoSecretBytes, NonEmptyKey};
+use crate::validation::NonEmptyKey;
 
 pub struct Key {
     key: SecretBytes,
