@@ -17,7 +17,7 @@ impl Display {
         Self { name_len }
     }
 
-    pub async fn files(&self, items: &mut [Files]) -> Result<()> {
+    pub async fn files(&self, items: &[Files]) -> Result<()> {
         if items.is_empty() {
             return cliclack::log::warning("No files found").context("failed to display files");
         }
@@ -26,7 +26,7 @@ impl Display {
         table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
         table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
-        for (i, file) in items.iter_mut().enumerate() {
+        for (i, file) in items.iter().enumerate() {
             let file_name = if file.name().len() > self.name_len {
                 file.name().get(..self.name_len.saturating_sub(1)).unwrap_or(file.name())
             } else {

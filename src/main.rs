@@ -30,12 +30,12 @@ impl App {
 
         let processing = self.input.processing_mode()?;
 
-        let mut files = Files::discover(".", processing);
+        let files = Files::discover(".", processing);
         if files.is_empty() {
             anyhow::bail!("no files available for processing");
         }
 
-        self.display.files(&mut files).await?;
+        self.display.files(&files).await?;
 
         let source = Files::new(self.input.file(&files)?);
         let target = Files::new(source.output_path(processing));
