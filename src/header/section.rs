@@ -15,8 +15,8 @@ struct EncodedSection {
 
 pub struct Header {
     pub salt: SecretBytes,
-    pub params: Vec<u8>,
-    pub metadata: Vec<u8>,
+    pub params: SecretBytes,
+    pub metadata: SecretBytes,
     pub mac: SecretBytes,
 }
 
@@ -56,8 +56,8 @@ impl SectionEncoder {
 
         Ok(Header {
             salt: SecretBytes::new(self.encoder.decode(&encoded_section.salt).context("failed to decode salt")?),
-            params: self.encoder.decode(&encoded_section.params).context("failed to decode params")?,
-            metadata: self.encoder.decode(&encoded_section.metadata).context("failed to decode metadata")?,
+            params: SecretBytes::new(self.encoder.decode(&encoded_section.params).context("failed to decode params")?),
+            metadata: SecretBytes::new(self.encoder.decode(&encoded_section.metadata).context("failed to decode metadata")?),
             mac: SecretBytes::new(self.encoder.decode(&encoded_section.mac).context("failed to decode mac")?),
         })
     }
