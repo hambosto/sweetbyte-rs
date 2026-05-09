@@ -1,11 +1,11 @@
 pub mod config;
 pub mod core;
+pub mod engine;
 pub mod files;
 pub mod header;
 pub mod secret;
 pub mod types;
 pub mod ui;
-pub mod worker;
 
 pub(crate) mod compression;
 pub(crate) mod encoding;

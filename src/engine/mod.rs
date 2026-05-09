@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
+use crate::engine::executor::Executor;
+use crate::engine::pipeline::Pipeline;
+use crate::engine::reader::Reader;
+use crate::engine::writer::Writer;
 use crate::secret::SecretBytes;
 use crate::types::{Processing, Task, TaskResult};
 use crate::ui::Progress;
-use crate::worker::executor::Executor;
-use crate::worker::pipeline::Pipeline;
-use crate::worker::reader::Reader;
-use crate::worker::writer::Writer;
 
 mod buffer;
 mod executor;
@@ -15,12 +15,12 @@ mod pipeline;
 mod reader;
 mod writer;
 
-pub struct Worker {
+pub struct Engine {
     processing: Processing,
     pipeline: Pipeline,
 }
 
-impl Worker {
+impl Engine {
     pub fn new(key: &SecretBytes, processing: Processing) -> Result<Self> {
         let pipeline = Pipeline::new(key, processing).context("failed to initialize pipeline")?;
 

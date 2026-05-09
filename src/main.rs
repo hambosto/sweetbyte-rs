@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use sweetbyte_rs::config::{ARGON2_SALT_LEN, NAME_MAX_LEN, PASSWORD_LEN};
 use sweetbyte_rs::core::Key;
+use sweetbyte_rs::engine::Engine;
 use sweetbyte_rs::files::Files;
 use sweetbyte_rs::header::{Deserializer, Serializer};
 use sweetbyte_rs::secret::{SecretBytes, SecretString};
 use sweetbyte_rs::types::{FileHeader, Processing};
 use sweetbyte_rs::ui::{Display, Input};
-use sweetbyte_rs::worker::Worker;
 use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
@@ -73,8 +73,8 @@ impl App {
 
         writer.write_all(&serialized).await.context("failed to write header")?;
 
-        let worker = Worker::new(&key, Processing::Encryption)?;
-        worker.process(reader, writer, metadata.size).await?;
+        let engine = Engine::new(&key, Processing::Encryption)?;
+        engine.process(reader, writer, metadata.size).await?;
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
@@ -90,8 +90,8 @@ impl App {
             anyhow::bail!("incorrect password");
         }
 
-        let worker = Worker::new(&key, Processing::Decryption)?;
-        worker.process(reader, writer, header.file_size()).await?;
+        let engine = Engine::new(&key, Processing::Decryption)?;
+        engine.process(reader, writer, header.file_size()).await?;
 
         if !target.validate_hash(header.file_hash()).await? {
             anyhow::bail!("hash verification failed");

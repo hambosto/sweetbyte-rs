@@ -5,8 +5,8 @@ use tokio::sync::Semaphore;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinSet;
 
+use crate::engine::pipeline::Pipeline;
 use crate::types::{Task, TaskResult};
-use crate::worker::pipeline::Pipeline;
 
 pub struct Executor {
     pipeline: Arc<Pipeline>,

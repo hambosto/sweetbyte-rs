@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
+use crate::engine::buffer::Buffer;
 use crate::types::{Processing, TaskResult};
 use crate::ui::Progress;
-use crate::worker::buffer::Buffer;
 
 pub struct Writer {
     processing: Processing,
