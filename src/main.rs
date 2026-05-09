@@ -67,14 +67,13 @@ impl App {
         let metadata = source.file_metadata().await.context("failed to read metadata")?;
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
-        let master_key = derive_key(secret, &salt)?;
-        let (aes_key, chacha_key, signer_key) = derive_hkdf_keys(&master_key, &salt)?;
+        let derived_keys = Key::new(&SecretBytes::new(secret.expose_secret().as_bytes().to_vec()))?.derive_keys(&salt)?;
         let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
-        let serialized = header.serialize(&salt, &signer_key)?;
+        let serialized = header.serialize(&salt, &derived_keys.third_key)?;
 
         writer.write_all(&serialized).await.context("failed to write header")?;
 
-        let engine = Engine::new(&aes_key, &chacha_key, Processing::Encryption)?;
+        let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Encryption)?;
         engine.process(reader, writer, metadata.size).await?;
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
@@ -83,17 +82,14 @@ impl App {
     async fn decrypt(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
         let mut reader = source.reader().await.context("failed to open source file")?;
         let writer = target.writer().await.context("failed to create target file")?;
-
         let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to read header")?;
 
-        let salt = header.salt();
-        let master_key = derive_key(secret, salt)?;
-        let (aes_key, chacha_key, signer_key) = derive_hkdf_keys(&master_key, salt)?;
-        if !header.verify(&signer_key)? {
+        let derived_keys = Key::new(&SecretBytes::new(secret.expose_secret().as_bytes().to_vec()))?.derive_keys(header.salt())?;
+        if !header.verify(&derived_keys.third_key)? {
             anyhow::bail!("incorrect password");
         }
 
-        let engine = Engine::new(&aes_key, &chacha_key, Processing::Decryption)?;
+        let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Decryption)?;
         engine.process(reader, writer, header.file_size()).await?;
 
         if !target.validate_hash(header.file_hash()).await? {
@@ -102,15 +98,6 @@ impl App {
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
-}
-
-fn derive_key(secret: &SecretString, salt: &[u8]) -> Result<SecretBytes> {
-    let key_bytes = SecretBytes::new(secret.expose_secret().as_bytes().to_vec());
-    Key::new(&key_bytes)?.derive_key(salt)
-}
-
-fn derive_hkdf_keys(master_key: &SecretBytes, salt: &[u8]) -> Result<(SecretBytes, SecretBytes, SecretBytes)> {
-    Key::new(master_key)?.derive_hkdf_keys(salt)
 }
 
 #[cfg(test)]
