@@ -77,11 +77,7 @@ impl App {
         let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Encryption)?;
         engine.process(reader, writer, metadata.size).await?;
 
-        Ok(FileHeader {
-            name: header.file_name().to_owned(),
-            size: header.file_size(),
-            hash: hex::encode(header.file_hash()),
-        })
+        Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
 
     async fn decrypt(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
@@ -103,11 +99,7 @@ impl App {
             anyhow::bail!("hash verification failed");
         }
 
-        Ok(FileHeader {
-            name: header.file_name().to_owned(),
-            size: header.file_size(),
-            hash: hex::encode(header.file_hash()),
-        })
+        Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
 }
 
