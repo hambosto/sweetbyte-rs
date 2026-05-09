@@ -17,8 +17,8 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(key: &SecretBytes, processing: Processing) -> Result<Self> {
-        let cipher = Cipher::new(key).context("failed to initialize cipher")?;
+    pub fn new(first_key: &SecretBytes, second_key: &SecretBytes, processing: Processing) -> Result<Self> {
+        let cipher = Cipher::new(first_key, second_key).context("failed to initialize cipher")?;
         let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize encoder")?;
         let compressor = Compressor::new(CompressionLevel::Fast).context("failed to initialize compressor")?;
         let padding = Pkcs7Padding::new(BlockSize::B128).context("failed to initialize padding")?;

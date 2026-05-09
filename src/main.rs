@@ -67,13 +67,14 @@ impl App {
         let metadata = source.file_metadata().await.context("failed to read metadata")?;
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
-        let key = derive_key(secret, &salt)?;
+        let master_key = derive_key(secret, &salt)?;
+        let (aes_key, chacha_key, signer_key) = derive_hkdf_keys(&master_key, &salt)?;
         let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
-        let serialized = header.serialize(&salt, &key)?;
+        let serialized = header.serialize(&salt, &signer_key)?;
 
         writer.write_all(&serialized).await.context("failed to write header")?;
 
-        let engine = Engine::new(&key, Processing::Encryption)?;
+        let engine = Engine::new(&aes_key, &chacha_key, Processing::Encryption)?;
         engine.process(reader, writer, metadata.size).await?;
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
@@ -85,12 +86,14 @@ impl App {
 
         let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to read header")?;
 
-        let key = derive_key(secret, header.salt())?;
-        if !header.verify(&key)? {
+        let salt = header.salt();
+        let master_key = derive_key(secret, salt)?;
+        let (aes_key, chacha_key, signer_key) = derive_hkdf_keys(&master_key, salt)?;
+        if !header.verify(&signer_key)? {
             anyhow::bail!("incorrect password");
         }
 
-        let engine = Engine::new(&key, Processing::Decryption)?;
+        let engine = Engine::new(&aes_key, &chacha_key, Processing::Decryption)?;
         engine.process(reader, writer, header.file_size()).await?;
 
         if !target.validate_hash(header.file_hash()).await? {
@@ -104,6 +107,10 @@ impl App {
 fn derive_key(secret: &SecretString, salt: &[u8]) -> Result<SecretBytes> {
     let key_bytes = SecretBytes::new(secret.expose_secret().as_bytes().to_vec());
     Key::new(&key_bytes)?.derive_key(salt)
+}
+
+fn derive_hkdf_keys(master_key: &SecretBytes, salt: &[u8]) -> Result<(SecretBytes, SecretBytes, SecretBytes)> {
+    Key::new(master_key)?.derive_hkdf_keys(salt)
 }
 
 #[cfg(test)]

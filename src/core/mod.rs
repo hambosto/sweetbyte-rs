@@ -10,7 +10,6 @@ pub use chacha20poly1305::ChaCha20Poly1305;
 pub use key::Key;
 pub use signer::Signer;
 
-use crate::config::KEY_LEN;
 use crate::secret::SecretBytes;
 use crate::validation::KeyBytes32;
 
@@ -25,11 +24,9 @@ pub struct Cipher {
 }
 
 impl Cipher {
-    pub fn new(key: &SecretBytes) -> Result<Self> {
-        let (first_key, second_key) = key.expose_secret().split_at_checked(KEY_LEN).context("invalid key length")?;
-
-        let first_secret = KeyBytes32::try_new(first_key.to_vec()).context("first key must be 32 bytes")?;
-        let second_secret = KeyBytes32::try_new(second_key.to_vec()).context("second key must be 32 bytes")?;
+    pub fn new(first_key: &SecretBytes, second_key: &SecretBytes) -> Result<Self> {
+        let first_secret = KeyBytes32::try_new(first_key.expose_secret().to_vec()).context("first key must be 32 bytes")?;
+        let second_secret = KeyBytes32::try_new(second_key.expose_secret().to_vec()).context("second key must be 32 bytes")?;
 
         let first_cipher = AesGcm::new(&first_secret.into_secret()).context("failed to initialize first cipher")?;
         let second_cipher = ChaCha20Poly1305::new(&second_secret.into_secret()).context("failed to initialize second cipher")?;

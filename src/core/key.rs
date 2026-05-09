@@ -1,11 +1,15 @@
 use anyhow::{Context, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
+use hkdf::Hkdf;
 use rand::TryRng;
 use rand::rngs::SysRng;
+use sha2::Sha256;
 
-use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST};
+use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
 use crate::secret::SecretBytes;
 use crate::validation::NonEmptyKey;
+
+type HkdfSha256 = Hkdf<Sha256>;
 
 pub struct Key {
     key: SecretBytes,
@@ -34,5 +38,20 @@ impl Key {
         SysRng.try_fill_bytes(&mut bytes).context("failed to generate salt")?;
 
         Ok(bytes)
+    }
+
+    pub fn derive_hkdf_keys(&self, salt: &[u8]) -> Result<(SecretBytes, SecretBytes, SecretBytes)> {
+        let hkdf = HkdfSha256::new(Some(salt), self.key.expose_secret());
+
+        let mut first_key = vec![0u8; KEY_LEN];
+        hkdf.expand(&KDF_INFO[0], &mut first_key).context("failed to derive first key")?;
+
+        let mut second_key = vec![0u8; KEY_LEN];
+        hkdf.expand(&KDF_INFO[1], &mut second_key).context("failed to derive second key")?;
+
+        let mut third_key = vec![0u8; KEY_LEN];
+        hkdf.expand(&KDF_INFO[2], &mut third_key).context("failed to derive third key")?;
+
+        Ok((SecretBytes::new(first_key), SecretBytes::new(second_key), SecretBytes::new(third_key)))
     }
 }

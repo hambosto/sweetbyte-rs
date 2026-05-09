@@ -32,10 +32,10 @@ impl Serializer {
         self.metadata.hash()
     }
 
-    pub fn serialize(&self, salt: &[u8], key: &SecretBytes) -> Result<Vec<u8>> {
+    pub fn serialize(&self, salt: &[u8], signer_key: &SecretBytes) -> Result<Vec<u8>> {
         let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
-        let signer = Signer::new(key).context("failed to initialize signer")?;
+        let signer = Signer::new(signer_key).context("failed to initialize signer")?;
         let mac = signer.compute_parts(&[salt, &params_bytes, &metadata_bytes]).context("failed to compute mac")?;
         let encoder = SectionEncoder::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
 

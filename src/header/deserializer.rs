@@ -40,10 +40,10 @@ impl Deserializer {
         self.header.salt.expose_secret()
     }
 
-    pub fn verify(&self, key: &SecretBytes) -> Result<bool> {
+    pub fn verify(&self, signer_key: &SecretBytes) -> Result<bool> {
         let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
-        let signer = Signer::new(key).context("failed to create signer")?;
+        let signer = Signer::new(signer_key).context("failed to create signer")?;
 
         Ok(signer.verify_parts(self.header.mac.expose_secret(), &[self.header.salt.expose_secret(), &params_bytes, &metadata_bytes]))
     }
