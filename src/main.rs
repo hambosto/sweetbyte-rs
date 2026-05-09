@@ -29,7 +29,6 @@ impl App {
         self.display.banner()?;
 
         let processing = self.input.processing_mode()?;
-
         let files = Files::discover(".", processing);
         if files.is_empty() {
             anyhow::bail!("no files available for processing");
@@ -67,16 +66,22 @@ impl App {
         let metadata = source.file_metadata().await.context("failed to read metadata")?;
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
-        let derived_keys = Key::new(&SecretBytes::new(secret.expose_secret().as_bytes().to_vec()))?.derive_keys(&salt)?;
+        let key_bytes = SecretBytes::new(secret.expose_secret().as_bytes().to_vec());
+        let key = Key::new(&key_bytes)?;
+        let derived_keys = key.derive_keys(&salt)?;
+
         let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
         let serialized = header.serialize(&salt, &derived_keys.third_key)?;
-
         writer.write_all(&serialized).await.context("failed to write header")?;
 
         let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Encryption)?;
         engine.process(reader, writer, metadata.size).await?;
 
-        Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+        Ok(FileHeader {
+            name: header.file_name().to_owned(),
+            size: header.file_size(),
+            hash: hex::encode(header.file_hash()),
+        })
     }
 
     async fn decrypt(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
@@ -84,7 +89,9 @@ impl App {
         let writer = target.writer().await.context("failed to create target file")?;
         let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to read header")?;
 
-        let derived_keys = Key::new(&SecretBytes::new(secret.expose_secret().as_bytes().to_vec()))?.derive_keys(header.salt())?;
+        let key_bytes = SecretBytes::new(secret.expose_secret().as_bytes().to_vec());
+        let key = Key::new(&key_bytes)?;
+        let derived_keys = key.derive_keys(header.salt())?;
         if !header.verify(&derived_keys.third_key)? {
             anyhow::bail!("incorrect password");
         }
@@ -96,7 +103,11 @@ impl App {
             anyhow::bail!("hash verification failed");
         }
 
-        Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+        Ok(FileHeader {
+            name: header.file_name().to_owned(),
+            size: header.file_size(),
+            hash: hex::encode(header.file_hash()),
+        })
     }
 }
 
