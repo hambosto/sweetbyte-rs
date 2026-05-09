@@ -4,7 +4,6 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 use humansize::DECIMAL;
 
-use crate::config::APP_NAME;
 use crate::files::Files;
 use crate::types::Processing;
 
@@ -68,8 +67,10 @@ impl Display {
     }
 
     pub fn banner(&self) -> Result<()> {
+        let app_name = env!("CARGO_PKG_NAME");
         let version = option_env!("SWEETBYTE_BUILD_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
-        cliclack::intro(format!("{APP_NAME} {version}")).context("failed to display banner")
+
+        cliclack::intro(format!("{app_name} {version}")).context("failed to display banner")
     }
 
     pub fn exit(&self) -> Result<()> {

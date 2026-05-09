@@ -12,7 +12,7 @@ pub use signer::Signer;
 
 use crate::config::KEY_LEN;
 use crate::secret::SecretBytes;
-use crate::validation::{KeyBytes32, KeyBytes64};
+use crate::validation::KeyBytes32;
 
 pub enum CipherAlgorithm {
     Aes256Gcm,
@@ -20,35 +20,34 @@ pub enum CipherAlgorithm {
 }
 
 pub struct Cipher {
-    first: AesGcm,
-    second: ChaCha20Poly1305,
+    first_cipher: AesGcm,
+    second_cipher: ChaCha20Poly1305,
 }
 
 impl Cipher {
     pub fn new(key: &SecretBytes) -> Result<Self> {
-        let key = KeyBytes64::try_new(key.expose_secret().to_vec()).context("key must be 64 bytes")?;
-        let key_bytes = key.into_inner();
-        let (first_key, second_key) = key_bytes.split_at(KEY_LEN);
-        let aes_secret = KeyBytes32::try_new(first_key.to_vec()).context("key must be 32 bytes")?;
-        let chacha_secret = KeyBytes32::try_new(second_key.to_vec()).context("key must be 32 bytes")?;
+        let (first_key, second_key) = key.expose_secret().split_at_checked(KEY_LEN).context("invalid key length")?;
 
-        let first = AesGcm::new(&aes_secret.into_secret()).context("failed to initialize AES-256-GCM cipher")?;
-        let second = ChaCha20Poly1305::new(&chacha_secret.into_secret()).context("failed to initialize ChaCha20Poly1305 cipher")?;
+        let first_secret = KeyBytes32::try_new(first_key.to_vec()).context("first key must be 32 bytes")?;
+        let second_secret = KeyBytes32::try_new(second_key.to_vec()).context("second key must be 32 bytes")?;
 
-        Ok(Self { first, second })
+        let first_cipher = AesGcm::new(&first_secret.into_secret()).context("failed to initialize first cipher")?;
+        let second_cipher = ChaCha20Poly1305::new(&second_secret.into_secret()).context("failed to initialize second cipher")?;
+
+        Ok(Self { first_cipher, second_cipher })
     }
 
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
         match algo {
-            CipherAlgorithm::Aes256Gcm => self.first.encrypt(plaintext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.second.encrypt(plaintext),
+            CipherAlgorithm::Aes256Gcm => self.first_cipher.encrypt(plaintext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.second_cipher.encrypt(plaintext),
         }
     }
 
     pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
         match algo {
-            CipherAlgorithm::Aes256Gcm => self.first.decrypt(ciphertext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.second.decrypt(ciphertext),
+            CipherAlgorithm::Aes256Gcm => self.first_cipher.decrypt(ciphertext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.second_cipher.decrypt(ciphertext),
         }
     }
 }

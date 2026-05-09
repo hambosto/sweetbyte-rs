@@ -1,4 +1,4 @@
-use crate::config::{ARGON2_KEY_LEN, CURRENT_VERSION, KEY_LEN, MAGIC_BYTES, MAX_FILENAME_LEN};
+use crate::config::{CURRENT_VERSION, KEY_LEN, MAGIC_BYTES, MAX_FILENAME_LEN};
 use crate::secret::SecretBytes;
 
 #[nutype::nutype(validate(predicate = |v| !v.is_empty()), derive(AsRef))]
@@ -9,9 +9,6 @@ pub struct NonEmptyKey(Vec<u8>);
 
 #[nutype::nutype(validate(predicate = |b| b.len() == KEY_LEN))]
 pub struct KeyBytes32(Vec<u8>);
-
-#[nutype::nutype(validate(predicate = |b| b.len() == ARGON2_KEY_LEN))]
-pub struct KeyBytes64(Vec<u8>);
 
 #[nutype::nutype(validate(not_empty, len_char_max = MAX_FILENAME_LEN), derive(AsRef, Serialize, Deserialize))]
 pub struct Filename(String);

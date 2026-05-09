@@ -1,5 +1,3 @@
-pub const APP_NAME: &str = "SweetByte";
-
 pub const FILE_EXTENSION: &str = "swx";
 
 pub const ARGON2_M_COST: u32 = 65536;
