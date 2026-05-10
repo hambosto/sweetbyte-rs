@@ -71,17 +71,22 @@ Decryption runs this in reverse. After decryption, the BLAKE3 hash of the output
 
 ### The header
 
-Each encrypted file starts with a header. Everything in the header gets Reed-Solomon encoded independently:
+Each encrypted file starts with a compressed and Reed-Solomon encoded header. This provides resilience against header corruption:
+
+```
+[4 bytes: compressed section length LE] [compressed + RS-encoded section data]
+```
+
+The section itself (before RS encoding) contains:
 
 | Field | Size | Notes |
 |-------|------|-------|
-| Lengths | 16 bytes | Four u32 LE values for encoded section sizes |
 | Salt | 32 bytes | Random, for Argon2id |
-| Parameters | 6 bytes | Magic `0xDEADBEEF` + version `0x0002` (serialized with postcard) |
-| Metadata | variable | Original filename, size, BLAKE3 hash (serialized with postcard) |
+| Parameters | variable | Magic `0xDEADBEEF` + version `0x0002` |
+| Metadata | variable | Original filename, size, BLAKE3 hash |
 | MAC | 32 bytes | HMAC-SHA256 of (salt + parameters + metadata) |
 
-The HMAC uses constant-time comparison via the `subtle` crate. Header deserialization fails fast if magic bytes or version don't match.
+The entire section is compressed with zstd and Reed-Solomon encoded (4+10 shards) before writing. Deserialization fails fast if magic bytes or version don't match. The HMAC uses constant-time comparison.
 
 ### Key derivation
 
@@ -92,7 +97,11 @@ Argon2id with these parameters:
 - Parallelism: 4 threads
 - Output: 64 bytes
 
-The 64-byte output gets split: first 32 bytes for AES key, last 32 bytes for ChaCha20 key.
+The 64-byte Argon2id output is fed through HKDF-SHA256 to derive three independent keys:
+
+- **First key** (32 bytes): Used for AES-256-GCM encryption
+- **Second key** (32 bytes): Used for XChaCha20-Poly1305 encryption
+- **Third key** (32 bytes): Used for HMAC-SHA256 signing
 
 ### Processing pipeline
 
@@ -100,7 +109,7 @@ Three stages, running concurrently:
 
 ```
 [Reader Task] -----> [Executor] -----> [Writer Task]
- tokio async        spawn_blocking      tokio async
+ tokio async       spawn_blocking       tokio async
 ```
 
 Files get read in 256KB chunks. Channel buffer size matches CPU core count. The executor processes chunks in parallel via tokio's `spawn_blocking` with a semaphore for concurrency control. A reordering buffer ensures the writer outputs chunks in order.
@@ -119,34 +128,34 @@ CRC32 validates each shard before decoding. Corrupted shards get reconstructed f
 
 ```
 src/
-├── main.rs                 # Entry point, interactive mode, tokio runtime
-├── lib.rs                  # Library root, MiMalloc global allocator
-├── config.rs               # All constants in one place
+├── lib.rs                  # Library root, global allocator
+├── main.rs                 # Entry point, interactive mode, async runtime
+├── config.rs               # All constants, HKDF info strings
 ├── types.rs                # Processing enum, Task, TaskResult
-├── secret.rs               # SecretBytes/SecretString via secrecy crate
-├── validation.rs           # Validated newtypes via nutype (Filename, FileSize, etc.)
-├── files.rs                # File discovery (walkdir), BLAKE3 hashing
+├── secret.rs               # Wrapper types for sensitive data
+├── validation.rs           # Validated newtypes (Filename, FileSize, etc.)
+├── files.rs                # File discovery, BLAKE3 hashing
 ├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
 ├── compression.rs          # zstd wrapper with compression levels
-├── padding.rs              # PKCS7 wrapper with configurable block size
+├── padding.rs              # PKCS7 padding wrapper
 │
 ├── core/
 │   ├── mod.rs              # Cipher struct holding both algorithms
-│   ├── aes_gcm.rs          # AES-256-GCM wrapper
-│   ├── chacha20poly1305.rs # XChaCha20-Poly1305 wrapper
-│   ├── key.rs              # Argon2id key derivation
+│   ├── aes_gcm.rs          # AES-256-GCM implementation
+│   ├── chacha20poly1305.rs # XChaCha20-Poly1305 implementation
+│   ├── key.rs              # Argon2id + HKDF key derivation
 │   └── signer.rs           # HMAC-SHA256 with constant-time comparison
 │
 ├── header/
 │   ├── mod.rs              # Header module exports
 │   ├── metadata.rs         # Metadata struct (filename, size, hash)
 │   ├── parameters.rs       # Parameters struct (magic, version)
-│   ├── section.rs          # Packs/unpacks RS-encoded sections
+│   ├── section.rs          # SectionEncoder for RS-encoded header sections
 │   ├── serializer.rs       # Header serialization
 │   └── deserializer.rs     # Header deserialization
 │
-├── worker/
-│   ├── mod.rs              # Worker, sets up the pipeline
+├── engine/
+│   ├── mod.rs              # Engine, sets up the pipeline
 │   ├── reader.rs           # Produces tasks from input file
 │   ├── executor.rs         # Parallel task processing
 │   ├── writer.rs           # Consumes results, writes output
@@ -155,16 +164,16 @@ src/
 │
 └── ui/
     ├── mod.rs              # UI module exports
-    ├── display.rs          # Tables via comfy-table, banner
-    ├── input.rs            # Interactive prompts via cliclack
-    └── progress.rs         # Progress bar via cliclack
+    ├── display.rs          # Terminal tables, banner display
+    ├── input.rs            # Interactive prompts for user input
+    └── progress.rs         # Progress bar display
 ```
 
 ## Security notes
 
 - Your password matters. Use something strong (minimum 8 characters enforced).
-- Constant-time MAC comparison via `subtle` crate.
-- Keys and passwords use `secrecy` crate with `Zeroize` support for secure memory handling.
+- Constant-time MAC comparison prevents timing attacks.
+- Keys and passwords are zeroized on drop for secure memory handling.
 - "Delete source file" in interactive mode calls `remove_file`. That's it. SSDs and journaling filesystems may retain data.
 - Not hardened against hardware side-channels. If that's your threat model, look elsewhere.
 
