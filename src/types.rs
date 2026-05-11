@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
 #[derive(Display, Debug, Clone, Copy, Eq, PartialEq, EnumIter, IntoStaticStr)]
@@ -34,7 +32,6 @@ pub struct Task {
     pub index: u64,
 }
 
-#[derive(PartialEq, Eq)]
 pub struct TaskResult {
     pub index: u64,
     pub data: Vec<u8>,
@@ -44,17 +41,5 @@ pub struct TaskResult {
 impl TaskResult {
     pub fn new(index: u64, data: Vec<u8>, size: usize) -> Self {
         Self { index, data, size }
-    }
-}
-
-impl Ord for TaskResult {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.index.cmp(&self.index)
-    }
-}
-
-impl PartialOrd for TaskResult {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }

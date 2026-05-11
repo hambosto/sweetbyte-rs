@@ -9,7 +9,6 @@ use crate::secret::Secret;
 use crate::types::{Processing, Task, TaskResult};
 use crate::ui::Progress;
 
-mod buffer;
 mod executor;
 mod pipeline;
 mod reader;

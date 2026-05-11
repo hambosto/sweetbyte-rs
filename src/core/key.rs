@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
 use hkdf::Hkdf;
-use rand::rngs::SysRng;
 use rand::TryRng;
+use rand::rngs::SysRng;
 use sha2::Sha256;
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
+use hashbrown::HashMap;
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
-use crate::engine::buffer::Buffer;
 use crate::types::{Processing, TaskResult};
 use crate::ui::Progress;
 
@@ -16,29 +16,28 @@ impl Writer {
     }
 
     pub async fn write_all<W: AsyncWrite + Unpin>(&self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
-        let mut buffer = Buffer::new(0);
+        let mut next_index = 0u64;
+        let mut pending = HashMap::<u64, TaskResult>::new();
         let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
-            let ready = buffer.add(result);
-            self.write_batch(&mut writer, &ready, progress).await?;
-        }
+            pending.insert(result.index, result);
 
-        let remaining = buffer.flush();
-        self.write_batch(&mut writer, &remaining, progress).await?;
+            while let Some(result) = pending.remove(&next_index) {
+                self.write_result(&mut writer, &result, progress).await?;
+                next_index = next_index.saturating_add(1);
+            }
+        }
 
         writer.flush().await.context("failed to flush")
     }
 
-    async fn write_batch<W: AsyncWrite + Unpin>(&self, writer: &mut W, results: &[TaskResult], progress: &Progress) -> Result<()> {
-        for result in results {
-            if matches!(self.processing, Processing::Encryption) {
-                writer.write_all(&u32::try_from(result.data.len())?.to_le_bytes()).await.context("failed to write chunk")?;
-            }
-
-            writer.write_all(&result.data).await.context("failed to write chunk")?;
-            progress.add(result.size as u64);
+    async fn write_result<W: AsyncWrite + Unpin>(&self, writer: &mut W, result: &TaskResult, progress: &Progress) -> Result<()> {
+        if matches!(self.processing, Processing::Encryption) {
+            writer.write_all(&u32::try_from(result.data.len())?.to_le_bytes()).await.context("failed to write chunk")?;
         }
+        writer.write_all(&result.data).await.context("failed to write chunk")?;
+        progress.add(result.size as u64);
 
         Ok(())
     }
