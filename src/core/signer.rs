@@ -3,17 +3,17 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::secret::SecretBytes;
+use crate::secret::Secret;
 use crate::validation::KeyBytes32;
 
 type HmacSha256 = Hmac<Sha256>;
 
 pub struct Signer {
-    key: SecretBytes,
+    key: Secret,
 }
 
 impl Signer {
-    pub fn new(key: &SecretBytes) -> Result<Self> {
+    pub fn new(key: &Secret) -> Result<Self> {
         let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 
         Ok(Self { key: key.into_secret() })

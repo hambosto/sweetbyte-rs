@@ -1,16 +1,16 @@
 use anyhow::{Context, Result};
-use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
+use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM, NONCE_LEN};
 use ring::rand::{SecureRandom, SystemRandom};
 
-use crate::secret::SecretBytes;
+use crate::secret::Secret;
 use crate::validation::{KeyBytes32, NonEmptyBytes};
 
 pub struct AesGcm {
-    key: SecretBytes,
+    key: Secret,
 }
 
 impl AesGcm {
-    pub fn new(key: &SecretBytes) -> Result<Self> {
+    pub fn new(key: &Secret) -> Result<Self> {
         let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
         Ok(Self { key: key.into_secret() })

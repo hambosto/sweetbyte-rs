@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 
+use crate::compression::CompressionLevel;
 use crate::config::{CURRENT_VERSION, MAGIC_BYTES, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
 use crate::header::section::Section;
-use crate::secret::SecretBytes;
+use crate::secret::Secret;
 
 pub struct Serializer {
     params: Parameters,
@@ -32,12 +33,12 @@ impl Serializer {
         self.metadata.hash()
     }
 
-    pub fn serialize(&self, salt: &[u8], signer_key: &SecretBytes) -> Result<Vec<u8>> {
+    pub fn serialize(&self, salt: &[u8], signer_key: &Secret) -> Result<Vec<u8>> {
         let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
         let signer = Signer::new(signer_key).context("failed to initialize signer")?;
         let mac = signer.compute_parts(&[salt, &params_bytes, &metadata_bytes]).context("failed to compute mac")?;
-        let section = Section::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
+        let section = Section::new(CompressionLevel::Best, ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
 
         section.pack(salt, &params_bytes, &metadata_bytes, &mac).context("failed to pack header sections")
     }

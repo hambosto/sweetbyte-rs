@@ -10,7 +10,7 @@ pub use chacha20poly1305::ChaCha20Poly1305;
 pub use key::Key;
 pub use signer::Signer;
 
-use crate::secret::SecretBytes;
+use crate::secret::Secret;
 use crate::validation::KeyBytes32;
 
 pub enum CipherAlgorithm {
@@ -24,7 +24,7 @@ pub struct Cipher {
 }
 
 impl Cipher {
-    pub fn new(first_key: &SecretBytes, second_key: &SecretBytes) -> Result<Self> {
+    pub fn new(first_key: &Secret, second_key: &Secret) -> Result<Self> {
         let first_secret = KeyBytes32::try_new(first_key.expose_secret().to_vec()).context("first key must be 32 bytes")?;
         let second_secret = KeyBytes32::try_new(second_key.expose_secret().to_vec()).context("second key must be 32 bytes")?;
 

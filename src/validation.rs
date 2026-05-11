@@ -1,14 +1,5 @@
 use crate::config::{CURRENT_VERSION, KEY_LEN, MAGIC_BYTES, MAX_FILENAME_LEN};
-use crate::secret::SecretBytes;
-
-#[nutype::nutype(validate(predicate = |v| !v.is_empty()), derive(AsRef))]
-pub struct NonEmptyBytes(Vec<u8>);
-
-#[nutype::nutype(validate(predicate = |v| !v.is_empty()))]
-pub struct NonEmptyKey(Vec<u8>);
-
-#[nutype::nutype(validate(predicate = |b| b.len() == KEY_LEN))]
-pub struct KeyBytes32(Vec<u8>);
+use crate::secret::Secret;
 
 #[nutype::nutype(validate(not_empty, len_char_max = MAX_FILENAME_LEN), derive(AsRef, Serialize, Deserialize))]
 pub struct Filename(String);
@@ -25,16 +16,14 @@ pub struct Magic(u32);
 #[nutype::nutype(validate(predicate = |&v| v == CURRENT_VERSION), derive(Serialize, Deserialize))]
 pub struct Version(u16);
 
-macro_rules! impl_into_secret {
-    ($($t:ty),* $(,)?) => {
-        $(
-            impl $t {
-                pub fn into_secret(self) -> SecretBytes {
-                    SecretBytes::new(self.into_inner())
-                }
-            }
-        )*
-    };
-}
+#[nutype::nutype(validate(predicate = |v| !v.is_empty()), derive(AsRef))]
+pub struct NonEmptyBytes(Vec<u8>);
 
-impl_into_secret!(NonEmptyKey, KeyBytes32);
+#[nutype::nutype(validate(predicate = |b| b.len() == KEY_LEN))]
+pub struct KeyBytes32(Vec<u8>);
+
+impl KeyBytes32 {
+    pub fn into_secret(self) -> Secret {
+        Secret::new(self.into_inner())
+    }
+}

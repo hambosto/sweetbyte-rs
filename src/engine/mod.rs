@@ -5,7 +5,7 @@ use crate::engine::executor::Executor;
 use crate::engine::pipeline::Pipeline;
 use crate::engine::reader::Reader;
 use crate::engine::writer::Writer;
-use crate::secret::SecretBytes;
+use crate::secret::Secret;
 use crate::types::{Processing, Task, TaskResult};
 use crate::ui::Progress;
 
@@ -21,7 +21,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(first_key: &SecretBytes, second_key: &SecretBytes, processing: Processing) -> Result<Self> {
+    pub fn new(first_key: &Secret, second_key: &Secret, processing: Processing) -> Result<Self> {
         let pipeline = Pipeline::new(first_key, second_key, processing).context("failed to initialize pipeline")?;
 
         Ok(Self { processing, pipeline })

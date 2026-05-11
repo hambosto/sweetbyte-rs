@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use sha2::{Digest, Sha256};
 
 use crate::files::Files;
+use crate::secret::Secret;
 use crate::types::Processing;
 
 pub struct Input {
@@ -17,7 +19,7 @@ impl Input {
         Self { min_password_len, default_overwrite: false, default_delete: false, filter_mode }
     }
 
-    pub fn password(&self, processing: Processing) -> Result<String> {
+    pub fn password(&self, processing: Processing) -> Result<Secret> {
         let min = self.min_password_len;
         let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("password must be at least {min} characters"));
 
@@ -34,7 +36,7 @@ impl Input {
             }
         }
 
-        Ok(password)
+        Ok(Secret::new(Sha256::digest(password.as_bytes()).to_vec()))
     }
 
     pub fn processing_mode(&self) -> Result<Processing> {

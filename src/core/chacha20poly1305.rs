@@ -1,16 +1,16 @@
 use anyhow::{Context, Result};
-use ring::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
+use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, CHACHA20_POLY1305, NONCE_LEN};
 use ring::rand::{SecureRandom, SystemRandom};
 
-use crate::secret::SecretBytes;
+use crate::secret::Secret;
 use crate::validation::{KeyBytes32, NonEmptyBytes};
 
 pub struct ChaCha20Poly1305 {
-    key: SecretBytes,
+    key: Secret,
 }
 
 impl ChaCha20Poly1305 {
-    pub fn new(key: &SecretBytes) -> Result<Self> {
+    pub fn new(key: &Secret) -> Result<Self> {
         let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
         Ok(Self { key: key.into_secret() })

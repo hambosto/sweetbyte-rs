@@ -4,7 +4,7 @@ use sweetbyte_rs::core::Key;
 use sweetbyte_rs::engine::Engine;
 use sweetbyte_rs::files::Files;
 use sweetbyte_rs::header::{Deserializer, Serializer};
-use sweetbyte_rs::secret::{SecretBytes, SecretString};
+use sweetbyte_rs::secret::Secret;
 use sweetbyte_rs::types::{FileHeader, Processing};
 use sweetbyte_rs::ui::{Display, Input};
 use tokio::io::AsyncWriteExt;
@@ -43,7 +43,7 @@ impl App {
             anyhow::bail!("operation canceled");
         }
 
-        let secret = SecretString::new(self.input.password(processing)?);
+        let secret = self.input.password(processing)?;
         let header = match processing {
             Processing::Encryption => self.encrypt(&source, &target, &secret).await?,
             Processing::Decryption => self.decrypt(&source, &target, &secret).await?,
@@ -60,18 +60,17 @@ impl App {
         self.display.exit()
     }
 
-    async fn encrypt(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
+    async fn encrypt(&self, source: &Files, target: &Files, secret: &Secret) -> Result<FileHeader> {
         let mut writer = target.writer().await.context("failed to create target file")?;
         let reader = source.reader().await.context("failed to open source file")?;
         let metadata = source.file_metadata().await.context("failed to read metadata")?;
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
-        let key_bytes = SecretBytes::new(secret.expose_secret().as_bytes().to_vec());
-        let key = Key::new(&key_bytes)?;
+        let key = Key::new(secret)?;
         let derived_keys = key.derive_keys(&salt)?;
 
         let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
-        let serialized = header.serialize(&salt, &derived_keys.third_key)?;
+        let serialized = header.serialize(&salt, &derived_keys.third_key).context("failed to serialize header")?;
         writer.write_all(&serialized).await.context("failed to write header")?;
 
         let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Encryption)?;
@@ -80,13 +79,12 @@ impl App {
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
     }
 
-    async fn decrypt(&self, source: &Files, target: &Files, secret: &SecretString) -> Result<FileHeader> {
+    async fn decrypt(&self, source: &Files, target: &Files, secret: &Secret) -> Result<FileHeader> {
         let mut reader = source.reader().await.context("failed to open source file")?;
         let writer = target.writer().await.context("failed to create target file")?;
-        let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to read header")?;
+        let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to deserialize header")?;
 
-        let key_bytes = SecretBytes::new(secret.expose_secret().as_bytes().to_vec());
-        let key = Key::new(&key_bytes)?;
+        let key = Key::new(secret)?;
         let derived_keys = key.derive_keys(header.salt())?;
         if !header.verify(&derived_keys.third_key)? {
             anyhow::bail!("incorrect password");
@@ -105,6 +103,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use sha2::{Digest, Sha256};
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -119,7 +118,7 @@ mod tests {
 
         fs::write(&source_path, b"test content").await.unwrap();
 
-        let secret = SecretString::new("password123");
+        let secret = Secret::new(Sha256::digest("password".as_bytes()).to_vec());
         let app = App::new(Input::new(PASSWORD_LEN, true), Display::new(NAME_MAX_LEN));
 
         let source = Files::new(&source_path);

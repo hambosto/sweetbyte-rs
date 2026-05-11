@@ -5,7 +5,7 @@ use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::{Cipher, CipherAlgorithm};
 use crate::encoding::Encoding;
 use crate::padding::{BlockSize, Pkcs7Padding};
-use crate::secret::SecretBytes;
+use crate::secret::Secret;
 use crate::types::{Processing, Task, TaskResult};
 
 pub struct Pipeline {
@@ -17,7 +17,7 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(first_key: &SecretBytes, second_key: &SecretBytes, processing: Processing) -> Result<Self> {
+    pub fn new(first_key: &Secret, second_key: &Secret, processing: Processing) -> Result<Self> {
         let cipher = Cipher::new(first_key, second_key).context("failed to initialize cipher")?;
         let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize encoder")?;
         let compressor = Compressor::new(CompressionLevel::Fast).context("failed to initialize compressor")?;
