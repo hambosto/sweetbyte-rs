@@ -47,10 +47,9 @@ impl Files {
 
     pub fn is_excluded(&self) -> bool {
         self.path
-            .to_str()
-            .into_iter()
-            .chain(self.path.iter().filter_map(|c| c.to_str()))
-            .any(|part| EXCLUDED_PATTERNS.iter().any(|p| fast_glob::glob_match(p, part)))
+            .iter()
+            .filter_map(|c| c.to_str())
+            .any(|part| EXCLUDED_PATTERNS.iter().any(|pattern| fast_glob::glob_match(pattern, part)))
     }
 
     pub fn is_eligible(&self, processing: Processing) -> bool {

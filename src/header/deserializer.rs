@@ -5,7 +5,7 @@ use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
-use crate::header::section::{Header, SectionEncoder};
+use crate::header::section::{Header, Section};
 use crate::secret::SecretBytes;
 
 pub struct Deserializer {
@@ -16,8 +16,8 @@ pub struct Deserializer {
 
 impl Deserializer {
     pub async fn deserialize<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
-        let encoder = SectionEncoder::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
-        let header = encoder.decode(reader).await.context("failed to decode header sections")?;
+        let section = Section::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
+        let header = section.unpack(reader).await.context("failed to unpack header sections")?;
         let params: Parameters = postcard::from_bytes(header.params.expose_secret()).context("failed to deserialize params")?;
         let metadata: Metadata = postcard::from_bytes(header.metadata.expose_secret()).context("failed to deserialize metadata")?;
 

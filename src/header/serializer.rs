@@ -4,7 +4,7 @@ use crate::config::{CURRENT_VERSION, MAGIC_BYTES, ORIGINAL_COUNT, RECOVERY_COUNT
 use crate::core::Signer;
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
-use crate::header::section::SectionEncoder;
+use crate::header::section::Section;
 use crate::secret::SecretBytes;
 
 pub struct Serializer {
@@ -37,8 +37,8 @@ impl Serializer {
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
         let signer = Signer::new(signer_key).context("failed to initialize signer")?;
         let mac = signer.compute_parts(&[salt, &params_bytes, &metadata_bytes]).context("failed to compute mac")?;
-        let encoder = SectionEncoder::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
+        let section = Section::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
 
-        encoder.encode(salt, &params_bytes, &metadata_bytes, &mac).context("failed to encode header sections")
+        section.pack(salt, &params_bytes, &metadata_bytes, &mac).context("failed to pack header sections")
     }
 }
