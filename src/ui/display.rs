@@ -42,12 +42,12 @@ impl Display {
     }
 
     pub fn success(&self, processing: Processing, file: &Files) -> Result<()> {
-        let verb = match processing {
+        let process = match processing {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",
         };
 
-        cliclack::log::success(format!("File {verb} successfully: {}", file.name())).context("failed to display success message")
+        cliclack::log::success(format!("File {process} successfully: {}", file.name())).context("failed to display success message")
     }
 
     pub fn deleted(&self, file: &Files) -> Result<()> {

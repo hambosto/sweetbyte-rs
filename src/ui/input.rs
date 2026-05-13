@@ -73,12 +73,12 @@ impl Input {
     }
 
     pub fn delete(&self, file: &Files, processing: Processing) -> Result<bool> {
-        let kind = match processing {
+        let process = match processing {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",
         };
 
-        cliclack::confirm(format!("Delete {} file {}?", kind, file.name()))
+        cliclack::confirm(format!("Delete {} file {}?", process, file.name()))
             .initial_value(self.default_delete)
             .interact()
             .context("failed to confirm deletion")
