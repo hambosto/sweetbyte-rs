@@ -1,5 +1,6 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
-use hashbrown::HashMap;
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
