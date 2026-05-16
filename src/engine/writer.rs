@@ -17,16 +17,16 @@ impl Writer {
     }
 
     pub async fn write_all<W: AsyncWrite + Unpin>(&self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
-        let mut next_index = 0u64;
+        let mut index = 0u64;
         let mut pending = HashMap::<u64, TaskResult>::new();
         let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
             pending.insert(result.index, result);
 
-            while let Some(result) = pending.remove(&next_index) {
+            while let Some(result) = pending.remove(&index) {
                 self.write_result(&mut writer, &result, progress).await?;
-                next_index = next_index.saturating_add(1);
+                index = index.saturating_add(1);
             }
         }
 
