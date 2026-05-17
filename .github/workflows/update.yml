@@ -29,5 +29,5 @@ jobs:
       - name: Auto-merge dependency update PR
         if: steps.update.outputs.pull-request-number != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         run: gh pr merge ${{ steps.update.outputs.pull-request-number }} --squash --delete-branch
