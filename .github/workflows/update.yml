@@ -24,7 +24,7 @@ jobs:
         id: update
         uses: DeterminateSystems/update-flake-lock@main
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
       - name: Auto-merge dependency update PR
         if: steps.update.outputs.pull-request-number != ''
