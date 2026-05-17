@@ -17,6 +17,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Install Nix package manager
+        uses: DeterminateSystems/nix-installer-action@main
+
       - name: Update flake.lock file
         id: update
         uses: DeterminateSystems/update-flake-lock@main
