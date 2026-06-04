@@ -93,7 +93,7 @@ impl App {
         let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Decryption)?;
         engine.process(reader, writer, header.file_size()).await?;
 
-        if !target.validate_hash(header.file_hash()).await? {
+        if !target.validate_hash(header.file_hash())? {
             anyhow::bail!("hash verification failed");
         }
 

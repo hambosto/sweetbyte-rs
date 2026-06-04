@@ -105,15 +105,15 @@ impl Files {
         tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to read metadata")
     }
 
-    pub async fn hash(&self) -> Result<Vec<u8>> {
+    pub fn hash(&self) -> Result<Vec<u8>> {
         let mut hasher = Hasher::new();
         hasher.update_mmap_rayon(&self.path).context("failed to memory-map file for hashing")?;
 
         Ok(hasher.finalize().as_bytes().to_vec())
     }
 
-    pub async fn validate_hash(&self, expected: &[u8]) -> Result<bool> {
-        let actual = self.hash().await?;
+    pub fn validate_hash(&self, expected: &[u8]) -> Result<bool> {
+        let actual = self.hash().context("failed to compute hash for validation")?;
 
         Ok(bool::from(actual.as_slice().ct_eq(expected)))
     }
@@ -121,7 +121,7 @@ impl Files {
     pub async fn file_metadata(&self) -> Result<FileMetadata> {
         let name = self.name().to_owned();
         let size = self.size().await?;
-        let hash = self.hash().await?;
+        let hash = self.hash()?;
 
         Ok(FileMetadata { name, size, hash })
     }

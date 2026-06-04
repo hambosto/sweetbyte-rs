@@ -59,9 +59,9 @@ impl Section {
     }
 
     pub async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<Header> {
-        let buffer_len = reader.read_u32_le().await.context("failed to read section length")?;
+        let buffer_size = reader.read_u32_le().await.context("failed to read section length")?;
 
-        let mut buffer = vec![0u8; buffer_len as usize];
+        let mut buffer = vec![0u8; buffer_size as usize];
         reader.read_exact(&mut buffer).await.context("failed to read section")?;
 
         let decompressed_section = self.compressor.decompress(&buffer).context("failed to decompress section")?;
