@@ -26,6 +26,7 @@ impl Pipeline {
         Ok(Self { cipher, encoder, compressor, padding, processing })
     }
 
+    #[inline]
     pub fn process(&self, task: &Task) -> Result<TaskResult> {
         match self.processing {
             Processing::Encryption => self.encrypt_pipeline(task),
@@ -33,6 +34,7 @@ impl Pipeline {
         }
     }
 
+    #[inline(always)]
     fn encrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
         self.compressor
             .compress(&task.data)
@@ -46,6 +48,7 @@ impl Pipeline {
             })
     }
 
+    #[inline(always)]
     fn decrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
         self.encoder
             .decode(&task.data)

@@ -10,6 +10,7 @@ pub enum Processing {
 }
 
 impl Processing {
+    #[inline]
     pub fn iter() -> impl Iterator<Item = Self> {
         <Self as IntoEnumIterator>::iter()
     }

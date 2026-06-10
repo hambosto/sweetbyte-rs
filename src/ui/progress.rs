@@ -14,6 +14,7 @@ impl Progress {
         Self { bar }
     }
 
+    #[inline]
     pub fn add(&self, delta: u64) {
         self.bar.inc(delta);
     }

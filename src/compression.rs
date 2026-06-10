@@ -13,12 +13,14 @@ pub enum CompressionLevel {
 }
 
 impl CompressionLevel {
+    #[inline]
     pub fn is_valid(&self) -> bool {
         matches!(self, Self::Fast | Self::Default | Self::Good | Self::Best)
     }
 }
 
 impl From<CompressionLevel> for i32 {
+    #[inline]
     fn from(level: CompressionLevel) -> Self {
         match level {
             CompressionLevel::Fast => 1,

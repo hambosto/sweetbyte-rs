@@ -34,6 +34,7 @@ impl Cipher {
         Ok(Self { primary_cipher, secondary_cipher })
     }
 
+    #[inline]
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
         match algo {
             CipherAlgorithm::Aes256Gcm => self.primary_cipher.encrypt(plaintext),
@@ -41,6 +42,7 @@ impl Cipher {
         }
     }
 
+    #[inline]
     pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
         match algo {
             CipherAlgorithm::Aes256Gcm => self.primary_cipher.decrypt(ciphertext),

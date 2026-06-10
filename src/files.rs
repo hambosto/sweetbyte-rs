@@ -21,31 +21,38 @@ pub struct Files {
 }
 
 impl Files {
+    #[inline]
     #[must_use]
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
 
+    #[inline]
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    #[inline]
     pub fn name(&self) -> &str {
         self.path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
     }
 
+    #[inline]
     pub fn exists(&self) -> bool {
         self.path.exists()
     }
 
+    #[inline]
     pub fn is_encrypted(&self) -> bool {
         self.path.extension().and_then(|e| e.to_str()).is_some_and(|e| e == FILE_EXTENSION)
     }
 
+    #[inline]
     pub fn is_hidden(&self) -> bool {
         self.path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.'))
     }
 
+    #[inline]
     pub fn is_excluded(&self) -> bool {
         self.path
             .iter()
@@ -53,6 +60,7 @@ impl Files {
             .any(|part| EXCLUDED_PATTERNS.iter().any(|pattern| fast_glob::glob_match(pattern, part)))
     }
 
+    #[inline]
     pub fn is_eligible(&self, processing: Processing) -> bool {
         !self.is_hidden()
             && !self.is_excluded()
@@ -62,6 +70,7 @@ impl Files {
             }
     }
 
+    #[inline]
     pub fn output_path(&self, processing: Processing) -> PathBuf {
         match processing {
             Processing::Encryption => self.path.with_added_extension(FILE_EXTENSION),

@@ -21,14 +21,17 @@ impl Serializer {
         Ok(Self { params, metadata })
     }
 
+    #[inline]
     pub fn file_name(&self) -> &str {
         self.metadata.name()
     }
 
+    #[inline]
     pub fn file_size(&self) -> u64 {
         self.metadata.size()
     }
 
+    #[inline]
     pub fn file_hash(&self) -> &[u8] {
         self.metadata.hash()
     }

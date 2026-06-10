@@ -16,6 +16,7 @@ impl ChaCha20Poly1305 {
         Ok(Self { key: key.into_secret() })
     }
 
+    #[inline(always)]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         let plaintext = NonEmptyBytes::try_new(plaintext.to_vec()).context("plaintext must not be empty")?;
 
@@ -35,6 +36,7 @@ impl ChaCha20Poly1305 {
         Ok(result)
     }
 
+    #[inline(always)]
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let ciphertext = NonEmptyBytes::try_new(ciphertext.to_vec()).context("ciphertext must not be empty")?;
         let (nonce_bytes, body) = ciphertext.as_ref().split_at(NONCE_LEN);

@@ -25,18 +25,22 @@ impl Deserializer {
         Ok(Self { params, metadata, header })
     }
 
+    #[inline]
     pub fn file_name(&self) -> &str {
         self.metadata.name()
     }
 
+    #[inline]
     pub fn file_size(&self) -> u64 {
         self.metadata.size()
     }
 
+    #[inline]
     pub fn file_hash(&self) -> &[u8] {
         self.metadata.hash()
     }
 
+    #[inline]
     pub fn salt(&self) -> &Secret {
         &self.header.salt
     }

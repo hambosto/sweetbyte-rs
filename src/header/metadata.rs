@@ -19,14 +19,17 @@ impl Metadata {
         Ok(Self { name, size, hash })
     }
 
+    #[inline]
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
 
+    #[inline]
     pub fn size(&self) -> u64 {
         *self.size.as_ref()
     }
 
+    #[inline]
     pub fn hash(&self) -> &[u8] {
         self.hash.as_ref()
     }

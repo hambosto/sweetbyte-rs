@@ -16,12 +16,14 @@ pub enum BlockSize {
 }
 
 impl BlockSize {
+    #[inline]
     pub fn is_valid(self) -> bool {
         matches!(self, Self::B16 | Self::B32 | Self::B64 | Self::B128)
     }
 }
 
 impl From<BlockSize> for usize {
+    #[inline]
     fn from(block_size: BlockSize) -> Self {
         match block_size {
             BlockSize::B16 => 16,
