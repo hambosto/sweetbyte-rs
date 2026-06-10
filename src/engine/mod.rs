@@ -20,8 +20,8 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(first_key: &Secret, second_key: &Secret, processing: Processing) -> Result<Self> {
-        let pipeline = Pipeline::new(first_key, second_key, processing).context("failed to initialize pipeline")?;
+    pub fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing) -> Result<Self> {
+        let pipeline = Pipeline::new(primary_key, secondary_key, processing).context("failed to initialize pipeline")?;
 
         Ok(Self { processing, pipeline })
     }

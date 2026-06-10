@@ -20,32 +20,31 @@ pub enum CipherAlgorithm {
 }
 
 pub struct Cipher {
-    first_cipher: AesGcm,
-    second_cipher: ChaCha20Poly1305,
+    primary_cipher: AesGcm,
+    secondary_cipher: ChaCha20Poly1305,
 }
 
 impl Cipher {
-    pub fn new(first_key: &Secret, second_key: &Secret) -> Result<Self> {
-        let first_secret = KeyBytes32::try_new(first_key.expose_secret().to_vec()).context("first key must be 32 bytes")?;
-        let second_secret = KeyBytes32::try_new(second_key.expose_secret().to_vec()).context("second key must be 32 bytes")?;
+    pub fn new(primary_key: &Secret, secondary_key: &Secret) -> Result<Self> {
+        let primary_secret = KeyBytes32::try_new(primary_key.expose_secret().to_vec()).context("primary key must be 32 bytes")?;
+        let secondary_secret = KeyBytes32::try_new(secondary_key.expose_secret().to_vec()).context("secondary key must be 32 bytes")?;
+        let primary_cipher = AesGcm::new(&primary_secret.into_secret()).context("failed to initialize primary cipher")?;
+        let secondary_cipher = ChaCha20Poly1305::new(&secondary_secret.into_secret()).context("failed to initialize secondary cipher")?;
 
-        let first_cipher = AesGcm::new(&first_secret.into_secret()).context("failed to initialize first cipher")?;
-        let second_cipher = ChaCha20Poly1305::new(&second_secret.into_secret()).context("failed to initialize second cipher")?;
-
-        Ok(Self { first_cipher, second_cipher })
+        Ok(Self { primary_cipher, secondary_cipher })
     }
 
     pub fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
         match algo {
-            CipherAlgorithm::Aes256Gcm => self.first_cipher.encrypt(plaintext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.second_cipher.encrypt(plaintext),
+            CipherAlgorithm::Aes256Gcm => self.primary_cipher.encrypt(plaintext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.secondary_cipher.encrypt(plaintext),
         }
     }
 
     pub fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
         match algo {
-            CipherAlgorithm::Aes256Gcm => self.first_cipher.decrypt(ciphertext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.second_cipher.decrypt(ciphertext),
+            CipherAlgorithm::Aes256Gcm => self.primary_cipher.decrypt(ciphertext),
+            CipherAlgorithm::ChaCha20Poly1305 => self.secondary_cipher.decrypt(ciphertext),
         }
     }
 }

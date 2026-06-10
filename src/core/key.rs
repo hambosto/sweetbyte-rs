@@ -8,20 +8,20 @@ use crate::secret::Secret;
 use crate::validation::KeyBytes32;
 
 pub struct DerivedKeys {
-    pub first_key: Secret,
-    pub second_key: Secret,
-    pub third_key: Secret,
+    pub primary_key: Secret,
+    pub secondary_key: Secret,
+    pub signer_key: Secret,
 }
 
-pub struct Key(Secret);
+struct KeyLen(usize);
 
-struct HkdfKeyLen(usize);
-
-impl KeyType for HkdfKeyLen {
+impl KeyType for KeyLen {
     fn len(&self) -> usize {
         self.0
     }
 }
+
+pub struct Key(Secret);
 
 impl Key {
     pub fn new(key: &Secret) -> Result<Self> {
@@ -34,15 +34,15 @@ impl Key {
         let master = self.stretch(salt)?;
         let prk = Salt::new(HKDF_SHA256, salt).extract(master.expose_secret());
 
-        let mut first_key = Secret::new(vec![0u8; KEY_LEN]);
-        let mut second_key = Secret::new(vec![0u8; KEY_LEN]);
-        let mut third_key = Secret::new(vec![0u8; KEY_LEN]);
+        let mut primary_key = Secret::new(vec![0u8; KEY_LEN]);
+        let mut secondary_key = Secret::new(vec![0u8; KEY_LEN]);
+        let mut signer_key = Secret::new(vec![0u8; KEY_LEN]);
 
-        expand_key_into(&prk, &KDF_INFO[0], first_key.expose_secret_mut())?;
-        expand_key_into(&prk, &KDF_INFO[1], second_key.expose_secret_mut())?;
-        expand_key_into(&prk, &KDF_INFO[2], third_key.expose_secret_mut())?;
+        expand_key_into(&prk, &KDF_INFO[0], primary_key.expose_secret_mut())?;
+        expand_key_into(&prk, &KDF_INFO[1], secondary_key.expose_secret_mut())?;
+        expand_key_into(&prk, &KDF_INFO[2], signer_key.expose_secret_mut())?;
 
-        Ok(DerivedKeys { first_key, second_key, third_key })
+        Ok(DerivedKeys { primary_key, secondary_key, signer_key })
     }
 
     fn stretch(&self, salt: &[u8]) -> Result<Secret> {
@@ -55,19 +55,18 @@ impl Key {
         Ok(Secret::new(buffer))
     }
 
-    pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
+    pub fn generate_salt(size: usize) -> Result<Secret> {
         let mut buffer = vec![0u8; size];
 
         SystemRandom::new().fill(&mut buffer).context("failed to generate salt")?;
 
-        Ok(buffer)
+        Ok(Secret::new(buffer))
     }
 }
 
 fn expand_key_into(prk: &Prk, info: &[u8], output: &mut [u8]) -> Result<()> {
     let kdf_info = &[info];
-    let okm = prk.expand(kdf_info, HkdfKeyLen(output.len())).context("failed to expand hkdf key")?;
-
+    let okm = prk.expand(kdf_info, KeyLen(output.len())).context("failed to expand hkdf key")?;
     okm.fill(output).context("failed to fill hkdf")?;
 
     Ok(())

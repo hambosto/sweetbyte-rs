@@ -68,13 +68,13 @@ impl App {
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
         let key = Key::new(secret)?;
-        let derived_keys = key.derive_keys(&salt)?;
+        let derived_keys = key.derive_keys(salt.expose_secret())?;
 
         let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
-        let serialized = header.serialize(&salt, &derived_keys.third_key).context("failed to serialize header")?;
+        let serialized = header.serialize(salt.expose_secret(), &derived_keys.signer_key).context("failed to serialize header")?;
         writer.write_all(&serialized).await.context("failed to write header")?;
 
-        let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Encryption)?;
+        let engine = Engine::new(&derived_keys.primary_key, &derived_keys.secondary_key, Processing::Encryption)?;
         engine.process(reader, writer, metadata.size).await?;
 
         Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
@@ -86,12 +86,12 @@ impl App {
         let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to deserialize header")?;
 
         let key = Key::new(secret)?;
-        let derived_keys = key.derive_keys(header.salt())?;
-        if !header.verify(&derived_keys.third_key)? {
+        let derived_keys = key.derive_keys(header.salt().expose_secret())?;
+        if !header.verify(&derived_keys.signer_key)? {
             anyhow::bail!("incorrect password");
         }
 
-        let engine = Engine::new(&derived_keys.first_key, &derived_keys.second_key, Processing::Decryption)?;
+        let engine = Engine::new(&derived_keys.primary_key, &derived_keys.secondary_key, Processing::Decryption)?;
         engine.process(reader, writer, header.file_size()).await?;
 
         if !target.validate_hash(header.file_hash())? {

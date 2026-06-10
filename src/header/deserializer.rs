@@ -37,8 +37,8 @@ impl Deserializer {
         self.metadata.hash()
     }
 
-    pub fn salt(&self) -> &[u8] {
-        self.header.salt.expose_secret()
+    pub fn salt(&self) -> &Secret {
+        &self.header.salt
     }
 
     pub fn verify(&self, signer_key: &Secret) -> Result<bool> {
