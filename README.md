@@ -4,7 +4,7 @@
 
 **File encryption that doesn't suck.**
 
-[![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/build.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
+[![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/check.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 </div>
@@ -79,12 +79,12 @@ Each encrypted file starts with a compressed and Reed-Solomon encoded header. Th
 
 The section itself (before RS encoding) contains:
 
-| Field | Size | Notes |
-|-------|------|-------|
-| Salt | 32 bytes | Random, for Argon2id |
-| Parameters | variable | Magic `0xDEADBEEF` + version `0x0002` |
-| Metadata | variable | Original filename, size, BLAKE3 hash |
-| MAC | 32 bytes | HMAC-SHA256 of (salt + parameters + metadata) |
+| Field      | Size     | Notes                                         |
+| ---------- | -------- | --------------------------------------------- |
+| Salt       | 32 bytes | Random, for Argon2id                          |
+| Parameters | variable | Magic `0xDEADBEEF` + version `0x0002`         |
+| Metadata   | variable | Original filename, size, BLAKE3 hash          |
+| MAC        | 32 bytes | HMAC-SHA256 of (salt + parameters + metadata) |
 
 The entire section is compressed with zstd and Reed-Solomon encoded (4+10 shards) before writing. Deserialization fails fast if magic bytes or version don't match. The HMAC uses constant-time comparison.
 

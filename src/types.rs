@@ -13,6 +13,7 @@ impl Processing {
         <Self as IntoEnumIterator>::iter()
     }
 
+    #[inline]
     pub fn label(self) -> &'static str {
         match self {
             Self::Encryption => "Encrypting...",
@@ -39,6 +40,7 @@ pub struct TaskResult {
 }
 
 impl TaskResult {
+    #[inline]
     pub fn new(index: u64, data: Vec<u8>, size: usize) -> Self {
         Self { index, data, size }
     }

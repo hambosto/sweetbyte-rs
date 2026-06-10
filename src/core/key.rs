@@ -1,15 +1,11 @@
 use anyhow::{Context, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
-use hkdf::Hkdf;
-use rand::TryRng;
-use rand::rngs::SysRng;
-use sha2::Sha256;
+use aws_lc_rs::hkdf::{KeyType, Prk, Salt, HKDF_SHA256};
+use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
 use crate::secret::Secret;
 use crate::validation::KeyBytes32;
-
-type HkdfSha256 = Hkdf<Sha256>;
 
 pub struct DerivedKeys {
     pub first_key: Secret,
@@ -17,46 +13,57 @@ pub struct DerivedKeys {
     pub third_key: Secret,
 }
 
-pub struct Key {
-    key: Secret,
+pub struct Key(Secret);
+
+struct HkdfKeyLen(usize);
+
+impl KeyType for HkdfKeyLen {
+    fn len(&self) -> usize {
+        self.0
+    }
 }
 
 impl Key {
     pub fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be exactly 32 bytes")?;
 
-        Ok(Self { key: key.into_secret() })
+        Ok(Self(inner.into_secret()))
     }
 
     pub fn derive_keys(&self, salt: &[u8]) -> Result<DerivedKeys> {
-        let master_key = self.derive_master_key(salt).context("failed to derive master key")?;
-        let hkdf = HkdfSha256::new(Some(salt), master_key.expose_secret());
+        let master = self.stretch(salt)?;
+        let prk = Salt::new(HKDF_SHA256, salt).extract(master.expose_secret());
+        let keys: Vec<Secret> = KDF_INFO.iter().map(|info| expand_key(&prk, info)).collect::<Result<Vec<Secret>>>()?;
+        let [first_key, second_key, third_key] = keys.try_into().map_err(|keys: Vec<Secret>| anyhow::anyhow!("expected 3 keys, got {}", keys.len()))?;
 
-        let expand_key = |info: &[u8]| -> Result<Secret> {
-            let mut buffer = vec![0u8; KEY_LEN];
-            hkdf.expand(info, &mut buffer).context("failed to expand hkdf key")?;
-
-            Ok(Secret::new(buffer))
-        };
-
-        Ok(DerivedKeys { first_key: expand_key(&KDF_INFO[0])?, second_key: expand_key(&KDF_INFO[1])?, third_key: expand_key(&KDF_INFO[2])? })
+        Ok(DerivedKeys { first_key, second_key, third_key })
     }
 
-    fn derive_master_key(&self, salt: &[u8]) -> Result<Secret> {
+    fn stretch(&self, salt: &[u8]) -> Result<Secret> {
         let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(ARGON2_KEY_LEN)).context("invalid argon2 parameters")?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
         let mut buffer = vec![0u8; ARGON2_KEY_LEN];
-        argon2.hash_password_into(self.key.expose_secret(), salt, &mut buffer).context("failed to stretch key with argon2")?;
+        argon2.hash_password_into(self.0.expose_secret(), salt, &mut buffer).context("failed to stretch key with argon2")?;
 
         Ok(Secret::new(buffer))
     }
 
     pub fn generate_salt(size: usize) -> Result<Vec<u8>> {
-        let mut bytes = vec![0u8; size];
+        let mut buffer = vec![0u8; size];
 
-        SysRng.try_fill_bytes(&mut bytes).context("failed to generate salt")?;
+        SystemRandom::new().fill(&mut buffer).context("failed to generate salt")?;
 
-        Ok(bytes)
+        Ok(buffer)
     }
+}
+
+fn expand_key(prk: &Prk, info: &[u8]) -> Result<Secret> {
+    let kdf_info = &[info];
+    let okm = prk.expand(kdf_info, HkdfKeyLen(KEY_LEN)).context("failed to expand hkdf key")?;
+
+    let mut buffer = vec![0u8; KEY_LEN];
+    okm.fill(&mut buffer).context("failed to fill hkdf")?;
+
+    Ok(Secret::new(buffer))
 }

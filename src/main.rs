@@ -63,7 +63,7 @@ impl App {
     async fn encrypt(&self, source: &Files, target: &Files, secret: &Secret) -> Result<FileHeader> {
         let mut writer = target.writer().await.context("failed to create target file")?;
         let reader = source.reader().await.context("failed to open source file")?;
-        let metadata = source.file_metadata().await.context("failed to read metadata")?;
+        let metadata = source.metadata().await.context("failed to read metadata")?;
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
         let key = Key::new(secret)?;
@@ -103,7 +103,6 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use sha2::{Digest, Sha256};
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -118,7 +117,7 @@ mod tests {
 
         fs::write(&source_path, b"test content").await.unwrap();
 
-        let secret = Secret::new(Sha256::digest("password".as_bytes()).to_vec());
+        let secret = Secret::new(aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, b"password").as_ref().to_vec());
         let app = App::new(Input::new(PASSWORD_LEN, true), Display::new(NAME_MAX_LEN));
 
         let source = Files::new(&source_path);

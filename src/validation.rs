@@ -20,7 +20,7 @@ pub struct Version(u16);
 pub struct NonEmptyBytes(Vec<u8>);
 
 #[nutype::nutype(validate(predicate = |b| b.len() == KEY_LEN))]
-pub struct KeyBytes32(Vec<u8>);
+pub(crate) struct KeyBytes32(Vec<u8>);
 
 impl KeyBytes32 {
     pub fn into_secret(self) -> Secret {

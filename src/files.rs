@@ -21,6 +21,7 @@ pub struct Files {
 }
 
 impl Files {
+    #[must_use]
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
@@ -53,18 +54,12 @@ impl Files {
     }
 
     pub fn is_eligible(&self, processing: Processing) -> bool {
-        if self.is_hidden() {
-            return false;
-        }
-
-        if self.is_excluded() {
-            return false;
-        }
-
-        match processing {
-            Processing::Encryption => !self.is_encrypted(),
-            Processing::Decryption => self.is_encrypted(),
-        }
+        !self.is_hidden()
+            && !self.is_excluded()
+            && match processing {
+                Processing::Encryption => !self.is_encrypted(),
+                Processing::Decryption => self.is_encrypted(),
+            }
     }
 
     pub fn output_path(&self, processing: Processing) -> PathBuf {
@@ -75,7 +70,7 @@ impl Files {
     }
 
     pub async fn reader(&self) -> Result<BufReader<File>> {
-        tokio::fs::File::open(&self.path).await.map(BufReader::new).context("failed to open file")
+        File::open(&self.path).await.map(BufReader::new).context("failed to open file")
     }
 
     pub async fn writer(&self) -> Result<BufWriter<File>> {
@@ -113,26 +108,29 @@ impl Files {
     }
 
     pub fn validate_hash(&self, expected: &[u8]) -> Result<bool> {
-        let actual = self.hash().context("failed to compute hash for validation")?;
+        let actual = self.hash()?;
 
         Ok(bool::from(actual.as_slice().ct_eq(expected)))
     }
 
-    pub async fn file_metadata(&self) -> Result<FileMetadata> {
-        let name = self.name().to_owned();
-        let size = self.size().await?;
-        let hash = self.hash()?;
-
-        Ok(FileMetadata { name, size, hash })
+    pub async fn metadata(&self) -> Result<FileMetadata> {
+        Ok(FileMetadata { name: self.name().to_owned(), size: self.size().await?, hash: self.hash()? })
     }
 
     pub fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {
-        WalkDir::new(root)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-            .map(|e| Self::new(e.into_path()))
-            .filter(|f| f.is_eligible(processing))
-            .collect()
+        let mut files = Vec::new();
+
+        for entry in WalkDir::new(root).into_iter().flatten() {
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let file = Self::new(entry.into_path());
+
+            if file.is_eligible(processing) {
+                files.push(file);
+            }
+        }
+
+        files
     }
 }

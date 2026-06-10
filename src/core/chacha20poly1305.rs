@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use ring::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
-use ring::rand::{SecureRandom, SystemRandom};
+use aws_lc_rs::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
+use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::secret::Secret;
 use crate::validation::{KeyBytes32, NonEmptyBytes};
