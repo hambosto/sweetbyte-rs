@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use aws_lc_rs::hmac::{Context as Ctx, Key, HMAC_SHA256};
+use aws_lc_rs::hmac::{Context as Ctx, HMAC_SHA256, Key};
 use subtle::ConstantTimeEq;
 
 use crate::secret::Secret;
@@ -8,6 +8,7 @@ use crate::validation::KeyBytes32;
 pub struct Signer {
     key: Secret,
 }
+
 impl Signer {
     pub fn new(key: &Secret) -> Result<Self> {
         let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;

@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 
 use crate::validation::NonEmptyBytes;
 
+#[non_exhaustive]
 #[derive(Default)]
 pub enum CompressionLevel {
     Fast,

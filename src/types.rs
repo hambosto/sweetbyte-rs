@@ -1,5 +1,6 @@
 use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
+#[non_exhaustive]
 #[derive(Display, Debug, Clone, Copy, Eq, PartialEq, EnumIter, IntoStaticStr)]
 pub enum Processing {
     #[strum(to_string = "Encrypt")]

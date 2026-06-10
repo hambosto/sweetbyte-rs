@@ -13,6 +13,7 @@ pub use signer::Signer;
 use crate::secret::Secret;
 use crate::validation::KeyBytes32;
 
+#[non_exhaustive]
 pub enum CipherAlgorithm {
     Aes256Gcm,
     ChaCha20Poly1305,

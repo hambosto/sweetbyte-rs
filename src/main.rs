@@ -47,6 +47,7 @@ impl App {
         let header = match processing {
             Processing::Encryption => self.encrypt(&source, &target, &secret).await?,
             Processing::Decryption => self.decrypt(&source, &target, &secret).await?,
+            _ => anyhow::bail!("unsupported processing mode"),
         };
 
         self.display.success(processing, &target)?;

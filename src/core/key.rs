@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
-use aws_lc_rs::hkdf::{KeyType, Prk, Salt, HKDF_SHA256};
+use aws_lc_rs::hkdf::{HKDF_SHA256, KeyType, Prk, Salt};
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
@@ -33,8 +33,14 @@ impl Key {
     pub fn derive_keys(&self, salt: &[u8]) -> Result<DerivedKeys> {
         let master = self.stretch(salt)?;
         let prk = Salt::new(HKDF_SHA256, salt).extract(master.expose_secret());
-        let keys: Vec<Secret> = KDF_INFO.iter().map(|info| expand_key(&prk, info)).collect::<Result<Vec<Secret>>>()?;
-        let [first_key, second_key, third_key] = keys.try_into().map_err(|keys: Vec<Secret>| anyhow::anyhow!("expected 3 keys, got {}", keys.len()))?;
+
+        let mut first_key = Secret::new(vec![0u8; KEY_LEN]);
+        let mut second_key = Secret::new(vec![0u8; KEY_LEN]);
+        let mut third_key = Secret::new(vec![0u8; KEY_LEN]);
+
+        expand_key_into(&prk, &KDF_INFO[0], first_key.expose_secret_mut())?;
+        expand_key_into(&prk, &KDF_INFO[1], second_key.expose_secret_mut())?;
+        expand_key_into(&prk, &KDF_INFO[2], third_key.expose_secret_mut())?;
 
         Ok(DerivedKeys { first_key, second_key, third_key })
     }
@@ -58,12 +64,11 @@ impl Key {
     }
 }
 
-fn expand_key(prk: &Prk, info: &[u8]) -> Result<Secret> {
+fn expand_key_into(prk: &Prk, info: &[u8], output: &mut [u8]) -> Result<()> {
     let kdf_info = &[info];
-    let okm = prk.expand(kdf_info, HkdfKeyLen(KEY_LEN)).context("failed to expand hkdf key")?;
+    let okm = prk.expand(kdf_info, HkdfKeyLen(output.len())).context("failed to expand hkdf key")?;
 
-    let mut buffer = vec![0u8; KEY_LEN];
-    okm.fill(&mut buffer).context("failed to fill hkdf")?;
+    okm.fill(output).context("failed to fill hkdf")?;
 
-    Ok(Secret::new(buffer))
+    Ok(())
 }

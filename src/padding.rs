@@ -6,6 +6,7 @@ use block_padding::{Padding, Pkcs7};
 use crate::validation::NonEmptyBytes;
 
 #[derive(Clone, Copy, Debug, Default)]
+#[non_exhaustive]
 pub enum BlockSize {
     #[default]
     B16,
