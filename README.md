@@ -6,6 +6,8 @@
 
 [![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/check.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/Rust-nightly-orange.svg)](https://www.rust-lang.org/)
+[![Nix](https://img.shields.io/badge/Nix-flake-purple.svg)](https://nixos.org/)
 
 </div>
 
@@ -15,6 +17,23 @@ SweetByte encrypts your files. It does this well.
 
 This is a Rust rewrite of my [original Go version](https://github.com/hambosto/sweetbyte). The Go version works fine, but I wanted something with better memory safety guarantees and cleaner concurrency.
 
+## Table of Contents
+
+- [Why this exists](#why-this-exists)
+- [Not compatible with the Go version](#not-compatible-with-the-go-version)
+- [Getting started](#getting-started)
+- [Usage](#usage)
+- [How it works](#how-it-works)
+  - [Encryption pipeline](#encryption-pipeline)
+  - [The header](#the-header)
+  - [Key derivation](#key-derivation)
+  - [Processing pipeline](#processing-pipeline)
+  - [Reed-Solomon encoding](#reed-solomon-encoding)
+- [Code structure](#code-structure)
+- [Security notes](#security-notes)
+- [Development](#development)
+- [License](#license)
+
 ## Why this exists
 
 Most encryption tools do one thing: encrypt. SweetByte does more:
@@ -22,6 +41,8 @@ Most encryption tools do one thing: encrypt. SweetByte does more:
 - **Cascading encryption.** AES-256-GCM then XChaCha20-Poly1305. An attacker would need to break both ciphers, not just one.
 - **Error correction.** Reed-Solomon encoding (4 data + 10 parity shards) means your encrypted file can survive some bit rot and still decrypt.
 - **Proper key derivation.** Argon2id with 64MB memory cost. Brute-forcing your password won't be practical.
+- **Concurrent processing.** Async pipeline with parallel chunk processing for fast encryption/decryption.
+- **Interactive TUI.** Clean terminal interface with progress bars and visual feedback.
 
 ## Not compatible with the Go version
 
@@ -35,6 +56,18 @@ Files encrypted with the Go version won't work here. The file format changed. If
 nix run github:hambosto/sweetbyte-rs
 ```
 
+Or add as a flake input:
+
+```nix
+{
+  inputs.sweetbyte.url = "github:hambosto/sweetbyte-rs";
+
+  outputs = { self, nixpkgs, sweetbyte, ... }: {
+    # Use sweetbyte.packages.${system}.default
+  };
+}
+```
+
 ### From source
 
 ```sh
@@ -44,6 +77,12 @@ cargo build --release
 ```
 
 Binary ends up at `target/release/sweetbyte-rs`.
+
+### Install to system
+
+```sh
+cargo install --path .
+```
 
 ## Usage
 
@@ -57,7 +96,25 @@ sweetbyte-rs
 
 You'll get prompts for everything. Pick encrypt or decrypt, choose a file, enter your password. Done.
 
+### What happens during encryption
+
+1. You select a file from the current directory (hidden files and certain directories are excluded)
+2. You enter a password (minimum 8 characters)
+3. The file is compressed, padded, double-encrypted, and error-corrected
+4. The encrypted file is saved with a `.swx` extension
+5. You're asked if you want to delete the original file
+
+### What happens during decryption
+
+1. You select a `.swx` file from the current directory
+2. You enter the password used during encryption
+3. The file is error-corrected, double-decrypted, unpadded, and decompressed
+4. The original file is restored with its original name
+5. You're asked if you want to delete the encrypted file
+
 ## How it works
+
+### Encryption pipeline
 
 The encryption pipeline, in order:
 
@@ -128,11 +185,11 @@ CRC32 validates each shard before decoding. Corrupted shards get reconstructed f
 
 ```
 src/
-├── lib.rs                  # Library root, global allocator
+├── lib.rs                  # Library root, global allocator (mimalloc)
 ├── main.rs                 # Entry point, interactive mode, async runtime
 ├── config.rs               # All constants, HKDF info strings
 ├── types.rs                # Processing enum, Task, TaskResult
-├── secret.rs               # Wrapper types for sensitive data
+├── secret.rs               # Wrapper types for sensitive data (zeroize on drop)
 ├── validation.rs           # Validated newtypes (Filename, FileSize, etc.)
 ├── files.rs                # File discovery, BLAKE3 hashing
 ├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
@@ -141,8 +198,8 @@ src/
 │
 ├── core/
 │   ├── mod.rs              # Cipher struct holding both algorithms
-│   ├── aes_gcm.rs          # AES-256-GCM implementation
-│   ├── chacha20poly1305.rs # XChaCha20-Poly1305 implementation
+│   ├── aes_gcm.rs          # AES-256-GCM implementation (aws-lc-rs)
+│   ├── chacha20poly1305.rs # XChaCha20-Poly1305 implementation (aws-lc-rs)
 │   ├── key.rs              # Argon2id + HKDF key derivation
 │   └── signer.rs           # HMAC-SHA256 with constant-time comparison
 │
@@ -150,7 +207,7 @@ src/
 │   ├── mod.rs              # Header module exports
 │   ├── metadata.rs         # Metadata struct (filename, size, hash)
 │   ├── parameters.rs       # Parameters struct (magic, version)
-│   ├── section.rs          # SectionEncoder for RS-encoded header sections
+│   ├── section.rs          # Section pack/unpack for RS-encoded headers
 │   ├── serializer.rs       # Header serialization
 │   └── deserializer.rs     # Header deserialization
 │
@@ -158,8 +215,7 @@ src/
 │   ├── mod.rs              # Engine, sets up the pipeline
 │   ├── reader.rs           # Produces tasks from input file
 │   ├── executor.rs         # Parallel task processing
-│   ├── writer.rs           # Consumes results, writes output
-│   ├── buffer.rs           # Reordering buffer for out-of-order results
+│   ├── writer.rs           # Consumes results, writes output (with reordering buffer)
 │   └── pipeline.rs         # The actual encrypt/decrypt stages
 │
 └── ui/
@@ -179,13 +235,29 @@ src/
 
 ## Development
 
+### Prerequisites
+
+- Rust nightly toolchain
+- Nix (optional, for reproducible builds)
+
+### Commands
+
 ```sh
-cargo fmt
-cargo clippy  # pedantic lint level
-cargo test
+cargo fmt              # Format code
+cargo clippy           # Run clippy (pedantic lint level)
+cargo test             # Run tests
+cargo build --release  # Build optimized binary
 ```
 
-CI runs on Ubuntu via GitHub Actions.
+### CI/CD
+
+GitHub Actions workflows:
+
+- **Code Quality** (`check.yml`): Runs on push/PR to `main`. Verifies formatting, runs clippy, executes tests.
+- **Cachix** (`cachix.yml`): Builds Nix package and pushes to Cachix binary cache after CI passes.
+- **Flake Updates** (`update.yml`): Hourly dependency updates via `DeterminateSystems/update-flake-lock`.
+
+Dependabot is configured for daily Cargo and GitHub Actions updates.
 
 ## License
 
