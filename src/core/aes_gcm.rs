@@ -11,9 +11,9 @@ pub struct AesGcm {
 
 impl AesGcm {
     pub fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: key.into_secret() })
+        Ok(Self { key: inner.into_secret() })
     }
 
     #[inline(always)]

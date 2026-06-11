@@ -11,9 +11,9 @@ pub struct Signer {
 
 impl Signer {
     pub fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 
-        Ok(Self { key: key.into_secret() })
+        Ok(Self { key: inner.into_secret() })
     }
 
     pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {

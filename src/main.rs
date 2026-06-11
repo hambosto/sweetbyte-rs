@@ -68,7 +68,7 @@ impl App {
 
         let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
         let key = Key::new(secret)?;
-        let derived_keys = key.derive_keys(salt.expose_secret())?;
+        let derived_keys = key.derive_keys(&salt)?;
 
         let header = Serializer::new(metadata.name, metadata.size, metadata.hash)?;
         let serialized = header.serialize(salt.expose_secret(), &derived_keys.signer_key).context("failed to serialize header")?;
@@ -86,7 +86,7 @@ impl App {
         let header = Deserializer::deserialize(reader.get_mut()).await.context("failed to deserialize header")?;
 
         let key = Key::new(secret)?;
-        let derived_keys = key.derive_keys(header.salt().expose_secret())?;
+        let derived_keys = key.derive_keys(header.salt())?;
         if !header.verify(&derived_keys.signer_key)? {
             anyhow::bail!("incorrect password");
         }

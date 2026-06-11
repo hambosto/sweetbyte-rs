@@ -133,8 +133,8 @@ impl Files {
             if !entry.file_type().is_file() {
                 continue;
             }
-            let file = Self::new(entry.into_path());
 
+            let file = Self::new(entry.into_path());
             if file.is_eligible(processing) {
                 files.push(file);
             }
