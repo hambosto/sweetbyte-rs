@@ -8,17 +8,17 @@ use tokio::task::JoinSet;
 use crate::engine::pipeline::Pipeline;
 use crate::types::{Task, TaskResult};
 
-pub struct Executor {
+pub(super) struct Executor {
     pipeline: Arc<Pipeline>,
     concurrency: usize,
 }
 
 impl Executor {
-    pub fn new(pipeline: Pipeline, concurrency: usize) -> Self {
+    pub(super) fn new(pipeline: Pipeline, concurrency: usize) -> Self {
         Self { pipeline: Arc::new(pipeline), concurrency }
     }
 
-    pub async fn execute(&self, mut tasks: Receiver<Task>, results: Sender<TaskResult>) -> Result<()> {
+    pub(super) async fn execute(&self, mut tasks: Receiver<Task>, results: Sender<TaskResult>) -> Result<()> {
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
         let mut workers: JoinSet<Result<()>> = JoinSet::new();
 

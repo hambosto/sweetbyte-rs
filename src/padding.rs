@@ -5,9 +5,9 @@ use block_padding::{Padding, Pkcs7};
 
 use crate::validation::NonEmptyBytes;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Default)]
 #[non_exhaustive]
-pub enum BlockSize {
+pub(crate) enum BlockSize {
     #[default]
     B16,
     B32,
@@ -17,7 +17,7 @@ pub enum BlockSize {
 
 impl BlockSize {
     #[inline]
-    pub fn is_valid(self) -> bool {
+    pub(crate) fn is_valid(&self) -> bool {
         matches!(self, Self::B16 | Self::B32 | Self::B64 | Self::B128)
     }
 }
@@ -34,12 +34,12 @@ impl From<BlockSize> for usize {
     }
 }
 
-pub struct Pkcs7Padding {
+pub(crate) struct Pkcs7Padding {
     block_size: BlockSize,
 }
 
 impl Pkcs7Padding {
-    pub fn new(block_size: BlockSize) -> Result<Self> {
+    pub(crate) fn new(block_size: BlockSize) -> Result<Self> {
         if !block_size.is_valid() {
             anyhow::bail!("invalid block size: must be 16, 32, 64, or 128");
         }
@@ -47,7 +47,7 @@ impl Pkcs7Padding {
         Ok(Self { block_size })
     }
 
-    pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         match self.block_size {
@@ -58,7 +58,7 @@ impl Pkcs7Padding {
         }
     }
 
-    pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         match self.block_size {

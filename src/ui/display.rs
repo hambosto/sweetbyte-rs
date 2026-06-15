@@ -7,16 +7,16 @@ use humansize::DECIMAL;
 use crate::files::Files;
 use crate::types::Processing;
 
-pub struct Display {
+pub(crate) struct Display {
     name_len: usize,
 }
 
 impl Display {
-    pub fn new(name_len: usize) -> Self {
+    pub(crate) fn new(name_len: usize) -> Self {
         Self { name_len }
     }
 
-    pub async fn files(&self, items: &[Files]) -> Result<()> {
+    pub(crate) async fn files(&self, items: &[Files]) -> Result<()> {
         if items.is_empty() {
             return cliclack::log::warning("No files found").context("failed to display files");
         }
@@ -41,7 +41,7 @@ impl Display {
         cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("failed to display files")
     }
 
-    pub fn success(&self, processing: Processing, file: &Files) -> Result<()> {
+    pub(crate) fn success(&self, processing: Processing, file: &Files) -> Result<()> {
         let process = match processing {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",
@@ -50,11 +50,11 @@ impl Display {
         cliclack::log::success(format!("File {process} successfully: {}", file.name())).context("failed to display success message")
     }
 
-    pub fn deleted(&self, file: &Files) -> Result<()> {
+    pub(crate) fn deleted(&self, file: &Files) -> Result<()> {
         cliclack::log::success(format!("Source file deleted: {}", file.name())).context("failed to display deletion message")
     }
 
-    pub fn header(&self, file_name: &str, file_size: u64, file_hash: &str) -> Result<()> {
+    pub(crate) fn header(&self, file_name: &str, file_size: u64, file_hash: &str) -> Result<()> {
         let mut table = Table::new();
         table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
 
@@ -66,18 +66,18 @@ impl Display {
         cliclack::note("Header Information", table.to_string()).context("failed to display header")
     }
 
-    pub fn banner(&self) -> Result<()> {
+    pub(crate) fn banner(&self) -> Result<()> {
         let app_name = env!("CARGO_PKG_NAME");
         let version = option_env!("SWEETBYTE_BUILD_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
 
         cliclack::intro(format!("{app_name} {version}")).context("failed to display banner")
     }
 
-    pub fn exit(&self) -> Result<()> {
+    pub(crate) fn exit(&self) -> Result<()> {
         cliclack::outro("Exiting").context("failed to display exit message")
     }
 
-    pub fn clear(&self) -> Result<()> {
+    pub(crate) fn clear(&self) -> Result<()> {
         cliclack::clear_screen().context("failed to clear screen")
     }
 }

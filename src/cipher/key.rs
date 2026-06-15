@@ -7,10 +7,10 @@ use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST,
 use crate::secret::Secret;
 use crate::validation::KeyBytes32;
 
-pub struct DerivedKeys {
-    pub primary_key: Secret,
-    pub secondary_key: Secret,
-    pub signer_key: Secret,
+pub(crate) struct DerivedKeys {
+    pub(crate) primary_key: Secret,
+    pub(crate) secondary_key: Secret,
+    pub(crate) signer_key: Secret,
 }
 
 struct KeyLen(usize);
@@ -21,18 +21,18 @@ impl KeyType for KeyLen {
     }
 }
 
-pub struct Key {
+pub(crate) struct Key {
     key: Secret,
 }
 
 impl Key {
-    pub fn new(key: &Secret) -> Result<Self> {
+    pub(crate) fn new(key: &Secret) -> Result<Self> {
         let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be exactly 32 bytes")?;
 
         Ok(Self { key: inner.into_secret() })
     }
 
-    pub fn derive_keys(&self, salt: &Secret) -> Result<DerivedKeys> {
+    pub(crate) fn derive_keys(&self, salt: &Secret) -> Result<DerivedKeys> {
         let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(ARGON2_KEY_LEN)).context("invalid argon2 parameters")?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
@@ -59,7 +59,7 @@ impl Key {
         Ok(DerivedKeys { primary_key, secondary_key, signer_key })
     }
 
-    pub fn generate_salt(size: usize) -> Result<Secret> {
+    pub(crate) fn generate_salt(size: usize) -> Result<Secret> {
         let mut buffer = vec![0u8; size];
 
         SystemRandom::new().fill(&mut buffer).context("failed to generate salt")?;

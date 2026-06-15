@@ -1,14 +1,13 @@
 use anyhow::{Context, Result};
 
+use crate::cipher::{Cipher, CipherAlgorithm};
 use crate::compression::{CompressionLevel, Compressor};
-use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
-use crate::core::{Cipher, CipherAlgorithm};
 use crate::encoding::Encoding;
 use crate::padding::{BlockSize, Pkcs7Padding};
 use crate::secret::Secret;
 use crate::types::{Processing, Task, TaskResult};
 
-pub struct Pipeline {
+pub(super) struct Pipeline {
     cipher: Cipher,
     encoder: Encoding,
     compressor: Compressor,
@@ -17,17 +16,19 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing) -> Result<Self> {
+    pub(super) fn new(
+        primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: CompressionLevel, block_size: BlockSize, original_count: usize, recovery_count: usize,
+    ) -> Result<Self> {
         let cipher = Cipher::new(primary_key, secondary_key).context("failed to initialize cipher")?;
-        let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize encoder")?;
-        let compressor = Compressor::new(CompressionLevel::Fast).context("failed to initialize compressor")?;
-        let padding = Pkcs7Padding::new(BlockSize::B128).context("failed to initialize padding")?;
+        let encoder = Encoding::new(original_count, recovery_count).context("failed to initialize encoder")?;
+        let compressor = Compressor::new(compression_level).context("failed to initialize compressor")?;
+        let padding = Pkcs7Padding::new(block_size).context("failed to initialize padding")?;
 
         Ok(Self { cipher, encoder, compressor, padding, processing })
     }
 
     #[inline]
-    pub fn process(&self, task: &Task) -> Result<TaskResult> {
+    pub(super) fn process(&self, task: &Task) -> Result<TaskResult> {
         match self.processing {
             Processing::Encryption => self.encrypt_pipeline(task),
             Processing::Decryption => self.decrypt_pipeline(task),

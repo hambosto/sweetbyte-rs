@@ -7,16 +7,16 @@ use tokio::sync::mpsc::Receiver;
 use crate::types::{Processing, TaskResult};
 use crate::ui::Progress;
 
-pub struct Writer {
+pub(super) struct Writer {
     processing: Processing,
 }
 
 impl Writer {
-    pub fn new(processing: Processing) -> Self {
+    pub(super) fn new(processing: Processing) -> Self {
         Self { processing }
     }
 
-    pub async fn write_all<W: AsyncWrite + Unpin>(&self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
+    pub(super) async fn write_all<W: AsyncWrite + Unpin>(&self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
         let mut index = 0u64;
         let mut pending = HashMap::<u64, TaskResult>::new();
         let mut writer = BufWriter::new(output);

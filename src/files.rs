@@ -10,50 +10,50 @@ use walkdir::WalkDir;
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::types::Processing;
 
-pub struct FileMetadata {
-    pub name: String,
-    pub size: u64,
-    pub hash: Vec<u8>,
+pub(crate) struct FileMetadata {
+    pub(crate) name: String,
+    pub(crate) size: u64,
+    pub(crate) hash: Vec<u8>,
 }
 
-pub struct Files {
+pub(crate) struct Files {
     path: PathBuf,
 }
 
 impl Files {
     #[inline]
     #[must_use]
-    pub fn new(path: impl Into<PathBuf>) -> Self {
+    pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
 
     #[inline]
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 
     #[inline]
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         self.path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
     }
 
     #[inline]
-    pub fn exists(&self) -> bool {
+    pub(crate) fn exists(&self) -> bool {
         self.path.exists()
     }
 
     #[inline]
-    pub fn is_encrypted(&self) -> bool {
+    pub(crate) fn is_encrypted(&self) -> bool {
         self.path.extension().and_then(|e| e.to_str()).is_some_and(|e| e == FILE_EXTENSION)
     }
 
     #[inline]
-    pub fn is_hidden(&self) -> bool {
+    pub(crate) fn is_hidden(&self) -> bool {
         self.path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.'))
     }
 
     #[inline]
-    pub fn is_excluded(&self) -> bool {
+    pub(crate) fn is_excluded(&self) -> bool {
         self.path
             .iter()
             .filter_map(|c| c.to_str())
@@ -61,7 +61,7 @@ impl Files {
     }
 
     #[inline]
-    pub fn is_eligible(&self, processing: Processing) -> bool {
+    pub(crate) fn is_eligible(&self, processing: Processing) -> bool {
         !self.is_hidden()
             && !self.is_excluded()
             && match processing {
@@ -71,18 +71,18 @@ impl Files {
     }
 
     #[inline]
-    pub fn output_path(&self, processing: Processing) -> PathBuf {
+    pub(crate) fn output_path(&self, processing: Processing) -> PathBuf {
         match processing {
             Processing::Encryption => self.path.with_added_extension(FILE_EXTENSION),
             Processing::Decryption => self.path.with_extension(""),
         }
     }
 
-    pub async fn reader(&self) -> Result<BufReader<File>> {
+    pub(crate) async fn reader(&self) -> Result<BufReader<File>> {
         File::open(&self.path).await.map(BufReader::new).context("failed to open file")
     }
 
-    pub async fn writer(&self) -> Result<BufWriter<File>> {
+    pub(crate) async fn writer(&self) -> Result<BufWriter<File>> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
             tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
         }
@@ -97,7 +97,7 @@ impl Files {
             .context("failed to create file")
     }
 
-    pub async fn delete(&self) -> Result<()> {
+    pub(crate) async fn delete(&self) -> Result<()> {
         if !self.exists() {
             anyhow::bail!("file does not exist: {}", self.path.display());
         }
@@ -105,28 +105,28 @@ impl Files {
         tokio::fs::remove_file(&self.path).await.context("failed to delete file")
     }
 
-    pub async fn size(&self) -> Result<u64> {
+    pub(crate) async fn size(&self) -> Result<u64> {
         tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to read metadata")
     }
 
-    pub fn hash(&self) -> Result<Vec<u8>> {
+    pub(crate) fn hash(&self) -> Result<Vec<u8>> {
         let mut hasher = Hasher::new();
         hasher.update_mmap_rayon(&self.path).context("failed to memory-map file for hashing")?;
 
         Ok(hasher.finalize().as_bytes().to_vec())
     }
 
-    pub fn validate_hash(&self, expected: &[u8]) -> Result<bool> {
+    pub(crate) fn validate_hash(&self, expected: &[u8]) -> Result<bool> {
         let actual = self.hash()?;
 
         Ok(bool::from(actual.as_slice().ct_eq(expected)))
     }
 
-    pub async fn metadata(&self) -> Result<FileMetadata> {
+    pub(crate) async fn metadata(&self) -> Result<FileMetadata> {
         Ok(FileMetadata { name: self.name().to_owned(), size: self.size().await?, hash: self.hash()? })
     }
 
-    pub fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {
+    pub(crate) fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {
         let mut files = Vec::new();
 
         for entry in WalkDir::new(root).into_iter().flatten() {

@@ -4,7 +4,7 @@ use crate::validation::NonEmptyBytes;
 
 #[non_exhaustive]
 #[derive(Default)]
-pub enum CompressionLevel {
+pub(crate) enum CompressionLevel {
     Fast,
     #[default]
     Default,
@@ -14,7 +14,7 @@ pub enum CompressionLevel {
 
 impl CompressionLevel {
     #[inline]
-    pub fn is_valid(&self) -> bool {
+    pub(crate) fn is_valid(&self) -> bool {
         matches!(self, Self::Fast | Self::Default | Self::Good | Self::Best)
     }
 }
@@ -31,12 +31,12 @@ impl From<CompressionLevel> for i32 {
     }
 }
 
-pub struct Compressor {
+pub(crate) struct Compressor {
     level: i32,
 }
 
 impl Compressor {
-    pub fn new(level: CompressionLevel) -> Result<Self> {
+    pub(crate) fn new(level: CompressionLevel) -> Result<Self> {
         if !level.is_valid() {
             anyhow::bail!("invalid compression level: must be Fast, Default, Good, or Best");
         }
@@ -44,13 +44,13 @@ impl Compressor {
         Ok(Self { level: i32::from(level) })
     }
 
-    pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
         let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         zstd::stream::encode_all(data.as_ref().as_slice(), self.level).context("failed to compress")
     }
 
-    pub fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
         let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         zstd::stream::decode_all(data.as_ref().as_slice()).context("failed to decompress")
