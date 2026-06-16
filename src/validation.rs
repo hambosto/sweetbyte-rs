@@ -23,7 +23,6 @@ pub(crate) struct NonEmptyBytes(Vec<u8>);
 pub(crate) struct KeyBytes32(Vec<u8>);
 
 impl KeyBytes32 {
-    #[inline]
     pub(crate) fn into_secret(self) -> Secret {
         Secret::new(self.into_inner())
     }

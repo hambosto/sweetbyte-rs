@@ -14,7 +14,6 @@ impl Progress {
         Self { bar }
     }
 
-    #[inline]
     pub(crate) fn add(&self, delta: u64) {
         self.bar.inc(delta);
     }

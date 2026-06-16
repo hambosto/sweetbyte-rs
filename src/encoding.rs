@@ -21,6 +21,7 @@ impl Encoding {
         Ok(Self { original_count, recovery_count, total_count })
     }
 
+    #[inline]
     pub(crate) fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let shard_size = data.len().div_ceil(self.original_count).next_multiple_of(MIN).max(MIN);
 
@@ -42,6 +43,7 @@ impl Encoding {
         Ok(result)
     }
 
+    #[inline]
     pub(crate) fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let (len_bytes, shard_bytes) = data.split_at_checked(LEN).context("data too short")?;
         let len_bytes: [u8; LEN] = len_bytes.try_into().context("invalid header length")?;

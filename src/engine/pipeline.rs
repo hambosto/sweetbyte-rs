@@ -35,7 +35,7 @@ impl Pipeline {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn encrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
         self.compressor
             .compress(&task.data)
@@ -49,7 +49,7 @@ impl Pipeline {
             })
     }
 
-    #[inline(always)]
+    #[inline]
     fn decrypt_pipeline(&self, task: &Task) -> Result<TaskResult> {
         self.encoder
             .decode(&task.data)

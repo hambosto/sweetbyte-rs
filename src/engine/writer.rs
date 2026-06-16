@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::{Context, Result};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
@@ -18,13 +16,25 @@ impl Writer {
 
     pub(super) async fn write_all<W: AsyncWrite + Unpin>(&self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
         let mut index = 0u64;
-        let mut pending = HashMap::<u64, TaskResult>::new();
+        let mut pending: Vec<Option<TaskResult>> = Vec::new();
         let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
-            pending.insert(result.index, result);
+            let idx = usize::try_from(result.index).context("chunk index overflow")?;
 
-            while let Some(result) = pending.remove(&index) {
+            if idx >= pending.len() {
+                pending.resize_with(idx.saturating_add(1), || None);
+            }
+
+            if let Some(slot) = pending.get_mut(idx) {
+                *slot = Some(result);
+            }
+
+            while let Ok(idx) = usize::try_from(index) {
+                let Some(result) = pending.get_mut(idx).and_then(|slot| slot.take()) else {
+                    break;
+                };
+
                 self.write_result(&mut writer, &result, progress).await?;
                 index = index.saturating_add(1);
             }

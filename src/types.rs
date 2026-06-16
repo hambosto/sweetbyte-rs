@@ -10,12 +10,10 @@ pub(crate) enum Processing {
 }
 
 impl Processing {
-    #[inline]
     pub(crate) fn iter() -> impl Iterator<Item = Self> {
         <Self as IntoEnumIterator>::iter()
     }
 
-    #[inline]
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Encryption => "Encrypting...",
@@ -42,7 +40,6 @@ pub(crate) struct TaskResult {
 }
 
 impl TaskResult {
-    #[inline]
     pub(crate) fn new(index: u64, data: Vec<u8>, size: usize) -> Self {
         Self { index, data, size }
     }

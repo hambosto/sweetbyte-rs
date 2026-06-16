@@ -21,38 +21,31 @@ pub(crate) struct Files {
 }
 
 impl Files {
-    #[inline]
     #[must_use]
     pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
 
-    #[inline]
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 
-    #[inline]
     pub(crate) fn name(&self) -> &str {
         self.path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
     }
 
-    #[inline]
     pub(crate) fn exists(&self) -> bool {
         self.path.exists()
     }
 
-    #[inline]
     pub(crate) fn is_encrypted(&self) -> bool {
         self.path.extension().and_then(|e| e.to_str()).is_some_and(|e| e == FILE_EXTENSION)
     }
 
-    #[inline]
     pub(crate) fn is_hidden(&self) -> bool {
         self.path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.'))
     }
 
-    #[inline]
     pub(crate) fn is_excluded(&self) -> bool {
         self.path
             .iter()
@@ -60,7 +53,6 @@ impl Files {
             .any(|part| EXCLUDED_PATTERNS.iter().any(|pattern| fast_glob::glob_match(pattern, part)))
     }
 
-    #[inline]
     pub(crate) fn is_eligible(&self, processing: Processing) -> bool {
         !self.is_hidden()
             && !self.is_excluded()
@@ -70,7 +62,6 @@ impl Files {
             }
     }
 
-    #[inline]
     pub(crate) fn output_path(&self, processing: Processing) -> PathBuf {
         match processing {
             Processing::Encryption => self.path.with_added_extension(FILE_EXTENSION),

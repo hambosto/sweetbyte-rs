@@ -16,34 +16,29 @@ pub(crate) struct ReadHeader {
 }
 
 impl ReadHeader {
-    #[inline]
+    #[must_use]
     pub(crate) async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
         let deserializer = Deserializer::from_reader(reader).await.context("failed to read header")?;
 
         Ok(Self { deserializer })
     }
 
-    #[inline]
     pub(crate) fn name(&self) -> &str {
         self.deserializer.file_name()
     }
 
-    #[inline]
     pub(crate) fn size(&self) -> u64 {
         self.deserializer.file_size()
     }
 
-    #[inline]
     pub(crate) fn hash(&self) -> &[u8] {
         self.deserializer.file_hash()
     }
 
-    #[inline]
     pub(crate) fn salt(&self) -> &Secret {
         self.deserializer.salt()
     }
 
-    #[inline]
     pub(crate) fn verify(&self, signer_key: &Secret) -> Result<bool> {
         self.deserializer.verify(signer_key)
     }
@@ -54,29 +49,25 @@ pub(crate) struct WriteHeader {
 }
 
 impl WriteHeader {
-    #[inline]
+    #[must_use]
     pub(crate) fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
         let serializer = Serializer::new(name, size, hash).context("failed to create header serializer")?;
 
         Ok(Self { serializer })
     }
 
-    #[inline]
     pub(crate) fn name(&self) -> &str {
         self.serializer.file_name()
     }
 
-    #[inline]
     pub(crate) fn size(&self) -> u64 {
         self.serializer.file_size()
     }
 
-    #[inline]
     pub(crate) fn hash(&self) -> &[u8] {
         self.serializer.file_hash()
     }
 
-    #[inline]
     pub(crate) fn serialize(&self, salt: &[u8], signer_key: &Secret) -> Result<Vec<u8>> {
         self.serializer.serialize(salt, signer_key)
     }

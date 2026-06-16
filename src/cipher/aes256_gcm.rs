@@ -16,7 +16,7 @@ impl Aes256Gcm {
         Ok(Self { key: inner.into_secret() })
     }
 
-    #[inline(always)]
+    #[inline]
     pub(super) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         let plaintext = NonEmptyBytes::try_new(plaintext.to_vec()).context("plaintext must not be empty")?;
 
@@ -36,7 +36,7 @@ impl Aes256Gcm {
         Ok(result)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(super) fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let ciphertext = NonEmptyBytes::try_new(ciphertext.to_vec()).context("ciphertext must not be empty")?;
         let (nonce_bytes, body) = ciphertext.as_ref().split_at(NONCE_LEN);
