@@ -11,63 +11,73 @@ use tokio::io::AsyncRead;
 
 use crate::secret::Secret;
 
-pub(crate) struct WriteHeader(Serializer);
-
-impl WriteHeader {
-    #[inline]
-    pub(crate) fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
-        Serializer::new(name, size, hash).context("failed to create header serializer").map(Self)
-    }
-
-    #[inline]
-    pub(crate) fn name(&self) -> &str {
-        self.0.file_name()
-    }
-    #[inline]
-    pub(crate) fn size(&self) -> u64 {
-        self.0.file_size()
-    }
-    #[inline]
-    pub(crate) fn hash(&self) -> &[u8] {
-        self.0.file_hash()
-    }
-
-    #[inline]
-    pub(crate) fn serialize(&self, salt: &[u8], signer_key: &Secret) -> Result<Vec<u8>> {
-        self.0.serialize(salt, signer_key)
-    }
+pub(crate) struct ReadHeader {
+    deserializer: Deserializer,
 }
-
-pub(crate) struct ReadHeader(Deserializer);
 
 impl ReadHeader {
     #[inline]
     pub(crate) async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
-        Deserializer::from_reader(reader).await.context("failed to read header").map(Self)
+        let deserializer = Deserializer::from_reader(reader).await.context("failed to read header")?;
+
+        Ok(Self { deserializer })
     }
 
     #[inline]
     pub(crate) fn name(&self) -> &str {
-        self.0.file_name()
+        self.deserializer.file_name()
     }
 
     #[inline]
     pub(crate) fn size(&self) -> u64 {
-        self.0.file_size()
+        self.deserializer.file_size()
     }
 
     #[inline]
     pub(crate) fn hash(&self) -> &[u8] {
-        self.0.file_hash()
+        self.deserializer.file_hash()
     }
 
     #[inline]
     pub(crate) fn salt(&self) -> &Secret {
-        self.0.salt()
+        self.deserializer.salt()
     }
 
     #[inline]
     pub(crate) fn verify(&self, signer_key: &Secret) -> Result<bool> {
-        self.0.verify(signer_key)
+        self.deserializer.verify(signer_key)
+    }
+}
+
+pub(crate) struct WriteHeader {
+    serializer: Serializer,
+}
+
+impl WriteHeader {
+    #[inline]
+    pub(crate) fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
+        let serializer = Serializer::new(name, size, hash).context("failed to create header serializer")?;
+
+        Ok(Self { serializer })
+    }
+
+    #[inline]
+    pub(crate) fn name(&self) -> &str {
+        self.serializer.file_name()
+    }
+
+    #[inline]
+    pub(crate) fn size(&self) -> u64 {
+        self.serializer.file_size()
+    }
+
+    #[inline]
+    pub(crate) fn hash(&self) -> &[u8] {
+        self.serializer.file_hash()
+    }
+
+    #[inline]
+    pub(crate) fn serialize(&self, salt: &[u8], signer_key: &Secret) -> Result<Vec<u8>> {
+        self.serializer.serialize(salt, signer_key)
     }
 }

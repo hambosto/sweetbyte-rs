@@ -5,11 +5,11 @@ use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 use crate::secret::Secret;
 use crate::validation::{KeyBytes32, NonEmptyBytes};
 
-pub(super) struct AesGcm {
+pub(super) struct Aes256Gcm {
     key: Secret,
 }
 
-impl AesGcm {
+impl Aes256Gcm {
     pub fn new(key: &Secret) -> Result<Self> {
         let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 

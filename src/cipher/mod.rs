@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 
-mod aes_gcm;
+mod aes256_gcm;
 mod chacha20poly1305;
 mod key;
 mod signer;
 
-use aes_gcm::AesGcm;
+use aes256_gcm::Aes256Gcm;
 use chacha20poly1305::ChaCha20Poly1305;
 pub(crate) use key::Key;
 pub(crate) use signer::Signer;
@@ -20,7 +20,7 @@ pub(crate) enum CipherAlgorithm {
 }
 
 pub(crate) struct Cipher {
-    primary_cipher: AesGcm,
+    primary_cipher: Aes256Gcm,
     secondary_cipher: ChaCha20Poly1305,
 }
 
@@ -28,7 +28,7 @@ impl Cipher {
     pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret) -> Result<Self> {
         let primary_secret = KeyBytes32::try_new(primary_key.expose_secret().to_vec()).context("primary key must be 32 bytes")?;
         let secondary_secret = KeyBytes32::try_new(secondary_key.expose_secret().to_vec()).context("secondary key must be 32 bytes")?;
-        let primary_cipher = AesGcm::new(&primary_secret.into_secret()).context("failed to initialize primary cipher")?;
+        let primary_cipher = Aes256Gcm::new(&primary_secret.into_secret()).context("failed to initialize primary cipher")?;
         let secondary_cipher = ChaCha20Poly1305::new(&secondary_secret.into_secret()).context("failed to initialize secondary cipher")?;
 
         Ok(Self { primary_cipher, secondary_cipher })
