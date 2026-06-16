@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{Padding, Pkcs7};
@@ -15,21 +15,16 @@ pub(crate) enum BlockSize {
     B128,
 }
 
-impl BlockSize {
-    #[inline]
-    pub(crate) fn is_valid(&self) -> bool {
-        matches!(self, Self::B16 | Self::B32 | Self::B64 | Self::B128)
-    }
-}
+impl TryFrom<usize> for BlockSize {
+    type Error = Error;
 
-impl From<BlockSize> for usize {
-    #[inline]
-    fn from(block_size: BlockSize) -> Self {
-        match block_size {
-            BlockSize::B16 => 16,
-            BlockSize::B32 => 32,
-            BlockSize::B64 => 64,
-            BlockSize::B128 => 128,
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            16 => Ok(BlockSize::B16),
+            32 => Ok(BlockSize::B32),
+            64 => Ok(BlockSize::B64),
+            128 => Ok(BlockSize::B128),
+            _ => Err(anyhow::anyhow!("invalid block size: {}. must be 16, 32, 64, or 128.", value)),
         }
     }
 }
@@ -40,10 +35,6 @@ pub(crate) struct Pkcs7Padding {
 
 impl Pkcs7Padding {
     pub(crate) fn new(block_size: BlockSize) -> Result<Self> {
-        if !block_size.is_valid() {
-            anyhow::bail!("invalid block size: must be 16, 32, 64, or 128");
-        }
-
         Ok(Self { block_size })
     }
 
