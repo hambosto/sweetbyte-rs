@@ -21,7 +21,6 @@ pub(crate) struct Files {
 }
 
 impl Files {
-    #[must_use]
     pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }

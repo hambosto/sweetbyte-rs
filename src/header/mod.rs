@@ -16,7 +16,6 @@ pub(crate) struct ReadHeader {
 }
 
 impl ReadHeader {
-    #[must_use]
     pub(crate) async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
         let deserializer = Deserializer::from_reader(reader).await.context("failed to read header")?;
 
