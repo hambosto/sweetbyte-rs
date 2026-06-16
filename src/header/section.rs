@@ -58,9 +58,6 @@ impl Section {
         result.extend_from_slice(&compressed_length.to_le_bytes());
         result.extend_from_slice(&compressed_section);
 
-        // let mut result = compressed_length.to_le_bytes().to_vec();
-        // result.extend_from_slice(&compressed_section);
-
         Ok(result)
     }
 
