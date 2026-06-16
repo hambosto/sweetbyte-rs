@@ -17,13 +17,14 @@ rustPlatform.buildRustPackage {
   pname = "sweetbyte-rs";
   version = "unstable-${fmtDate self.lastModifiedDate}-${self.shortRev or "dirty"}";
 
-  src = lib.fileset.toSource {
-    root = ../.;
-    fileset = lib.fileset.unions [
-      ../src
-      ../Cargo.lock
-      ../Cargo.toml
-    ];
+  src = lib.cleanSourceWith {
+    filter =
+      name: _:
+      let
+        baseName = baseNameOf (toString name);
+      in
+      !(lib.hasSuffix ".nix" baseName);
+    src = lib.cleanSource ../.;
   };
 
   cargoLock.lockFile = ../Cargo.lock;

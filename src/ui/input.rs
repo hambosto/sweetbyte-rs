@@ -6,7 +6,7 @@ use crate::files::Files;
 use crate::secret::Secret;
 use crate::types::Processing;
 
-pub struct Input {
+pub(crate) struct Input {
     min_password_len: usize,
     default_overwrite: bool,
     default_delete: bool,
@@ -14,11 +14,11 @@ pub struct Input {
 }
 
 impl Input {
-    pub fn new(min_password_len: usize, filter_mode: bool) -> Self {
+    pub(crate) fn new(min_password_len: usize, filter_mode: bool) -> Self {
         Self { min_password_len, default_overwrite: false, default_delete: false, filter_mode }
     }
 
-    pub fn password(&self, processing: Processing) -> Result<Secret> {
+    pub(crate) fn password(&self, processing: Processing) -> Result<Secret> {
         let min = self.min_password_len;
         let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("password must be at least {min} characters"));
 
@@ -38,7 +38,7 @@ impl Input {
         Ok(Secret::new(aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, password.as_bytes()).as_ref().to_vec()))
     }
 
-    pub fn processing_mode(&self) -> Result<Processing> {
+    pub(crate) fn processing_mode(&self) -> Result<Processing> {
         let mut select = cliclack::select("Select operation");
         for m in Processing::iter() {
             select = select.item(m, m.to_string(), "");
@@ -51,7 +51,7 @@ impl Input {
         select.interact().context("failed to select operation")
     }
 
-    pub fn file(&self, files: &[Files]) -> Result<PathBuf> {
+    pub(crate) fn file(&self, files: &[Files]) -> Result<PathBuf> {
         let mut select = cliclack::select("Select file");
         for f in files {
             select = select.item(f.path().to_path_buf(), f.name(), "");
@@ -64,14 +64,14 @@ impl Input {
         select.interact().context("failed to select file")
     }
 
-    pub fn overwrite(&self, file: &Files) -> Result<bool> {
+    pub(crate) fn overwrite(&self, file: &Files) -> Result<bool> {
         cliclack::confirm(format!("Output file {} already exists. Overwrite?", file.name()))
             .initial_value(self.default_overwrite)
             .interact()
             .context("failed to confirm overwrite")
     }
 
-    pub fn delete(&self, file: &Files, processing: Processing) -> Result<bool> {
+    pub(crate) fn delete(&self, file: &Files, processing: Processing) -> Result<bool> {
         let process = match processing {
             Processing::Encryption => "encrypted",
             Processing::Decryption => "decrypted",

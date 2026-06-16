@@ -1,20 +1,19 @@
 use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox};
 
-pub struct Secret(SecretBox<Vec<u8>>);
+pub(crate) struct Secret {
+    secret: SecretBox<Vec<u8>>,
+}
 
 impl Secret {
-    #[inline]
-    pub fn new(data: Vec<u8>) -> Self {
-        Self(SecretBox::new(Box::new(data)))
+    pub(crate) fn new(secret: Vec<u8>) -> Self {
+        Self { secret: SecretBox::new(Box::new(secret)) }
     }
 
-    #[inline]
-    pub fn expose_secret(&self) -> &[u8] {
-        self.0.expose_secret()
+    pub(crate) fn expose_secret(&self) -> &[u8] {
+        self.secret.expose_secret()
     }
 
-    #[inline]
-    pub fn expose_secret_mut(&mut self) -> &mut [u8] {
-        self.0.expose_secret_mut()
+    pub(crate) fn expose_secret_mut(&mut self) -> &mut [u8] {
+        self.secret.expose_secret_mut()
     }
 }

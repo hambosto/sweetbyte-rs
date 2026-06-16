@@ -5,14 +5,14 @@ const LEN: usize = 4;
 const CRC: usize = 4;
 const MIN: usize = 2;
 
-pub struct Encoding {
+pub(crate) struct Encoding {
     original_count: usize,
     recovery_count: usize,
     total_count: usize,
 }
 
 impl Encoding {
-    pub fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
+    pub(crate) fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
         if !reed_solomon_simd::ReedSolomonEncoder::supports(original_count, recovery_count) {
             anyhow::bail!("unsupported shard config");
         }
@@ -21,7 +21,8 @@ impl Encoding {
         Ok(Self { original_count, recovery_count, total_count })
     }
 
-    pub fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
+    #[inline]
+    pub(crate) fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let shard_size = data.len().div_ceil(self.original_count).next_multiple_of(MIN).max(MIN);
 
         let mut original = vec![0u8; self.original_count.saturating_mul(shard_size)];
@@ -42,7 +43,8 @@ impl Encoding {
         Ok(result)
     }
 
-    pub fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
+    #[inline]
+    pub(crate) fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let (len_bytes, shard_bytes) = data.split_at_checked(LEN).context("data too short")?;
         let len_bytes: [u8; LEN] = len_bytes.try_into().context("invalid header length")?;
         let original_size = u32::from_le_bytes(len_bytes) as usize;

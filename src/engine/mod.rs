@@ -1,10 +1,12 @@
 use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
+use crate::compression::CompressionLevel;
 use crate::engine::executor::Executor;
 use crate::engine::pipeline::Pipeline;
 use crate::engine::reader::Reader;
 use crate::engine::writer::Writer;
+use crate::padding::BlockSize;
 use crate::secret::Secret;
 use crate::types::{Processing, Task, TaskResult};
 use crate::ui::Progress;
@@ -14,19 +16,21 @@ mod pipeline;
 mod reader;
 mod writer;
 
-pub struct Engine {
+pub(crate) struct Engine {
     processing: Processing,
     pipeline: Pipeline,
 }
 
 impl Engine {
-    pub fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing) -> Result<Self> {
-        let pipeline = Pipeline::new(primary_key, secondary_key, processing).context("failed to initialize pipeline")?;
+    pub(crate) fn new(
+        primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: CompressionLevel, block_size: BlockSize, original_count: usize, recovery_count: usize,
+    ) -> Result<Self> {
+        let pipeline = Pipeline::new(primary_key, secondary_key, processing, compression_level, block_size, original_count, recovery_count).context("failed to initialize pipeline")?;
 
         Ok(Self { processing, pipeline })
     }
 
-    pub async fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
+    pub(crate) async fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,

@@ -1,38 +1,34 @@
-pub const FILE_EXTENSION: &str = "swx";
+pub(crate) const FILE_EXTENSION: &str = "swx";
 
-pub const ARGON2_M_COST: u32 = 65536;
+pub(crate) const ARGON2_M_COST: u32 = 65536;
 
-pub const ARGON2_T_COST: u32 = 3;
+pub(crate) const ARGON2_T_COST: u32 = 3;
 
-pub const ARGON2_P_COST: u32 = 4;
+pub(crate) const ARGON2_P_COST: u32 = 4;
 
-pub const ARGON2_KEY_LEN: usize = 64;
+pub(crate) const ARGON2_KEY_LEN: usize = 64;
 
-pub const ARGON2_SALT_LEN: usize = 32;
+pub(crate) const ARGON2_SALT_LEN: usize = 32;
 
-pub const CHACHA_NONCE_SIZE: usize = 24;
+pub(crate) const KEY_LEN: usize = 32;
 
-pub const AES_NONCE_SIZE: usize = 12;
+pub(crate) const ORIGINAL_COUNT: usize = 4;
 
-pub const KEY_LEN: usize = 32;
+pub(crate) const RECOVERY_COUNT: usize = 10;
 
-pub const ORIGINAL_COUNT: usize = 4;
+pub(crate) const CHUNK_SIZE: usize = 256 * 1024;
 
-pub const RECOVERY_COUNT: usize = 10;
+pub(crate) const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
 
-pub const CHUNK_SIZE: usize = 256 * 1024;
+pub(crate) const CURRENT_VERSION: u16 = 0x0002;
 
-pub const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
+pub(crate) const MAX_FILENAME_LEN: usize = 256;
 
-pub const CURRENT_VERSION: u16 = 0x0002;
+pub(crate) const PASSWORD_LEN: usize = 8;
 
-pub const MAX_FILENAME_LEN: usize = 256;
+pub(crate) const NAME_MAX_LEN: usize = 35;
 
-pub const PASSWORD_LEN: usize = 8;
-
-pub const NAME_MAX_LEN: usize = 35;
-
-pub const KDF_INFO: [[u8; 64]; 3] = [
+pub(crate) const KDF_INFO: [[u8; 64]; 3] = [
     [
         0x65, 0x37, 0x34, 0x66, 0x62, 0x38, 0x65, 0x37, 0x65, 0x65, 0x62, 0x37, 0x62, 0x35, 0x32, 0x64, 0x61, 0x31, 0x33, 0x36, 0x66, 0x34, 0x38, 0x39, 0x36, 0x62, 0x30, 0x34, 0x30, 0x36, 0x61, 0x36,
         0x30, 0x35, 0x31, 0x31, 0x62, 0x32, 0x63, 0x64, 0x30, 0x34, 0x32, 0x34, 0x36, 0x33, 0x30, 0x64, 0x35, 0x66, 0x65, 0x36, 0x37, 0x33, 0x39, 0x34, 0x64, 0x66, 0x63, 0x30, 0x64, 0x32, 0x34, 0x64,
@@ -47,4 +43,4 @@ pub const KDF_INFO: [[u8; 64]; 3] = [
     ], // sweetbyte/v1/hkdf-sha256/key-derivation/role=third
 ];
 
-pub const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go", "*.nix", "*.toml", "*.lock"];
+pub(crate) const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go", "*.nix", "*.toml", "*.lock"];

@@ -3,20 +3,20 @@ use aws_lc_rs::hmac::{Context as Ctx, HMAC_SHA256, Key};
 use subtle::ConstantTimeEq;
 
 use crate::secret::Secret;
-use crate::validation::KeyBytes32;
+use crate::validation::KeyBytes;
 
-pub struct Signer {
+pub(crate) struct Signer {
     key: Secret,
 }
 
 impl Signer {
-    pub fn new(key: &Secret) -> Result<Self> {
-        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+    pub(crate) fn new(key: &Secret) -> Result<Self> {
+        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: inner.into_secret() })
+        Ok(Self { key: key.into_secret() })
     }
 
-    pub fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
+    pub(crate) fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
         if parts.is_empty() {
             anyhow::bail!("no input parts provided");
         }
@@ -47,7 +47,7 @@ impl Signer {
         Ok(ctx.sign().as_ref().to_vec())
     }
 
-    pub fn verify_parts(&self, expected: &[u8], parts: &[&[u8]]) -> bool {
+    pub(crate) fn verify_parts(&self, expected: &[u8], parts: &[&[u8]]) -> bool {
         self.compute_parts(parts).map(|computed| expected.ct_eq(&computed).into()).unwrap_or(false)
     }
 }

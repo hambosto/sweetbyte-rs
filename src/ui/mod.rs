@@ -2,6 +2,6 @@ mod display;
 mod input;
 mod progress;
 
-pub use display::Display;
-pub use input::Input;
-pub use progress::Progress;
+pub(crate) use display::Display;
+pub(crate) use input::Input;
+pub(crate) use progress::Progress;

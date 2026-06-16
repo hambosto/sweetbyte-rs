@@ -2,7 +2,7 @@ use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
 #[non_exhaustive]
 #[derive(Display, Debug, Clone, Copy, Eq, PartialEq, EnumIter, IntoStaticStr)]
-pub enum Processing {
+pub(crate) enum Processing {
     #[strum(to_string = "Encrypt")]
     Encryption,
     #[strum(to_string = "Decrypt")]
@@ -10,13 +10,11 @@ pub enum Processing {
 }
 
 impl Processing {
-    #[inline]
-    pub fn iter() -> impl Iterator<Item = Self> {
+    pub(crate) fn iter() -> impl Iterator<Item = Self> {
         <Self as IntoEnumIterator>::iter()
     }
 
-    #[inline]
-    pub fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Encryption => "Encrypting...",
             Self::Decryption => "Decrypting...",
@@ -24,26 +22,25 @@ impl Processing {
     }
 }
 
-pub struct FileHeader {
-    pub name: String,
-    pub size: u64,
-    pub hash: String,
+pub(crate) struct FileHeader {
+    pub(crate) name: String,
+    pub(crate) size: u64,
+    pub(crate) hash: String,
 }
 
-pub struct Task {
-    pub data: Vec<u8>,
-    pub index: u64,
+pub(crate) struct Task {
+    pub(crate) data: Vec<u8>,
+    pub(crate) index: u64,
 }
 
-pub struct TaskResult {
-    pub index: u64,
-    pub data: Vec<u8>,
-    pub size: usize,
+pub(crate) struct TaskResult {
+    pub(crate) index: u64,
+    pub(crate) data: Vec<u8>,
+    pub(crate) size: usize,
 }
 
 impl TaskResult {
-    #[inline]
-    pub fn new(index: u64, data: Vec<u8>, size: usize) -> Self {
+    pub(crate) fn new(index: u64, data: Vec<u8>, size: usize) -> Self {
         Self { index, data, size }
     }
 }

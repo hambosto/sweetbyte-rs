@@ -5,16 +5,16 @@ use tokio::sync::mpsc::Sender;
 use crate::config::CHUNK_SIZE;
 use crate::types::{Processing, Task};
 
-pub struct Reader {
+pub(super) struct Reader {
     processing: Processing,
 }
 
 impl Reader {
-    pub fn new(processing: Processing) -> Self {
+    pub(super) fn new(processing: Processing) -> Self {
         Self { processing }
     }
 
-    pub async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
+    pub(super) async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
         let mut reader = BufReader::new(input);
 
         match self.processing {

@@ -1,13 +1,13 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{Padding, Pkcs7};
 
 use crate::validation::NonEmptyBytes;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Default)]
 #[non_exhaustive]
-pub enum BlockSize {
+pub(crate) enum BlockSize {
     #[default]
     B16,
     B32,
@@ -15,39 +15,31 @@ pub enum BlockSize {
     B128,
 }
 
-impl BlockSize {
-    #[inline]
-    pub fn is_valid(self) -> bool {
-        matches!(self, Self::B16 | Self::B32 | Self::B64 | Self::B128)
-    }
-}
+impl TryFrom<usize> for BlockSize {
+    type Error = Error;
 
-impl From<BlockSize> for usize {
-    #[inline]
-    fn from(block_size: BlockSize) -> Self {
-        match block_size {
-            BlockSize::B16 => 16,
-            BlockSize::B32 => 32,
-            BlockSize::B64 => 64,
-            BlockSize::B128 => 128,
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            16 => Ok(BlockSize::B16),
+            32 => Ok(BlockSize::B32),
+            64 => Ok(BlockSize::B64),
+            128 => Ok(BlockSize::B128),
+            _ => Err(anyhow::anyhow!("invalid block size: {}. must be 16, 32, 64, or 128.", value)),
         }
     }
 }
 
-pub struct Pkcs7Padding {
+pub(crate) struct Pkcs7Padding {
     block_size: BlockSize,
 }
 
 impl Pkcs7Padding {
-    pub fn new(block_size: BlockSize) -> Result<Self> {
-        if !block_size.is_valid() {
-            anyhow::bail!("invalid block size: must be 16, 32, 64, or 128");
-        }
-
+    pub(crate) fn new(block_size: BlockSize) -> Result<Self> {
         Ok(Self { block_size })
     }
 
-    pub fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
+    #[inline]
+    pub(crate) fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         match self.block_size {
@@ -58,7 +50,8 @@ impl Pkcs7Padding {
         }
     }
 
-    pub fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
+    #[inline]
+    pub(crate) fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
 
         match self.block_size {
@@ -69,6 +62,7 @@ impl Pkcs7Padding {
         }
     }
 
+    #[inline]
     fn pad_with<B: ArraySize>(data: &[u8]) -> Result<Vec<u8>> {
         match Pkcs7::pad_detached::<B>(data) {
             block_padding::PaddedData::Pad { blocks, tail_block } => {
@@ -92,6 +86,7 @@ impl Pkcs7Padding {
         }
     }
 
+    #[inline]
     fn unpad_with<B: ArraySize + Unsigned>(data: &[u8]) -> Result<Vec<u8>> {
         let num_blocks = data.len().checked_div(B::USIZE).unwrap_or(0);
         let mut blocks = Vec::with_capacity(num_blocks);

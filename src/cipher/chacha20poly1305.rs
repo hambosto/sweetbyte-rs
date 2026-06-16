@@ -3,21 +3,21 @@ use aws_lc_rs::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, Unb
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::secret::Secret;
-use crate::validation::{KeyBytes32, NonEmptyBytes};
+use crate::validation::{KeyBytes, NonEmptyBytes};
 
-pub struct ChaCha20Poly1305 {
+pub(super) struct ChaCha20Poly1305 {
     key: Secret,
 }
 
 impl ChaCha20Poly1305 {
-    pub fn new(key: &Secret) -> Result<Self> {
-        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+    pub(super) fn new(key: &Secret) -> Result<Self> {
+        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: inner.into_secret() })
+        Ok(Self { key: key.into_secret() })
     }
 
-    #[inline(always)]
-    pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+    #[inline]
+    pub(super) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         let plaintext = NonEmptyBytes::try_new(plaintext.to_vec()).context("plaintext must not be empty")?;
 
         let mut nonce_bytes = [0u8; NONCE_LEN];
@@ -36,8 +36,8 @@ impl ChaCha20Poly1305 {
         Ok(result)
     }
 
-    #[inline(always)]
-    pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+    #[inline]
+    pub(super) fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let ciphertext = NonEmptyBytes::try_new(ciphertext.to_vec()).context("ciphertext must not be empty")?;
         let (nonce_bytes, body) = ciphertext.as_ref().split_at(NONCE_LEN);
 
