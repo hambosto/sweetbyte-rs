@@ -17,7 +17,7 @@ use compression::CompressionLevel;
 use config::{ARGON2_SALT_LEN, NAME_MAX_LEN, ORIGINAL_COUNT, PASSWORD_LEN, RECOVERY_COUNT};
 use engine::Engine;
 use files::Files;
-use header::Header;
+use header::{ReadHeader, WriteHeader};
 use padding::BlockSize;
 use secret::Secret;
 use tokio::io::AsyncWriteExt;
@@ -80,35 +80,35 @@ async fn encrypt(source: &Files, target: &Files, secret: &Secret) -> Result<File
     let key = Key::new(secret)?;
     let derived_keys = key.derive_keys(&salt)?;
 
-    let header = Header::new(metadata.name, metadata.size, metadata.hash)?;
+    let header = WriteHeader::new(metadata.name, metadata.size, metadata.hash)?;
     let serialized = header.serialize(salt.expose_secret(), &derived_keys.signer_key).context("failed to serialize header")?;
     writer.write_all(&serialized).await.context("failed to write header")?;
 
     let engine = Engine::new(&derived_keys.primary_key, &derived_keys.secondary_key, Processing::Encryption, CompressionLevel::Fast, BlockSize::B128, ORIGINAL_COUNT, RECOVERY_COUNT)?;
     engine.process(reader, writer, metadata.size).await?;
 
-    Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+    Ok(FileHeader { name: header.name().to_owned(), size: header.size(), hash: hex::encode(header.hash()) })
 }
 
 async fn decrypt(source: &Files, target: &Files, secret: &Secret) -> Result<FileHeader> {
     let mut reader = source.reader().await.context("failed to open source file")?;
     let writer = target.writer().await.context("failed to create target file")?;
-    let header = Header::from_reader(reader.get_mut()).await.context("failed to deserialize header")?;
+    let header = ReadHeader::from_reader(reader.get_mut()).await.context("failed to deserialize header")?;
 
     let key = Key::new(secret)?;
-    let derived_keys = key.derive_keys(header.salt()?)?;
+    let derived_keys = key.derive_keys(header.salt())?;
     if !header.verify(&derived_keys.signer_key)? {
         anyhow::bail!("incorrect password");
     }
 
     let engine = Engine::new(&derived_keys.primary_key, &derived_keys.secondary_key, Processing::Decryption, CompressionLevel::Fast, BlockSize::B128, ORIGINAL_COUNT, RECOVERY_COUNT)?;
-    engine.process(reader, writer, header.file_size()).await?;
+    engine.process(reader, writer, header.size()).await?;
 
-    if !target.validate_hash(header.file_hash())? {
+    if !target.validate_hash(header.hash())? {
         anyhow::bail!("hash verification failed");
     }
 
-    Ok(FileHeader { name: header.file_name().to_owned(), size: header.file_size(), hash: hex::encode(header.file_hash()) })
+    Ok(FileHeader { name: header.name().to_owned(), size: header.size(), hash: hex::encode(header.hash()) })
 }
 
 #[cfg(test)]
