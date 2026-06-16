@@ -15,7 +15,6 @@ pub(crate) struct WriteHeader(Serializer);
 
 impl WriteHeader {
     #[inline]
-    #[must_use]
     pub(crate) fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
         Serializer::new(name, size, hash).context("failed to create header serializer").map(Self)
     }
@@ -43,7 +42,6 @@ pub(crate) struct ReadHeader(Deserializer);
 
 impl ReadHeader {
     #[inline]
-    #[must_use]
     pub(crate) async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
         Deserializer::from_reader(reader).await.context("failed to read header").map(Self)
     }
