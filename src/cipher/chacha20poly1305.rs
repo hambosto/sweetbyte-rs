@@ -3,7 +3,7 @@ use aws_lc_rs::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, Unb
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::secret::Secret;
-use crate::validation::{KeyBytes32, NonEmptyBytes};
+use crate::validation::{KeyBytes, NonEmptyBytes};
 
 pub(super) struct ChaCha20Poly1305 {
     key: Secret,
@@ -11,9 +11,9 @@ pub(super) struct ChaCha20Poly1305 {
 
 impl ChaCha20Poly1305 {
     pub(super) fn new(key: &Secret) -> Result<Self> {
-        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: inner.into_secret() })
+        Ok(Self { key: key.into_secret() })
     }
 
     #[inline]

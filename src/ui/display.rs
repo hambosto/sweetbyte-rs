@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
-use humansize::DECIMAL;
 
 use crate::files::Files;
 use crate::types::Processing;
@@ -31,7 +30,7 @@ impl Display {
             } else {
                 file.name()
             };
-            let file_size = humansize::format_size(file.size().await?, DECIMAL);
+            let file_size = humansize::format_size(file.size().await?, humansize::DECIMAL);
             let file_status = if file.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
             let status_color = if file.is_encrypted() { Color::Cyan } else { Color::Green };
 
@@ -58,7 +57,7 @@ impl Display {
         let mut table = Table::new();
         table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
 
-        let file_size = humansize::format_size(file_size, DECIMAL);
+        let file_size = humansize::format_size(file_size, humansize::DECIMAL);
         table.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(file_name).fg(Color::White)]);
         table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(&file_size).fg(Color::White)]);
         table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(file_hash).fg(Color::White)]);

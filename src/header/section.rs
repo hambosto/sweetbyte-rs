@@ -7,6 +7,8 @@ use crate::compression::{CompressionLevel, Compressor};
 use crate::encoding::Encoding;
 use crate::secret::Secret;
 
+const PREFIX_LEN: usize = 4;
+
 #[serde_with::serde_as]
 #[derive(Serialize, Deserialize)]
 struct SectionList {
@@ -52,8 +54,12 @@ impl Section {
         let compressed_section = self.compressor.compress(&serialized_section).context("failed to compress section")?;
         let compressed_length = u32::try_from(compressed_section.len()).context("section too large")?;
 
-        let mut result = compressed_length.to_le_bytes().to_vec();
+        let mut result = Vec::with_capacity(PREFIX_LEN + compressed_section.len());
+        result.extend_from_slice(&compressed_length.to_le_bytes());
         result.extend_from_slice(&compressed_section);
+
+        // let mut result = compressed_length.to_le_bytes().to_vec();
+        // result.extend_from_slice(&compressed_section);
 
         Ok(result)
     }

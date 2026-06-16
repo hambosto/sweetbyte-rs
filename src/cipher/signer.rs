@@ -3,7 +3,7 @@ use aws_lc_rs::hmac::{Context as Ctx, HMAC_SHA256, Key};
 use subtle::ConstantTimeEq;
 
 use crate::secret::Secret;
-use crate::validation::KeyBytes32;
+use crate::validation::KeyBytes;
 
 pub(crate) struct Signer {
     key: Secret,
@@ -11,9 +11,9 @@ pub(crate) struct Signer {
 
 impl Signer {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: inner.into_secret() })
+        Ok(Self { key: key.into_secret() })
     }
 
     pub(crate) fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {

@@ -3,7 +3,7 @@ use aws_lc_rs::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKe
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::secret::Secret;
-use crate::validation::{KeyBytes32, NonEmptyBytes};
+use crate::validation::{KeyBytes, NonEmptyBytes};
 
 pub(super) struct Aes256Gcm {
     key: Secret,
@@ -11,9 +11,9 @@ pub(super) struct Aes256Gcm {
 
 impl Aes256Gcm {
     pub fn new(key: &Secret) -> Result<Self> {
-        let inner = KeyBytes32::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: inner.into_secret() })
+        Ok(Self { key: key.into_secret() })
     }
 
     #[inline]

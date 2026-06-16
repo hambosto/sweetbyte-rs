@@ -48,7 +48,6 @@ pub(crate) struct WriteHeader {
 }
 
 impl WriteHeader {
-    #[must_use]
     pub(crate) fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
         let serializer = Serializer::new(name, size, hash).context("failed to create header serializer")?;
 
