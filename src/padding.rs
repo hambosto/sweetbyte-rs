@@ -91,7 +91,7 @@ impl Pkcs7Padding {
         let num_blocks = data.len().checked_div(B::USIZE).unwrap_or(0);
         let mut blocks = Vec::with_capacity(num_blocks);
 
-        for chunk in data.chunks_exact(B::USIZE) {
+        for chunk in data.chunks(B::USIZE) {
             let mut arr = Array::default();
             arr.copy_from_slice(chunk);
             blocks.push(arr);
