@@ -12,9 +12,9 @@ homepage = "https://github.com/hambosto/sweetbyte-rs"
 repository = "https://github.com/hambosto/sweetbyte-rs"
 
 [dependencies]
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 argon2 = { version = "0.5.3", features = ["std"] }
-aws-lc-rs = "1.17.0"
+aws-lc-rs = "1.17.1"
 blake3 = { version = "1.8.5", features = ["mmap", "rayon"] }
 block-padding = "0.4.2"
 cliclack = "0.5.4"
