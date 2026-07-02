@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
-use crate::config::CHUNK_SIZE;
+use crate::config::{CHUNK_SIZE, MAX_CHUNK_SIZE};
 use crate::types::{Processing, Task};
 
 pub(super) struct Reader {
@@ -47,6 +47,10 @@ impl Reader {
         while let Ok(chunk_len) = reader.read_u32_le().await {
             if chunk_len == 0 {
                 break;
+            }
+
+            if chunk_len > MAX_CHUNK_SIZE {
+                anyhow::bail!("chunk size {chunk_len} exceeds maximum {MAX_CHUNK_SIZE}");
             }
 
             let mut data = vec![0u8; chunk_len as usize];

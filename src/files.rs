@@ -119,7 +119,7 @@ impl Files {
     pub(crate) fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {
         let mut files = Vec::new();
 
-        for entry in WalkDir::new(root).into_iter().flatten() {
+        for entry in WalkDir::new(root).follow_links(false).into_iter().flatten() {
             if !entry.file_type().is_file() {
                 continue;
             }

@@ -5,6 +5,9 @@ use subtle::ConstantTimeEq;
 use crate::secret::Secret;
 use crate::validation::KeyBytes;
 
+const MAX_PART_LEN: usize = 1 << 20;
+const MAX_TOTAL_LEN: usize = 1 << 24;
+
 pub(crate) struct Signer {
     key: Secret,
 }
@@ -23,12 +26,12 @@ impl Signer {
 
         let mut total_len: usize = 0;
         for (i, part) in parts.iter().enumerate() {
-            if part.len() > 1 << 20 {
+            if part.len() > MAX_PART_LEN {
                 anyhow::bail!("part {i} exceeds size limit");
             }
 
             total_len = total_len.saturating_add(part.len());
-            if total_len > 1 << 24 {
+            if total_len > MAX_TOTAL_LEN {
                 anyhow::bail!("total input size exceeds limit");
             }
         }

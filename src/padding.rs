@@ -3,8 +3,6 @@ use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{Padding, Pkcs7};
 
-use crate::validation::NonEmptyBytes;
-
 #[derive(Default)]
 #[non_exhaustive]
 pub(crate) enum BlockSize {
@@ -40,25 +38,29 @@ impl Pkcs7Padding {
 
     #[inline]
     pub(crate) fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
+        if data.is_empty() {
+            anyhow::bail!("data must not be empty");
+        }
 
         match self.block_size {
-            BlockSize::B16 => Self::pad_with::<U16>(data.as_ref()),
-            BlockSize::B32 => Self::pad_with::<U32>(data.as_ref()),
-            BlockSize::B64 => Self::pad_with::<U64>(data.as_ref()),
-            BlockSize::B128 => Self::pad_with::<U128>(data.as_ref()),
+            BlockSize::B16 => Self::pad_with::<U16>(data),
+            BlockSize::B32 => Self::pad_with::<U32>(data),
+            BlockSize::B64 => Self::pad_with::<U64>(data),
+            BlockSize::B128 => Self::pad_with::<U128>(data),
         }
     }
 
     #[inline]
     pub(crate) fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
+        if data.is_empty() {
+            anyhow::bail!("data must not be empty");
+        }
 
         match self.block_size {
-            BlockSize::B16 => Self::unpad_with::<U16>(data.as_ref()),
-            BlockSize::B32 => Self::unpad_with::<U32>(data.as_ref()),
-            BlockSize::B64 => Self::unpad_with::<U64>(data.as_ref()),
-            BlockSize::B128 => Self::unpad_with::<U128>(data.as_ref()),
+            BlockSize::B16 => Self::unpad_with::<U16>(data),
+            BlockSize::B32 => Self::unpad_with::<U32>(data),
+            BlockSize::B64 => Self::unpad_with::<U64>(data),
+            BlockSize::B128 => Self::unpad_with::<U128>(data),
         }
     }
 

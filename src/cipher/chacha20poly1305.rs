@@ -3,7 +3,7 @@ use aws_lc_rs::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, Unb
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::secret::Secret;
-use crate::validation::{KeyBytes, NonEmptyBytes};
+use crate::validation::KeyBytes;
 
 pub(super) struct ChaCha20Poly1305 {
     key: Secret,
@@ -18,7 +18,9 @@ impl ChaCha20Poly1305 {
 
     #[inline]
     pub(super) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        let plaintext = NonEmptyBytes::try_new(plaintext.to_vec()).context("plaintext must not be empty")?;
+        if plaintext.is_empty() {
+            anyhow::bail!("plaintext must not be empty");
+        }
 
         let mut nonce_bytes = [0u8; NONCE_LEN];
         SystemRandom::new().fill(&mut nonce_bytes).context("failed to generate nonce")?;
@@ -26,7 +28,7 @@ impl ChaCha20Poly1305 {
         let nonce = Nonce::assume_unique_for_key(nonce_bytes);
         let key = LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, self.key.expose_secret()).context("failed to setup key")?);
 
-        let mut buffer = plaintext.as_ref().to_vec();
+        let mut buffer = plaintext.to_vec();
         key.seal_in_place_append_tag(nonce, Aad::empty(), &mut buffer).context("failed to encrypt")?;
 
         let mut result = Vec::with_capacity(NONCE_LEN.saturating_add(buffer.len()));
@@ -38,9 +40,11 @@ impl ChaCha20Poly1305 {
 
     #[inline]
     pub(super) fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        let ciphertext = NonEmptyBytes::try_new(ciphertext.to_vec()).context("ciphertext must not be empty")?;
-        let (nonce_bytes, body) = ciphertext.as_ref().split_at(NONCE_LEN);
+        if ciphertext.is_empty() {
+            anyhow::bail!("ciphertext must not be empty");
+        }
 
+        let (nonce_bytes, body) = ciphertext.split_at(NONCE_LEN);
         let nonce = Nonce::assume_unique_for_key(nonce_bytes.try_into().context("invalid nonce")?);
         let key = LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, self.key.expose_secret()).context("failed to setup key")?);
 

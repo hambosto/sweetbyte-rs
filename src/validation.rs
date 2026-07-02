@@ -16,9 +16,6 @@ pub(crate) struct Magic(u32);
 #[nutype::nutype(validate(predicate = |&v| v == CURRENT_VERSION), derive(Serialize, Deserialize))]
 pub(crate) struct Version(u16);
 
-#[nutype::nutype(validate(predicate = |v| !v.is_empty()), derive(AsRef))]
-pub(crate) struct NonEmptyBytes(Vec<u8>);
-
 #[nutype::nutype(validate(predicate = |b| b.len() == KEY_LEN))]
 pub(crate) struct KeyBytes(Vec<u8>);
 

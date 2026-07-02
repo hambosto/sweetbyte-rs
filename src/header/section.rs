@@ -4,6 +4,7 @@ use serde_with::base64::Base64;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::compression::{CompressionLevel, Compressor};
+use crate::config::MAX_SECTION_SIZE;
 use crate::encoding::Encoding;
 use crate::secret::Secret;
 
@@ -63,6 +64,10 @@ impl Section {
 
     pub(super) async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<SectionData> {
         let buffer_size = reader.read_u32_le().await.context("failed to read section length")?;
+
+        if buffer_size > MAX_SECTION_SIZE {
+            anyhow::bail!("section size {buffer_size} exceeds maximum {MAX_SECTION_SIZE}");
+        }
 
         let mut buffer = vec![0u8; buffer_size as usize];
         reader.read_exact(&mut buffer).await.context("failed to read section")?;

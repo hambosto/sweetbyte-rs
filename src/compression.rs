@@ -1,7 +1,5 @@
 use anyhow::{Context, Error, Result};
 
-use crate::validation::NonEmptyBytes;
-
 #[non_exhaustive]
 #[derive(Clone, Copy, Default)]
 pub(crate) enum CompressionLevel {
@@ -47,14 +45,18 @@ impl Compressor {
     }
 
     pub(crate) fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
+        if data.is_empty() {
+            anyhow::bail!("data must not be empty");
+        }
 
-        zstd::stream::encode_all(data.as_ref().as_slice(), self.level.into()).context("failed to compress")
+        zstd::stream::encode_all(data, self.level.into()).context("failed to compress")
     }
 
     pub(crate) fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let data = NonEmptyBytes::try_new(data.to_vec()).context("data must not be empty")?;
+        if data.is_empty() {
+            anyhow::bail!("data must not be empty");
+        }
 
-        zstd::stream::decode_all(data.as_ref().as_slice()).context("failed to decompress")
+        zstd::stream::decode_all(data).context("failed to decompress")
     }
 }

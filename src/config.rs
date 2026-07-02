@@ -24,6 +24,10 @@ pub(crate) const CURRENT_VERSION: u16 = 0x0002;
 
 pub(crate) const MAX_FILENAME_LEN: usize = 256;
 
+pub(crate) const MAX_CHUNK_SIZE: u32 = 512 * 1024;
+
+pub(crate) const MAX_SECTION_SIZE: u32 = 2 * 1024;
+
 pub(crate) const PASSWORD_LEN: usize = 8;
 
 pub(crate) const NAME_MAX_LEN: usize = 35;
