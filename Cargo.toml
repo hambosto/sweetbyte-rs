@@ -27,7 +27,7 @@ secrecy           = "0.10.3"
 serde             = { version = "1.0.228", features = ["derive"] }
 serde_with        = { version = "3.21.0", features = ["base64"] }
 strum             = { version = "0.28.0", features = ["derive"] }
-subtle            = { version = "2.6.1", default-features = false }
+subtle            = "2.6.1"
 tokio             = { version = "1.52.3", features = ["full"] }
 walkdir           = "2.5.0"
 zstd              = { version = "0.13.3", features = ["thin"] }
