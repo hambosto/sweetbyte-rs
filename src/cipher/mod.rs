@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 
-mod aes256_gcm;
+mod aes256gcm;
 mod chacha20poly1305;
 mod key;
 mod signer;
 
-use aes256_gcm::Aes256Gcm;
+use aes256gcm::Aes256Gcm;
 use chacha20poly1305::ChaCha20Poly1305;
 pub(crate) use key::Key;
 pub(crate) use signer::Signer;

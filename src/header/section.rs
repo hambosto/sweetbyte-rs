@@ -51,7 +51,7 @@ impl Section {
             mac: self.encoder.encode(mac).context("failed to encode mac")?,
         };
 
-        let serialized_section = oxicode::serde::encode_serde(&encoded_section).context("failed to serialize section")?;
+        let serialized_section = postcard::to_allocvec(&encoded_section).context("failed to serialize section")?;
         let compressed_section = self.compressor.compress(&serialized_section).context("failed to compress section")?;
         let compressed_length = u32::try_from(compressed_section.len()).context("section too large")?;
 
@@ -73,7 +73,7 @@ impl Section {
         reader.read_exact(&mut buffer).await.context("failed to read section")?;
 
         let decompressed_section = self.compressor.decompress(&buffer).context("failed to decompress section")?;
-        let encoded_section: SectionList = oxicode::serde::decode_serde(&decompressed_section).context("failed to deserialize section")?;
+        let encoded_section: SectionList = postcard::from_bytes(&decompressed_section).context("failed to deserialize section")?;
 
         Ok(SectionData {
             salt: Secret::new(self.encoder.decode(&encoded_section.salt).context("failed to decode salt")?),
