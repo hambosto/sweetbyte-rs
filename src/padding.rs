@@ -93,7 +93,6 @@ impl Pkcs7Padding {
         let num_blocks = data.len().checked_div(B::USIZE).unwrap_or(0);
         let mut blocks = Vec::with_capacity(num_blocks);
 
-        #[expect(clippy::chunks_exact_to_as_chunks, reason = "as_chunks is nightly-only")]
         for chunk in data.chunks_exact(B::USIZE) {
             let mut arr = Array::default();
             arr.copy_from_slice(chunk);
