@@ -98,7 +98,7 @@ async fn decrypt(source: &Files, target: &Files, secret: &Secret) -> Result<File
     let key = Key::new(secret)?;
     let derived_keys = key.derive_keys(header.salt())?;
     if !header.verify(&derived_keys.signer_key)? {
-        anyhow::bail!("incorrect password");
+        anyhow::bail!("incorrect password or corrupted file");
     }
 
     let engine = Engine::new(&derived_keys.primary_key, &derived_keys.secondary_key, Processing::Decryption, CompressionLevel::Fast, BlockSize::B128, ORIGINAL_COUNT, RECOVERY_COUNT)?;
@@ -127,7 +127,7 @@ mod tests {
 
         fs::write(&source_path, b"test content").await.unwrap();
 
-        let secret = Secret::new(aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, b"password").as_ref().to_vec());
+        let secret = Secret::new(b"password".to_vec());
 
         let source = Files::new(&source_path);
         let encrypted = Files::new(&encrypted_path);

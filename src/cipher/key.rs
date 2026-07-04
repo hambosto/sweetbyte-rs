@@ -5,7 +5,7 @@ use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
 use crate::secret::Secret;
-use crate::validation::KeyBytes;
+use crate::validation::NonEmptyKey;
 
 pub(crate) struct DerivedKeys {
     pub(crate) primary_key: Secret,
@@ -27,7 +27,7 @@ pub(crate) struct Key {
 
 impl Key {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be exactly 32 bytes")?;
+        let key = NonEmptyKey::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 
         Ok(Self { key: key.into_secret() })
     }

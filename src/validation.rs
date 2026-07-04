@@ -19,7 +19,16 @@ pub(crate) struct Version(u16);
 #[nutype::nutype(validate(predicate = |b| b.len() == KEY_LEN))]
 pub(crate) struct KeyBytes(Vec<u8>);
 
+#[nutype::nutype(validate(predicate = |b| !b.is_empty()))]
+pub(crate) struct NonEmptyKey(Vec<u8>);
+
 impl KeyBytes {
+    pub(crate) fn into_secret(self) -> Secret {
+        Secret::new(self.into_inner())
+    }
+}
+
+impl NonEmptyKey {
     pub(crate) fn into_secret(self) -> Secret {
         Secret::new(self.into_inner())
     }

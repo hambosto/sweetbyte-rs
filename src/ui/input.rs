@@ -35,7 +35,7 @@ impl Input {
             }
         }
 
-        Ok(Secret::new(aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, password.as_bytes()).as_ref().to_vec()))
+        Ok(Secret::new(password.as_bytes().to_vec()))
     }
 
     pub(crate) fn processing_mode(&self) -> Result<Processing> {
