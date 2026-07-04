@@ -20,6 +20,10 @@ impl Processing {
             Self::Decryption => "Decrypting...",
         }
     }
+
+    pub(crate) fn is_encryption(self) -> bool {
+        matches!(self, Self::Encryption)
+    }
 }
 
 pub(crate) struct FileHeader {

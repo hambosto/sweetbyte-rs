@@ -59,11 +59,11 @@ impl Key {
         Ok(DerivedKeys { primary_key, secondary_key, signer_key })
     }
 
-    pub(crate) fn generate_salt(size: usize) -> Result<Secret> {
-        let mut buffer = vec![0u8; size];
+    pub(crate) fn generate_salt(salt_size: usize) -> Result<Secret> {
+        let mut salt_bytes = vec![0u8; salt_size];
 
-        SystemRandom::new().fill(&mut buffer).context("failed to generate salt")?;
+        SystemRandom::new().fill(&mut salt_bytes).context("failed to generate salt")?;
 
-        Ok(Secret::new(buffer))
+        Ok(Secret::new(salt_bytes))
     }
 }

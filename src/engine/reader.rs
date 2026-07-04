@@ -44,19 +44,21 @@ impl Reader {
     async fn read_length_prefixed<R: AsyncRead + Unpin>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         let mut index = 0u64;
 
-        while let Ok(chunk_len) = reader.read_u32_le().await {
-            if chunk_len == 0 {
-                break;
-            }
+        loop {
+            match reader.read_u32_le().await {
+                Ok(chunk_len) => {
+                    if chunk_len > MAX_CHUNK_SIZE {
+                        anyhow::bail!("chunk size {chunk_len} exceeds maximum {MAX_CHUNK_SIZE}");
+                    }
 
-            if chunk_len > MAX_CHUNK_SIZE {
-                anyhow::bail!("chunk size {chunk_len} exceeds maximum {MAX_CHUNK_SIZE}");
+                    let mut data = vec![0u8; chunk_len as usize];
+                    reader.read_exact(&mut data).await.context("failed to read chunk")?;
+                    sender.send(Task { data, index }).await.context("failed to send chunk")?;
+                    index = index.saturating_add(1);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e).context("failed to read chunk length"),
             }
-
-            let mut data = vec![0u8; chunk_len as usize];
-            reader.read_exact(&mut data).await.context("failed to read chunk")?;
-            sender.send(Task { data, index }).await.context("failed to send chunk")?;
-            index = index.saturating_add(1);
         }
 
         Ok(())

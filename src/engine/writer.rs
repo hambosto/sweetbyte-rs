@@ -44,9 +44,10 @@ impl Writer {
     }
 
     async fn write_result<W: AsyncWrite + Unpin>(&self, writer: &mut W, result: &TaskResult, progress: &Progress) -> Result<()> {
-        if matches!(self.processing, Processing::Encryption) {
+        if self.processing.is_encryption() {
             writer.write_all(&u32::try_from(result.data.len())?.to_le_bytes()).await.context("failed to write chunk")?;
         }
+
         writer.write_all(&result.data).await.context("failed to write chunk")?;
         progress.add(result.size as u64);
 
