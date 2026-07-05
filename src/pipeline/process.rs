@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use super::processing::Processing;
 use super::task::{Task, TaskResult};
 use crate::cipher::{Algorithm, Cipher};
-use crate::prepare::{BlockSize, Compression, CompressionLevel, Encoding, Pkcs7Padding};
+use crate::codec::{BlockSize, Compression, CompressionLevel, Encoding, Pkcs7Padding};
 use crate::secret::Secret;
 
 pub(super) struct Process {

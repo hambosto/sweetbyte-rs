@@ -1,10 +1,10 @@
 mod app;
 mod cipher;
+mod codec;
 mod config;
 mod file;
 mod header;
 mod pipeline;
-mod prepare;
 mod secret;
 mod ui;
 mod validation;

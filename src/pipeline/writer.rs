@@ -51,7 +51,7 @@ impl Writer {
         }
 
         writer.write_all(&result.data).await.context("failed to write chunk")?;
-        progress.add(result.size as u64);
+        progress.add(u64::try_from(result.size).context("size overflow")?);
 
         Ok(())
     }

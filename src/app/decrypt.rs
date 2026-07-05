@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 
 use crate::cipher::Key;
+use crate::codec::{BlockSize, CompressionLevel};
 use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::file::{Files, Metadata};
 use crate::header::ReadHeader;
 use crate::pipeline::{Pipeline, Processing};
-use crate::prepare::{BlockSize, CompressionLevel};
 use crate::secret::Secret;
 
 pub(crate) async fn decrypt(source: &Files, target: &Files, secret: &Secret) -> Result<Metadata> {

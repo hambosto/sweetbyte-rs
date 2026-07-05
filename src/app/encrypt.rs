@@ -2,11 +2,11 @@ use anyhow::{Context, Result};
 use tokio::io::AsyncWriteExt;
 
 use crate::cipher::Key;
+use crate::codec::{BlockSize, CompressionLevel};
 use crate::config::{ARGON2_SALT_LEN, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::file::{Files, Metadata};
 use crate::header::WriteHeader;
 use crate::pipeline::{Pipeline, Processing};
-use crate::prepare::{BlockSize, CompressionLevel};
 use crate::secret::Secret;
 
 pub(crate) async fn encrypt(source: &Files, target: &Files, secret: &Secret) -> Result<Metadata> {
