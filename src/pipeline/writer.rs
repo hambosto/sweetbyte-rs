@@ -1,10 +1,12 @@
+use std::collections::VecDeque;
+
+use anyhow::{Context, Result};
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
+use tokio::sync::mpsc::Receiver;
+
 use super::processing::Processing;
 use super::task::TaskResult;
 use crate::ui::Progress;
-use anyhow::{Context, Result};
-use std::collections::VecDeque;
-use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
-use tokio::sync::mpsc::Receiver;
 
 pub(super) struct Writer {
     processing: Processing,
@@ -30,9 +32,8 @@ impl Writer {
             let slot = pending.get_mut(offset).context("chunk slot missing")?;
             *slot = Some(result);
 
-            loop {
-                let Some(front) = pending.front_mut() else { break };
-                let Some(result) = front.take() else { break };
+            while let Some(slot) = pending.front_mut() {
+                let Some(result) = slot.take() else { break };
                 pending.pop_front();
 
                 self.write_result(&mut writer, &result, progress).await?;
