@@ -1,46 +1,98 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
-use super::handle::Files;
-use crate::config::EXCLUDED_PATTERNS;
+use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::pipeline::Processing;
 
-impl Files {
-    pub(crate) fn is_hidden(&self) -> bool {
-        self.path().file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.'))
+pub(crate) struct Discover {
+    root: String,
+    processing: Processing,
+}
+
+impl Discover {
+    pub(crate) fn new(root: impl Into<String>, processing: Processing) -> Self {
+        Self { root: root.into(), processing }
     }
 
-    pub(crate) fn is_excluded(&self) -> bool {
-        self.path()
-            .iter()
-            .filter_map(|c| c.to_str())
-            .any(|part| EXCLUDED_PATTERNS.iter().any(|pattern| fast_glob::glob_match(pattern, part)))
-    }
+    pub(crate) fn run(&self) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        for entry in WalkDir::new(&self.root).follow_links(false) {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
 
-    pub(crate) fn is_eligible(&self, processing: Processing) -> bool {
-        !self.is_hidden()
-            && !self.is_excluded()
-            && match processing {
-                Processing::Encryption => !self.is_encrypted(),
-                Processing::Decryption => self.is_encrypted(),
-            }
-    }
-
-    pub(crate) fn discover(root: impl AsRef<Path>, processing: Processing) -> Vec<Self> {
-        let mut files = Vec::new();
-
-        for entry in WalkDir::new(root).follow_links(false).into_iter().flatten() {
             if !entry.file_type().is_file() {
                 continue;
             }
 
-            let file = Self::new(entry.into_path());
-            if file.is_eligible(processing) {
-                files.push(file);
+            let path = entry.into_path();
+            if self.is_eligible(&path) {
+                paths.push(path);
             }
         }
 
-        files
+        paths
+    }
+
+    fn is_eligible(&self, path: &Path) -> bool {
+        if Self::is_hidden(path) {
+            return false;
+        }
+
+        if Self::is_excluded(path) {
+            return false;
+        }
+
+        match self.processing {
+            Processing::Encryption => !Self::is_encrypted(path),
+            Processing::Decryption => Self::is_encrypted(path),
+        }
+    }
+
+    fn is_hidden(path: &Path) -> bool {
+        let file_name = match path.file_name() {
+            Some(file_name) => file_name,
+            None => return false,
+        };
+
+        let file_name = match file_name.to_str() {
+            Some(file_name) => file_name,
+            None => return false,
+        };
+
+        file_name.starts_with('.')
+    }
+
+    fn is_excluded(path: &Path) -> bool {
+        for component in path.iter() {
+            let part = match component.to_str() {
+                Some(part) => part,
+                None => continue,
+            };
+
+            for pattern in EXCLUDED_PATTERNS.iter() {
+                if fast_glob::glob_match(pattern, part) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    fn is_encrypted(path: &Path) -> bool {
+        let extension = match path.extension() {
+            Some(extension) => extension,
+            None => return false,
+        };
+
+        let extension = match extension.to_str() {
+            Some(extension) => extension,
+            None => return false,
+        };
+
+        extension == FILE_EXTENSION
     }
 }

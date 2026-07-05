@@ -11,6 +11,7 @@ mod validation;
 
 use anyhow::{Context, Result};
 use config::{NAME_MAX_LEN, PASSWORD_LEN};
+use file::{Discover, Files};
 use pipeline::Processing;
 use ui::{Display, Input};
 
@@ -22,7 +23,7 @@ pub async fn run() -> Result<()> {
     display.banner()?;
 
     let processing = input.processing_mode()?;
-    let files = file::Files::discover(".", processing);
+    let files: Vec<Files> = Discover::new(".", processing).run().into_iter().map(Files::new).collect();
     if files.is_empty() {
         anyhow::bail!("no files available for processing");
     }
