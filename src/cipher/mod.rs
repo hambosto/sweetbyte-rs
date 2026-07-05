@@ -1,12 +1,12 @@
 mod aes256gcm;
 mod chacha20poly1305;
-mod key;
+mod derive;
 mod signer;
 
 use aes256gcm::Aes256Gcm;
 use anyhow::{Context, Result};
 use chacha20poly1305::ChaCha20Poly1305;
-pub(crate) use key::Key;
+pub(crate) use derive::Derive;
 pub(crate) use signer::Signer;
 
 use crate::secret::Secret;

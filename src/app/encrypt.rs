@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use tokio::io::AsyncWriteExt;
 
-use crate::cipher::Key;
+use crate::cipher::Derive;
 use crate::codec::{BlockSize, CompressionLevel};
 use crate::config::{ARGON2_SALT_LEN, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::file::{Files, Metadata};
@@ -14,8 +14,8 @@ pub(crate) async fn encrypt(source: &Files, target: &Files, secret: &Secret) -> 
     let reader = source.reader().await.context("failed to open source file")?;
     let metadata = source.metadata().await.context("failed to read metadata")?;
 
-    let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
-    let key = Key::new(secret)?;
+    let salt = Derive::generate_salt(ARGON2_SALT_LEN)?;
+    let key = Derive::new(secret)?;
     let derived_keys = key.derive_keys(&salt)?;
 
     let header = WriteHeader::new(metadata.name, metadata.size, metadata.hash)?;
