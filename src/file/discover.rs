@@ -2,10 +2,9 @@ use std::path::Path;
 
 use walkdir::WalkDir;
 
+use super::handle::Files;
 use crate::config::EXCLUDED_PATTERNS;
 use crate::pipeline::Processing;
-
-use super::handle::Files;
 
 impl Files {
     pub(crate) fn is_hidden(&self) -> bool {

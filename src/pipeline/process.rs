@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
 
+use super::processing::Processing;
+use super::task::{Task, TaskResult};
 use crate::cipher::{Algorithm, Cipher};
 use crate::prepare::{BlockSize, Compression, CompressionLevel, Encoding, Pkcs7Padding};
 use crate::secret::Secret;
-
-use super::processing::Processing;
-use super::task::{Task, TaskResult};
 
 pub(super) struct Process {
     cipher: Cipher,

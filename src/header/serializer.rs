@@ -1,13 +1,10 @@
 use anyhow::{Context, Result};
 
-use crate::cipher::Signer;
-use crate::config::{CURRENT_VERSION, MAGIC_BYTES, ORIGINAL_COUNT, RECOVERY_COUNT};
-// use crate::header::metadata::Metadata;
-// use crate::header::parameters::Parameters;
-// use crate::header::section::Section;
 use super::metadata::Metadata;
 use super::parameters::Parameters;
 use super::section::Section;
+use crate::cipher::Signer;
+use crate::config::{CURRENT_VERSION, MAGIC_BYTES, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::prepare::CompressionLevel;
 use crate::secret::Secret;
 

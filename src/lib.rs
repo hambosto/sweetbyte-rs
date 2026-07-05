@@ -10,10 +10,9 @@ mod ui;
 mod validation;
 
 use anyhow::{Context, Result};
+use config::{NAME_MAX_LEN, PASSWORD_LEN};
 use pipeline::Processing;
 use ui::{Display, Input};
-
-use config::{NAME_MAX_LEN, PASSWORD_LEN};
 
 pub async fn run() -> Result<()> {
     let input = Input::new(PASSWORD_LEN, true);

@@ -6,19 +6,17 @@ mod task;
 mod writer;
 
 use anyhow::{Context, Result};
+use executor::Executor;
+use process::Process;
+pub(crate) use processing::Processing;
+use reader::Reader;
+use task::{Task, TaskResult};
 use tokio::io::{AsyncRead, AsyncWrite};
+use writer::Writer;
 
 use crate::prepare::{BlockSize, CompressionLevel};
 use crate::secret::Secret;
 use crate::ui::Progress;
-
-pub(crate) use processing::Processing;
-
-use executor::Executor;
-use process::Process;
-use reader::Reader;
-use task::{Task, TaskResult};
-use writer::Writer;
 
 pub(crate) struct Pipeline {
     processing: Processing,

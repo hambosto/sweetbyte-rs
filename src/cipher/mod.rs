@@ -3,16 +3,14 @@ mod chacha20poly1305;
 mod key;
 mod signer;
 
+use aes256gcm::Aes256Gcm;
 use anyhow::{Context, Result};
-
-use crate::secret::Secret;
-use crate::validation::KeyBytes;
-
+use chacha20poly1305::ChaCha20Poly1305;
 pub(crate) use key::Key;
 pub(crate) use signer::Signer;
 
-use aes256gcm::Aes256Gcm;
-use chacha20poly1305::ChaCha20Poly1305;
+use crate::secret::Secret;
+use crate::validation::KeyBytes;
 
 pub(crate) enum Algorithm {
     Aes256Gcm,

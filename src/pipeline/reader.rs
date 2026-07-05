@@ -2,10 +2,9 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
-use crate::config::{CHUNK_SIZE, MAX_CHUNK_SIZE};
-
 use super::processing::Processing;
 use super::task::Task;
+use crate::config::{CHUNK_SIZE, MAX_CHUNK_SIZE};
 
 pub(super) struct Reader {
     processing: Processing,
