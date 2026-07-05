@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use aws_lc_rs::hmac::{Context as Ctx, HMAC_SHA256, Key};
+use aws_lc_rs::hmac::{Context as HmacContext, HMAC_SHA256, Key};
 use subtle::ConstantTimeEq;
 
 use crate::secret::Secret;
@@ -36,18 +36,16 @@ impl Signer {
             }
         }
 
-        let non_empty: Vec<&[u8]> = parts.iter().copied().filter(|p| !p.is_empty()).collect();
-        if non_empty.is_empty() {
-            anyhow::bail!("all parts are empty");
-        }
         let key = Key::new(HMAC_SHA256, self.key.expose_secret());
+        let mut hmac_context = HmacContext::with_key(&key);
 
-        let mut ctx = Ctx::with_key(&key);
-        for part in non_empty {
-            ctx.update(part);
+        for part in parts {
+            let part_len: u64 = part.len().try_into().context("part length overflow")?;
+            hmac_context.update(&part_len.to_be_bytes());
+            hmac_context.update(part);
         }
 
-        Ok(ctx.sign().as_ref().to_vec())
+        Ok(hmac_context.sign().as_ref().to_vec())
     }
 
     pub(crate) fn verify_parts(&self, expected: &[u8], parts: &[&[u8]]) -> bool {
