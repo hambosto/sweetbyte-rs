@@ -3,8 +3,8 @@ use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
-use crate::files::Files;
-use crate::types::Processing;
+use crate::file::Files;
+use crate::pipeline::Processing;
 
 pub(crate) struct Display {
     name_len: usize,

@@ -1,0 +1,55 @@
+mod app;
+mod cipher;
+mod config;
+mod file;
+mod header;
+mod pipeline;
+mod prepare;
+mod secret;
+mod ui;
+mod validation;
+
+use anyhow::{Context, Result};
+use pipeline::Processing;
+use ui::{Display, Input};
+
+use config::{NAME_MAX_LEN, PASSWORD_LEN};
+
+pub async fn run() -> Result<()> {
+    let input = Input::new(PASSWORD_LEN, true);
+    let display = Display::new(NAME_MAX_LEN);
+
+    display.clear()?;
+    display.banner()?;
+
+    let processing = input.processing_mode()?;
+    let files = file::Files::discover(".", processing);
+    if files.is_empty() {
+        anyhow::bail!("no files available for processing");
+    }
+
+    display.files(&files).await?;
+
+    let source = file::Files::new(input.file(&files)?);
+    let target = file::Files::new(source.output_path(processing));
+
+    if target.exists() && !input.overwrite(&target)? {
+        anyhow::bail!("operation canceled");
+    }
+
+    let secret = input.password(processing)?;
+    let header = match processing {
+        Processing::Encryption => app::encrypt(&source, &target, &secret).await?,
+        Processing::Decryption => app::decrypt(&source, &target, &secret).await?,
+    };
+
+    display.success(processing, &target)?;
+    display.header(&header.name, header.size, &hex::encode(&header.hash))?;
+
+    if input.delete(&source, processing)? {
+        source.delete().await.context("failed to delete source file")?;
+        display.deleted(&source)?;
+    }
+
+    display.exit()
+}

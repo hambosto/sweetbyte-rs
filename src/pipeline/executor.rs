@@ -5,17 +5,17 @@ use tokio::sync::Semaphore;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinSet;
 
-use crate::engine::pipeline::Pipeline;
-use crate::types::{Task, TaskResult};
+use super::process::Process;
+use super::task::{Task, TaskResult};
 
 pub(super) struct Executor {
-    pipeline: Arc<Pipeline>,
+    process: Arc<Process>,
     concurrency: usize,
 }
 
 impl Executor {
-    pub(super) fn new(pipeline: Pipeline, concurrency: usize) -> Self {
-        Self { pipeline: Arc::new(pipeline), concurrency }
+    pub(super) fn new(process: Process, concurrency: usize) -> Self {
+        Self { process: Arc::new(process), concurrency }
     }
 
     pub(super) async fn execute(&self, mut tasks: Receiver<Task>, results: Sender<TaskResult>) -> Result<()> {
@@ -24,11 +24,11 @@ impl Executor {
 
         while let Some(task) = tasks.recv().await {
             let permit = Arc::clone(&semaphore).acquire_owned().await.context("failed to acquire semaphore permit")?;
-            let pipeline = Arc::clone(&self.pipeline);
+            let process = Arc::clone(&self.process);
             let results = results.clone();
 
             workers.spawn_blocking(move || {
-                let result = pipeline.process(&task).context("failed to process task")?;
+                let result = process.process(&task).context("failed to process task")?;
                 results.blocking_send(result).context("failed to send result")?;
 
                 drop(permit);

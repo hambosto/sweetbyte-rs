@@ -2,8 +2,10 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Receiver;
 
-use crate::types::{Processing, TaskResult};
 use crate::ui::Progress;
+
+use super::processing::Processing;
+use super::task::TaskResult;
 
 pub(super) struct Writer {
     processing: Processing,

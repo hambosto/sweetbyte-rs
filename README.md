@@ -186,43 +186,60 @@ CRC32 validates each shard before decoding. Corrupted shards get reconstructed f
 
 ```
 src/
-├── main.rs                 # Entry point, global allocator (mimalloc), interactive mode, async runtime
-├── config.rs               # All constants, HKDF info strings
-├── types.rs                # Processing enum, Task, TaskResult
-├── secret.rs               # Wrapper types for sensitive data (zeroize on drop)
-├── validation.rs           # Validated newtypes (Filename, FileSize, etc.)
-├── files.rs                # File discovery, BLAKE3 hashing
-├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
-├── compression.rs          # zstd wrapper with compression levels
-├── padding.rs              # PKCS7 padding wrapper
+├── lib.rs                    # Library root, run() entry point
+├── main.rs                   # Binary entry (mimalloc + tokio)
+├── config.rs                 # All constants (Argon2, Reed-Solomon, chunk sizes, etc.)
+├── secret.rs                 # Sensitive data wrapper (zeroize on drop)
+├── validation.rs             # Validated newtypes (Filename, FileSize, Magic, etc.)
 │
-├── cipher/
-│   ├── mod.rs              # Cipher struct holding both algorithms
-│   ├── aes256_gcm.rs       # AES-256-GCM implementation (aws-lc-rs)
-│   ├── chacha20poly1305.rs # ChaCha20-Poly1305 implementation (aws-lc-rs)
-│   ├── key.rs              # Argon2id + HKDF key derivation
-│   └── signer.rs           # HMAC-SHA256 with constant-time comparison
+├── cipher/                   # Encryption algorithms
+│   ├── mod.rs                # Cipher + Algorithm structs
+│   ├── aes256gcm.rs          # AES-256-GCM (aws-lc-rs)
+│   ├── chacha20poly1305.rs   # ChaCha20-Poly1305 (aws-lc-rs)
+│   ├── key.rs                # Argon2id + HKDF key derivation
+│   └── signer.rs             # HMAC-SHA256 with constant-time comparison
 │
-├── header/
-│   ├── mod.rs              # Header module exports
-│   ├── metadata.rs         # Metadata struct (filename, size, hash)
-│   ├── parameters.rs       # Parameters struct (magic, version)
-│   ├── section.rs          # Section pack/unpack for RS-encoded headers
-│   ├── serializer.rs       # Header serialization
-│   └── deserializer.rs     # Header deserialization
+├── header/                   # File format header
+│   ├── mod.rs                # Re-exports (ReadHeader, WriteHeader)
+│   ├── reader.rs             # ReadHeader (wraps Deserializer)
+│   ├── writer.rs             # WriteHeader (wraps Serializer)
+│   ├── deserializer.rs       # Header deserialization logic
+│   ├── serializer.rs         # Header serialization logic
+│   ├── metadata.rs           # Original file info (name, size, hash)
+│   ├── parameters.rs         # Magic bytes + version
+│   └── section.rs            # Compressed + RS-encoded sections
 │
-├── engine/
-│   ├── mod.rs              # Engine, sets up the pipeline
-│   ├── reader.rs           # Produces tasks from input file
-│   ├── executor.rs         # Parallel task processing
-│   ├── writer.rs           # Consumes results, writes output (with reordering buffer)
-│   └── pipeline.rs         # The actual encrypt/decrypt stages
+├── prepare/                  # Data preparation steps
+│   ├── mod.rs                # Re-exports
+│   ├── compress.rs           # Compression (zstd) + CompressionLevel
+│   ├── encode.rs             # Encoding (Reed-Solomon + CRC32)
+│   └── pad.rs                # Pkcs7Padding + BlockSize
 │
-└── ui/
-    ├── mod.rs              # UI module exports
-    ├── display.rs          # Terminal tables, banner display
-    ├── input.rs            # Interactive prompts for user input
-    └── progress.rs         # Progress bar display
+├── pipeline/                 # Data flow: read → process → write
+│   ├── mod.rs                # Pipeline orchestrator (concurrent stages)
+│   ├── process.rs            # Process (actual encrypt/decrypt logic)
+│   ├── reader.rs             # Chunked input reader
+│   ├── executor.rs           # Parallel task executor (spawn_blocking)
+│   ├── writer.rs             # Ordered output writer (reordering buffer)
+│   ├── task.rs               # Task + TaskResult
+│   └── processing.rs         # Processing enum (Encryption/Decryption)
+│
+├── file/                     # Filesystem operations
+│   ├── mod.rs                # Re-exports
+│   ├── handle.rs             # Files struct (open, read, write, delete, metadata)
+│   ├── discover.rs           # File discovery with filtering
+│   └── hash.rs               # BLAKE3 hashing + validation
+│
+├── ui/                       # Terminal interface
+│   ├── mod.rs                # Re-exports
+│   ├── display.rs            # Tables, banner, success messages
+│   ├── input.rs              # Interactive prompts (password, file select)
+│   └── progress.rs           # Progress bar
+│
+└── app/                      # Orchestration
+    ├── mod.rs                # Re-exports + integration tests
+    ├── encrypt.rs            # Encryption workflow
+    └── decrypt.rs            # Decryption workflow
 ```
 
 ## Dependencies

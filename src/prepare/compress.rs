@@ -35,11 +35,11 @@ impl From<CompressionLevel> for i32 {
     }
 }
 
-pub(crate) struct Compressor {
+pub(crate) struct Compression {
     level: CompressionLevel,
 }
 
-impl Compressor {
+impl Compression {
     pub(crate) fn new(level: CompressionLevel) -> Result<Self> {
         Ok(Self { level })
     }
