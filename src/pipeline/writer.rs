@@ -1,10 +1,10 @@
-use anyhow::{Context, Result};
-use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
-use tokio::sync::mpsc::Receiver;
-
 use super::processing::Processing;
 use super::task::TaskResult;
 use crate::ui::Progress;
+use anyhow::{Context, Result};
+use std::collections::VecDeque;
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
+use tokio::sync::mpsc::Receiver;
 
 pub(super) struct Writer {
     processing: Processing,
@@ -16,28 +16,27 @@ impl Writer {
     }
 
     pub(super) async fn write_all<W: AsyncWrite + Unpin>(&self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
-        let mut index = 0u64;
-        let mut pending: Vec<Option<TaskResult>> = Vec::new();
+        let mut next_index = 0u64;
+        let mut pending: VecDeque<Option<TaskResult>> = VecDeque::new();
         let mut writer = BufWriter::new(output);
 
         while let Some(result) = receiver.recv().await {
-            let idx = usize::try_from(result.index).context("chunk index overflow")?;
-
-            if idx >= pending.len() {
-                pending.resize_with(idx.saturating_add(1), || None);
+            let delta = result.index.checked_sub(next_index).context("chunk index behind writer")?;
+            let offset = usize::try_from(delta).context("chunk index overflow")?;
+            if offset >= pending.len() {
+                pending.resize_with(offset.saturating_add(1), || None);
             }
 
-            if let Some(slot) = pending.get_mut(idx) {
-                *slot = Some(result);
-            }
+            let slot = pending.get_mut(offset).context("chunk slot missing")?;
+            *slot = Some(result);
 
-            while let Ok(idx) = usize::try_from(index) {
-                let Some(result) = pending.get_mut(idx).and_then(|slot| slot.take()) else {
-                    break;
-                };
+            loop {
+                let Some(front) = pending.front_mut() else { break };
+                let Some(result) = front.take() else { break };
+                pending.pop_front();
 
                 self.write_result(&mut writer, &result, progress).await?;
-                index = index.saturating_add(1);
+                next_index = next_index.saturating_add(1);
             }
         }
 
@@ -46,7 +45,8 @@ impl Writer {
 
     async fn write_result<W: AsyncWrite + Unpin>(&self, writer: &mut W, result: &TaskResult, progress: &Progress) -> Result<()> {
         if self.processing.is_encryption() {
-            writer.write_all(&u32::try_from(result.data.len())?.to_le_bytes()).await.context("failed to write chunk")?;
+            let data_len = u32::try_from(result.data.len()).context("chunk length overflow")?;
+            writer.write_all(&data_len.to_le_bytes()).await.context("failed to write chunk")?;
         }
 
         writer.write_all(&result.data).await.context("failed to write chunk")?;
