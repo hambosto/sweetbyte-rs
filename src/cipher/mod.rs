@@ -1,13 +1,13 @@
 mod aes256gcm;
 mod chacha20poly1305;
-mod derive;
 mod signer;
+mod stretch;
 
 use aes256gcm::Aes256Gcm;
 use anyhow::{Context, Result};
 use chacha20poly1305::ChaCha20Poly1305;
-pub(crate) use derive::Derive;
 pub(crate) use signer::Signer;
+pub(crate) use stretch::Stretch;
 
 use crate::secret::Secret;
 use crate::validation::KeyBytes;

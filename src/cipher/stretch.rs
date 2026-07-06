@@ -21,11 +21,11 @@ impl KeyType for Len {
     }
 }
 
-pub(crate) struct Derive {
+pub(crate) struct Stretch {
     key: Secret,
 }
 
-impl Derive {
+impl Stretch {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
         let key = NonEmptyKey::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 

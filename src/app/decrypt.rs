@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-use crate::cipher::Derive;
+use crate::cipher::Stretch;
 use crate::compression::CompressionLevel;
 use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::file::{Files, Metadata};
@@ -14,7 +14,7 @@ pub(crate) async fn decrypt(source: &Files, target: &Files, secret: &Secret) -> 
     let writer = target.writer().await.context("failed to create target file")?;
     let header = ReadHeader::from_reader(reader.get_mut()).await.context("failed to deserialize header")?;
 
-    let key = Derive::new(secret)?;
+    let key = Stretch::new(secret)?;
     let derived_keys = key.derive_keys(header.salt())?;
     if !header.verify(&derived_keys.signer_key)? {
         anyhow::bail!("incorrect password or corrupted file");
