@@ -22,7 +22,7 @@ impl TryFrom<usize> for BlockSize {
             32 => Ok(BlockSize::B32),
             64 => Ok(BlockSize::B64),
             128 => Ok(BlockSize::B128),
-            _ => Err(anyhow::anyhow!("invalid block size: {}. must be 16, 32, 64, or 128.", value)),
+            _ => Err(anyhow::anyhow!("invalid block size: {value}. must be 16, 32, 64, or 128.")),
         }
     }
 }
