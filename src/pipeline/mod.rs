@@ -1,33 +1,36 @@
-use anyhow::{Context, Result};
-use tokio::io::{AsyncRead, AsyncWrite};
-
-use crate::compression::CompressionLevel;
-use crate::engine::executor::Executor;
-use crate::engine::pipeline::Pipeline;
-use crate::engine::reader::Reader;
-use crate::engine::writer::Writer;
-use crate::padding::BlockSize;
-use crate::secret::Secret;
-use crate::types::{Processing, Task, TaskResult};
-use crate::ui::Progress;
-
 mod executor;
-mod pipeline;
+mod process;
+mod processing;
 mod reader;
+mod task;
 mod writer;
 
-pub(crate) struct Engine {
+use anyhow::{Context, Result};
+use executor::Executor;
+use process::Process;
+pub(crate) use processing::Processing;
+use reader::Reader;
+use task::{Task, TaskResult};
+use tokio::io::{AsyncRead, AsyncWrite};
+use writer::Writer;
+
+use crate::compression::CompressionLevel;
+use crate::padding::BlockSize;
+use crate::secret::Secret;
+use crate::ui::Progress;
+
+pub(crate) struct Pipeline {
     processing: Processing,
-    pipeline: Pipeline,
+    process: Process,
 }
 
-impl Engine {
+impl Pipeline {
     pub(crate) fn new(
         primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: CompressionLevel, block_size: BlockSize, original_count: usize, recovery_count: usize,
     ) -> Result<Self> {
-        let pipeline = Pipeline::new(primary_key, secondary_key, processing, compression_level, block_size, original_count, recovery_count).context("failed to initialize pipeline")?;
+        let process = Process::new(primary_key, secondary_key, processing, compression_level, block_size, original_count, recovery_count).context("failed to initialize process")?;
 
-        Ok(Self { processing, pipeline })
+        Ok(Self { processing, process })
     }
 
     pub(crate) async fn process<R, W>(self, input: R, output: W, total_size: u64) -> Result<()>
@@ -43,7 +46,7 @@ impl Engine {
 
         let reader_handle = tokio::spawn(async move { Reader::new(self.processing).read_all(input, &task_tx).await });
         let writer_handle = tokio::spawn(async move { Writer::new(self.processing).write_all(output, result_rx, &progress_bar).await });
-        let executor_handle = tokio::spawn(async move { Executor::new(self.pipeline, channel_size).execute(task_rx, result_tx).await });
+        let executor_handle = tokio::spawn(async move { Executor::new(self.process, channel_size).execute(task_rx, result_tx).await });
 
         let (reader_result, executor_result, writer_result) = tokio::join!(reader_handle, executor_handle, writer_handle);
 

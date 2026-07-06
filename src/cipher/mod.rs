@@ -1,19 +1,18 @@
-use anyhow::{Context, Result};
-
 mod aes256gcm;
 mod chacha20poly1305;
-mod key;
 mod signer;
+mod stretch;
 
 use aes256gcm::Aes256Gcm;
+use anyhow::{Context, Result};
 use chacha20poly1305::ChaCha20Poly1305;
-pub(crate) use key::Key;
 pub(crate) use signer::Signer;
+pub(crate) use stretch::Stretch;
 
 use crate::secret::Secret;
 use crate::validation::KeyBytes;
 
-pub(crate) enum CipherAlgorithm {
+pub(crate) enum Algorithm {
     Aes256Gcm,
     ChaCha20Poly1305,
 }
@@ -34,18 +33,18 @@ impl Cipher {
     }
 
     #[inline]
-    pub(crate) fn encrypt(&self, algo: &CipherAlgorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
-        match algo {
-            CipherAlgorithm::Aes256Gcm => self.primary_cipher.encrypt(plaintext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.secondary_cipher.encrypt(plaintext),
+    pub(crate) fn encrypt(&self, algorithm: &Algorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
+        match algorithm {
+            Algorithm::Aes256Gcm => self.primary_cipher.encrypt(plaintext),
+            Algorithm::ChaCha20Poly1305 => self.secondary_cipher.encrypt(plaintext),
         }
     }
 
     #[inline]
-    pub(crate) fn decrypt(&self, algo: &CipherAlgorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        match algo {
-            CipherAlgorithm::Aes256Gcm => self.primary_cipher.decrypt(ciphertext),
-            CipherAlgorithm::ChaCha20Poly1305 => self.secondary_cipher.decrypt(ciphertext),
+    pub(crate) fn decrypt(&self, algorithm: &Algorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        match algorithm {
+            Algorithm::Aes256Gcm => self.primary_cipher.decrypt(ciphertext),
+            Algorithm::ChaCha20Poly1305 => self.secondary_cipher.decrypt(ciphertext),
         }
     }
 }

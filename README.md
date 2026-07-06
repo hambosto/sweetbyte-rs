@@ -182,49 +182,6 @@ Each encoded block has this format:
 
 CRC32 validates each shard before decoding. Corrupted shards get reconstructed from parity.
 
-## Code structure
-
-```
-src/
-├── main.rs                 # Entry point, global allocator (mimalloc), interactive mode, async runtime
-├── config.rs               # All constants, HKDF info strings
-├── types.rs                # Processing enum, Task, TaskResult
-├── secret.rs               # Wrapper types for sensitive data (zeroize on drop)
-├── validation.rs           # Validated newtypes (Filename, FileSize, etc.)
-├── files.rs                # File discovery, BLAKE3 hashing
-├── encoding.rs             # Reed-Solomon with CRC32 per-shard validation
-├── compression.rs          # zstd wrapper with compression levels
-├── padding.rs              # PKCS7 padding wrapper
-│
-├── cipher/
-│   ├── mod.rs              # Cipher struct holding both algorithms
-│   ├── aes256_gcm.rs       # AES-256-GCM implementation (aws-lc-rs)
-│   ├── chacha20poly1305.rs # ChaCha20-Poly1305 implementation (aws-lc-rs)
-│   ├── key.rs              # Argon2id + HKDF key derivation
-│   └── signer.rs           # HMAC-SHA256 with constant-time comparison
-│
-├── header/
-│   ├── mod.rs              # Header module exports
-│   ├── metadata.rs         # Metadata struct (filename, size, hash)
-│   ├── parameters.rs       # Parameters struct (magic, version)
-│   ├── section.rs          # Section pack/unpack for RS-encoded headers
-│   ├── serializer.rs       # Header serialization
-│   └── deserializer.rs     # Header deserialization
-│
-├── engine/
-│   ├── mod.rs              # Engine, sets up the pipeline
-│   ├── reader.rs           # Produces tasks from input file
-│   ├── executor.rs         # Parallel task processing
-│   ├── writer.rs           # Consumes results, writes output (with reordering buffer)
-│   └── pipeline.rs         # The actual encrypt/decrypt stages
-│
-└── ui/
-    ├── mod.rs              # UI module exports
-    ├── display.rs          # Terminal tables, banner display
-    ├── input.rs            # Interactive prompts for user input
-    └── progress.rs         # Progress bar display
-```
-
 ## Dependencies
 
 | Crate | Purpose |

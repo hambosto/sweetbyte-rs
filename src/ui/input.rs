@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use crate::files::Files;
+use crate::file::Files;
+use crate::pipeline::Processing;
 use crate::secret::Secret;
-use crate::types::Processing;
 
 pub(crate) struct Input {
     min_password_len: usize,

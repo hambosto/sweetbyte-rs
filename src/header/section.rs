@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::base64::Base64;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::compression::{CompressionLevel, Compressor};
+use crate::compression::{Compression, CompressionLevel};
 use crate::config::MAX_SECTION_SIZE;
 use crate::encoding::Encoding;
 use crate::secret::Secret;
@@ -31,13 +31,13 @@ pub(super) struct SectionData {
 }
 
 pub(super) struct Section {
-    compressor: Compressor,
+    compressor: Compression,
     encoder: Encoding,
 }
 
 impl Section {
     pub(super) fn new(compression_level: CompressionLevel, original_count: usize, recovery_count: usize) -> Result<Self> {
-        let compressor = Compressor::new(compression_level).context("failed to initialize compressor")?;
+        let compressor = Compression::new(compression_level).context("failed to initialize compression")?;
         let encoder = Encoding::new(original_count, recovery_count).context("failed to initialize encoder")?;
 
         Ok(Self { compressor, encoder })

@@ -2,8 +2,9 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
+use super::processing::Processing;
+use super::task::Task;
 use crate::config::{CHUNK_SIZE, MAX_CHUNK_SIZE};
-use crate::types::{Processing, Task};
 
 pub(super) struct Reader {
     processing: Processing,
@@ -50,7 +51,6 @@ impl Reader {
                     if chunk_len > MAX_CHUNK_SIZE {
                         anyhow::bail!("chunk size {chunk_len} exceeds maximum {MAX_CHUNK_SIZE}");
                     }
-
                     let mut data = vec![0u8; chunk_len as usize];
                     reader.read_exact(&mut data).await.context("failed to read chunk")?;
                     sender.send(Task { data, index }).await.context("failed to send chunk")?;

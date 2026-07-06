@@ -19,7 +19,7 @@ impl TryFrom<i32> for CompressionLevel {
             3 => Ok(CompressionLevel::Default),
             9 => Ok(CompressionLevel::Good),
             22 => Ok(CompressionLevel::Best),
-            _ => Err(anyhow::anyhow!("invalid compression level: {}. must be 1, 3, 9, or 22.", value)),
+            _ => Err(anyhow::anyhow!("invalid compression level: {value}. must be 1, 3, 9, or 22.")),
         }
     }
 }
@@ -35,11 +35,11 @@ impl From<CompressionLevel> for i32 {
     }
 }
 
-pub(crate) struct Compressor {
+pub(crate) struct Compression {
     level: CompressionLevel,
 }
 
-impl Compressor {
+impl Compression {
     pub(crate) fn new(level: CompressionLevel) -> Result<Self> {
         Ok(Self { level })
     }
