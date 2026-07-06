@@ -32,8 +32,8 @@ pub async fn run() -> Result<()> {
 
     display.files(&files).await?;
 
-    let source = file::Files::new(input.file(&files)?);
-    let target = file::Files::new(source.output_path(processing));
+    let source = Files::new(input.file(&files)?);
+    let target = Files::new(source.output_path(processing));
 
     if target.exists() && !input.overwrite(&target)? {
         anyhow::bail!("operation canceled");
