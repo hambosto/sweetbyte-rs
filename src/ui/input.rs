@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use crate::file::Files;
+use crate::files::Files;
 use crate::pipeline::Processing;
 use crate::secret::Secret;
 

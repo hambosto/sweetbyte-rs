@@ -10,7 +10,7 @@ mod tests {
     use tokio::fs;
 
     use super::*;
-    use crate::file::Files;
+    use crate::files::Files;
     use crate::secret::Secret;
 
     #[tokio::test]

@@ -3,7 +3,7 @@ use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
-use crate::file::Files;
+use crate::files::Files;
 use crate::pipeline::Processing;
 
 pub(crate) struct Display {

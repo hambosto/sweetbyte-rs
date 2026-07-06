@@ -3,7 +3,7 @@ mod cipher;
 mod compression;
 mod config;
 mod encoding;
-mod file;
+mod files;
 mod header;
 mod padding;
 mod pipeline;
@@ -16,7 +16,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use anyhow::{Context, Result};
 use config::{NAME_MAX_LEN, PASSWORD_LEN};
-use file::{Discover, Files};
+use files::{Discover, Files};
 use pipeline::Processing;
 use ui::{Display, Input};
 
