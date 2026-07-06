@@ -14,7 +14,8 @@ use task::{Task, TaskResult};
 use tokio::io::{AsyncRead, AsyncWrite};
 use writer::Writer;
 
-use crate::codec::{BlockSize, CompressionLevel};
+use crate::compression::CompressionLevel;
+use crate::padding::BlockSize;
 use crate::secret::Secret;
 use crate::ui::Progress;
 

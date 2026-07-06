@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 
 use crate::cipher::Derive;
-use crate::codec::{BlockSize, CompressionLevel};
+use crate::compression::CompressionLevel;
 use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::file::{Files, Metadata};
 use crate::header::ReadHeader;
+use crate::padding::BlockSize;
 use crate::pipeline::{Pipeline, Processing};
 use crate::secret::Secret;
 

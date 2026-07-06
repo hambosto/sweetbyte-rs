@@ -2,10 +2,11 @@ use anyhow::{Context, Result};
 use tokio::io::AsyncWriteExt;
 
 use crate::cipher::Derive;
-use crate::codec::{BlockSize, CompressionLevel};
+use crate::compression::CompressionLevel;
 use crate::config::{ARGON2_SALT_LEN, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::file::{Files, Metadata};
 use crate::header::WriteHeader;
+use crate::padding::BlockSize;
 use crate::pipeline::{Pipeline, Processing};
 use crate::secret::Secret;
 

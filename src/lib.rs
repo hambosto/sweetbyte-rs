@@ -1,9 +1,11 @@
 mod app;
 mod cipher;
-mod codec;
+mod compression;
 mod config;
+mod encoding;
 mod file;
 mod header;
+mod padding;
 mod pipeline;
 mod secret;
 mod ui;

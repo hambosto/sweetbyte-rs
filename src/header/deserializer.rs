@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use tokio::io::AsyncRead;
 
 use crate::cipher::Signer;
-use crate::codec::CompressionLevel;
+use crate::compression::CompressionLevel;
 use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::header::metadata::Metadata;
 use crate::header::parameters::Parameters;
