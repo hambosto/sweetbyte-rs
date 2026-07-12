@@ -1,7 +1,7 @@
 use anyhow::{Context, Error, Result};
 use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
-use block_padding::{Padding, Pkcs7};
+use block_padding::{PaddedData, Padding, Pkcs7};
 
 #[derive(Default)]
 #[non_exhaustive]
@@ -67,7 +67,7 @@ impl Pkcs7Padding {
     #[inline]
     fn pad_with<B: ArraySize>(data: &[u8]) -> Result<Vec<u8>> {
         match Pkcs7::pad_detached::<B>(data) {
-            block_padding::PaddedData::Pad { blocks, tail_block } => {
+            PaddedData::Pad { blocks, tail_block } => {
                 let total_len = blocks.len().saturating_mul(B::USIZE).saturating_add(B::USIZE);
                 let mut result = Vec::with_capacity(total_len);
                 for block in blocks {
@@ -76,7 +76,7 @@ impl Pkcs7Padding {
                 result.extend_from_slice(tail_block.as_slice());
                 Ok(result)
             }
-            block_padding::PaddedData::NoPad { blocks } => {
+            PaddedData::NoPad { blocks } => {
                 let total_len = blocks.len().saturating_mul(B::USIZE);
                 let mut result = Vec::with_capacity(total_len);
                 for block in blocks {
@@ -84,7 +84,7 @@ impl Pkcs7Padding {
                 }
                 Ok(result)
             }
-            block_padding::PaddedData::Error => anyhow::bail!("invalid padding"),
+            PaddedData::Error => anyhow::bail!("invalid padding"),
         }
     }
 
