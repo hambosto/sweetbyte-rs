@@ -11,14 +11,16 @@ mod secret;
 mod ui;
 mod validation;
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 use anyhow::{Context, Result};
-use config::{NAME_MAX_LEN, PASSWORD_LEN};
-use files::{Discover, Files};
-use pipeline::Processing;
-use ui::{Display, Input};
+use mimalloc::MiMalloc;
+
+use crate::config::{NAME_MAX_LEN, PASSWORD_LEN};
+use crate::files::{Discover, Files};
+use crate::pipeline::Processing;
+use crate::ui::{Display, Input};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
