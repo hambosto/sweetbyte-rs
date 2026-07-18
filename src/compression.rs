@@ -1,6 +1,5 @@
 use anyhow::{Context, Error, Result};
 
-#[non_exhaustive]
 #[derive(Clone, Copy, Default)]
 pub(crate) enum CompressionLevel {
     Fast,
@@ -41,6 +40,12 @@ pub(crate) struct Compression {
 
 impl Compression {
     pub(crate) fn new(level: CompressionLevel) -> Result<Self> {
+        let zstd_level: i32 = level.into();
+        let supported_range = zstd::compression_level_range();
+        if !supported_range.contains(&zstd_level) {
+            anyhow::bail!("compression level {zstd_level} out of range: valid range is {} to {}", supported_range.start(), supported_range.end());
+        }
+
         Ok(Self { level })
     }
 
