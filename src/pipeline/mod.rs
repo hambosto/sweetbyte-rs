@@ -1,17 +1,16 @@
 mod executor;
 mod process;
-mod processing;
 mod reader;
-mod task;
+mod types;
 mod writer;
 
 use anyhow::{Context, Result};
 use executor::Executor;
 use process::Process;
-pub(crate) use processing::Processing;
 use reader::Reader;
-use task::{Task, TaskResult};
 use tokio::io::{AsyncRead, AsyncWrite};
+pub(crate) use types::Processing;
+use types::{Task, TaskResult};
 use writer::Writer;
 
 use crate::compression::CompressionLevel;
@@ -38,7 +37,7 @@ impl Pipeline {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let channel_size = std::thread::available_parallelism().map(|p| p.get()).context("failed to get available parallelism")?;
+        let channel_size = std::thread::available_parallelism().map(std::num::NonZero::get).context("failed to get available parallelism")?;
         let progress_bar = Progress::new(total_size, self.processing.label());
 
         let (task_tx, task_rx) = tokio::sync::mpsc::channel::<Task>(channel_size);

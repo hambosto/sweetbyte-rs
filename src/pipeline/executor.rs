@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinSet;
 
 use super::process::Process;
-use super::task::{Task, TaskResult};
+use super::types::{Task, TaskResult};
 
 pub(super) struct Executor {
     process: Arc<Process>,

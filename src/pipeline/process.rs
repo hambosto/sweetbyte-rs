@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 
-use super::processing::Processing;
-use super::task::{Task, TaskResult};
+use super::types::{Processing, Task, TaskResult};
 use crate::cipher::{Algorithm, Cipher};
 use crate::compression::{Compression, CompressionLevel};
 use crate::encoding::Encoding;
