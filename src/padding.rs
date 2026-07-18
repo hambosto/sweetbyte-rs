@@ -3,8 +3,7 @@ use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{PaddedData, Padding, Pkcs7};
 
-#[derive(Default)]
-#[non_exhaustive]
+#[derive(Clone, Copy, Default)]
 pub(crate) enum BlockSize {
     #[default]
     B16,
@@ -27,12 +26,29 @@ impl TryFrom<usize> for BlockSize {
     }
 }
 
+impl From<BlockSize> for usize {
+    fn from(block_size: BlockSize) -> Self {
+        match block_size {
+            BlockSize::B16 => 16,
+            BlockSize::B32 => 32,
+            BlockSize::B64 => 64,
+            BlockSize::B128 => 128,
+        }
+    }
+}
+
 pub(crate) struct Pkcs7Padding {
     block_size: BlockSize,
 }
 
 impl Pkcs7Padding {
     pub(crate) fn new(block_size: BlockSize) -> Result<Self> {
+        let size: usize = block_size.into();
+
+        if size > 255 {
+            anyhow::bail!("block size {size} exceeds PKCS#7's maximum of 255 bytes");
+        }
+
         Ok(Self { block_size })
     }
 
