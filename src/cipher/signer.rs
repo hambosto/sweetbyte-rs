@@ -49,6 +49,6 @@ impl Signer {
     }
 
     pub(crate) fn verify_parts(&self, expected: &[u8], parts: &[&[u8]]) -> bool {
-        self.compute_parts(parts).map(|computed| expected.ct_eq(&computed).into()).unwrap_or(false)
+        self.compute_parts(parts).is_ok_and(|computed| expected.ct_eq(&computed).into())
     }
 }
