@@ -23,12 +23,17 @@ impl Executor {
         let mut workers: JoinSet<Result<()>> = JoinSet::new();
 
         while let Some(task) = tasks.recv().await {
+            while let Some(join_result) = workers.try_join_next() {
+                let worker_result = join_result.context("executor panicked")?;
+                worker_result.context("failed to process task")?;
+            }
+
             let permit = Arc::clone(&semaphore).acquire_owned().await.context("failed to acquire semaphore permit")?;
             let process = Arc::clone(&self.process);
             let results = results.clone();
 
             workers.spawn_blocking(move || {
-                let result = process.process(&task).context("failed to process task")?;
+                let result = process.process(&task)?;
                 results.blocking_send(result).context("failed to send result")?;
 
                 drop(permit);
@@ -36,8 +41,11 @@ impl Executor {
             });
         }
 
+        drop(tasks);
+
         while let Some(join_result) = workers.join_next().await {
-            join_result?.context("executor panicked")?;
+            let worker_result = join_result.context("executor panicked")?;
+            worker_result.context("failed to process task")?;
         }
 
         Ok(())
