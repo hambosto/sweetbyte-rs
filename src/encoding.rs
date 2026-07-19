@@ -35,7 +35,7 @@ impl Encoding {
         result.extend_from_slice(&u32::try_from(data.len())?.to_le_bytes());
 
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, original.chunks(shard_size)).context("failed to encode reed-solomon shards")?;
-        for shard in original.chunks(shard_size).chain(recovery.iter().map(|v| v.as_slice())) {
+        for shard in original.chunks(shard_size).chain(recovery.iter().map(Vec::as_slice)) {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
             result.extend_from_slice(shard);
         }
@@ -68,15 +68,16 @@ impl Encoding {
             }
         }
 
-        let restored = if original.len() == self.original_count {
-            original.into_iter().map(|(index, shard)| (index, shard.to_vec())).collect()
-        } else {
-            reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode reed-solomon shards")?
-        };
-
         let mut result = Vec::with_capacity(self.original_count.saturating_mul(shard_size.saturating_sub(CRC)));
-        for index in 0..self.original_count {
-            result.extend_from_slice(restored.get(&index).with_context(|| format!("missing shard {index}"))?);
+        if original.len() == self.original_count {
+            for (_, shard) in original {
+                result.extend_from_slice(shard);
+            }
+        } else {
+            let restored = reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode reed-solomon shards")?;
+            for index in 0..self.original_count {
+                result.extend_from_slice(restored.get(&index).with_context(|| format!("missing shard {index}"))?);
+            }
         }
         result.truncate(original_size);
 

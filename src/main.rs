@@ -14,10 +14,10 @@ mod validation;
 use anyhow::{Context, Result};
 use mimalloc::MiMalloc;
 
-use crate::config::{NAME_MAX_LEN, PASSWORD_LEN};
+use crate::config::PASSWORD_LEN;
 use crate::files::{Discover, Files};
 use crate::pipeline::Processing;
-use crate::ui::{Display, Input};
+use crate::ui::Input;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -25,10 +25,9 @@ static GLOBAL: MiMalloc = MiMalloc;
 #[tokio::main]
 async fn main() -> Result<()> {
     let input = Input::new(PASSWORD_LEN, true);
-    let display = Display::new(NAME_MAX_LEN);
 
-    display.clear()?;
-    display.banner()?;
+    crate::ui::display::clear()?;
+    crate::ui::display::banner()?;
 
     let processing = input.processing_mode()?;
     let files: Vec<Files> = Discover::new(".", processing).run().into_iter().map(Files::new).collect();
@@ -36,7 +35,7 @@ async fn main() -> Result<()> {
         anyhow::bail!("no files available for processing");
     }
 
-    display.files(&files).await?;
+    crate::ui::display::files(&files).await?;
 
     let source = Files::new(input.file(&files)?);
     let target = Files::new(source.output_path(processing));
@@ -51,13 +50,13 @@ async fn main() -> Result<()> {
         Processing::Decryption => app::decrypt(&source, &target, &secret).await?,
     };
 
-    display.success(processing, &target)?;
-    display.header(&header.name, header.size, &hex::encode(&header.hash))?;
+    crate::ui::display::success(processing, &target)?;
+    crate::ui::display::header(&header.name, header.size, &hex::encode(&header.hash))?;
 
     if input.delete(&source, processing)? {
         source.delete().await.context("failed to delete source file")?;
-        display.deleted(&source)?;
+        crate::ui::display::deleted(&source)?;
     }
 
-    display.exit()
+    crate::ui::display::exit()
 }

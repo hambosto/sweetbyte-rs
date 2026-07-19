@@ -17,10 +17,10 @@ impl Discover {
 
     pub(crate) fn run(&self) -> Vec<PathBuf> {
         let mut paths = Vec::new();
+
         for entry in WalkDir::new(&self.root).follow_links(false) {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(_) => continue,
+            let Ok(entry) = entry else {
+                continue;
             };
 
             if !entry.file_type().is_file() {
@@ -52,27 +52,24 @@ impl Discover {
     }
 
     fn is_hidden(path: &Path) -> bool {
-        let file_name = match path.file_name() {
-            Some(file_name) => file_name,
-            None => return false,
+        let Some(file_name) = path.file_name() else {
+            return false;
         };
 
-        let file_name = match file_name.to_str() {
-            Some(file_name) => file_name,
-            None => return false,
+        let Some(file_name) = file_name.to_str() else {
+            return false;
         };
 
         file_name.starts_with('.')
     }
 
     fn is_excluded(path: &Path) -> bool {
-        for component in path.iter() {
-            let part = match component.to_str() {
-                Some(part) => part,
-                None => continue,
+        for component in path {
+            let Some(part) = component.to_str() else {
+                continue;
             };
 
-            for pattern in EXCLUDED_PATTERNS.iter() {
+            for pattern in EXCLUDED_PATTERNS {
                 if fast_glob::glob_match(pattern, part) {
                     return true;
                 }
@@ -83,14 +80,12 @@ impl Discover {
     }
 
     fn is_encrypted(path: &Path) -> bool {
-        let extension = match path.extension() {
-            Some(extension) => extension,
-            None => return false,
+        let Some(extension) = path.extension() else {
+            return false;
         };
 
-        let extension = match extension.to_str() {
-            Some(extension) => extension,
-            None => return false,
+        let Some(extension) = extension.to_str() else {
+            return false;
         };
 
         extension == FILE_EXTENSION
