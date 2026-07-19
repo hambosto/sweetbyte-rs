@@ -1,11 +1,11 @@
-mod aes256gcm;
-mod chacha20poly1305;
+mod aead;
 mod signer;
 mod stretch;
 
-use aes256gcm::Aes256Gcm;
+use aead::AeadCipher;
+use aes_gcm::Aes256Gcm;
 use anyhow::{Context, Result};
-use chacha20poly1305::ChaCha20Poly1305;
+use chacha20poly1305::XChaCha20Poly1305;
 pub(crate) use signer::Signer;
 pub(crate) use stretch::Stretch;
 
@@ -18,16 +18,16 @@ pub(crate) enum Algorithm {
 }
 
 pub(crate) struct Cipher {
-    primary_cipher: Aes256Gcm,
-    secondary_cipher: ChaCha20Poly1305,
+    primary_cipher: AeadCipher<Aes256Gcm>,
+    secondary_cipher: AeadCipher<XChaCha20Poly1305>,
 }
 
 impl Cipher {
     pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret) -> Result<Self> {
         let primary_key = KeyBytes::try_new(primary_key.expose_secret().to_vec()).context("primary key must be 32 bytes")?;
         let secondary_key = KeyBytes::try_new(secondary_key.expose_secret().to_vec()).context("secondary key must be 32 bytes")?;
-        let primary_cipher = Aes256Gcm::new(&primary_key.into_secret()).context("failed to initialize primary cipher")?;
-        let secondary_cipher = ChaCha20Poly1305::new(&secondary_key.into_secret()).context("failed to initialize secondary cipher")?;
+        let primary_cipher = AeadCipher::<Aes256Gcm>::new(&primary_key.into_secret()).context("failed to initialize primary cipher")?;
+        let secondary_cipher = AeadCipher::<XChaCha20Poly1305>::new(&secondary_key.into_secret()).context("failed to initialize secondary cipher")?;
 
         Ok(Self { primary_cipher, secondary_cipher })
     }
