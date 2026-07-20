@@ -1,13 +1,13 @@
 mod aead;
+mod key_deriver;
 mod signer;
-mod stretch;
 
 use aead::AeadCipher;
 use aes_gcm::Aes256Gcm;
 use anyhow::{Context, Result};
 use chacha20poly1305::XChaCha20Poly1305;
+pub(crate) use key_deriver::KeyDeriver;
 pub(crate) use signer::Signer;
-pub(crate) use stretch::Stretch;
 
 use crate::secret::Secret;
 use crate::validation::KeyBytes;
