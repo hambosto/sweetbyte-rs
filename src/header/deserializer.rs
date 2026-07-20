@@ -4,8 +4,7 @@ use tokio::io::AsyncRead;
 use super::section::{Section, SectionData};
 use super::types::{Metadata, Parameters};
 use crate::cipher::Signer;
-use crate::compression::CompressionLevel;
-use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
+use crate::config::{COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::secret::Secret;
 
 pub(crate) struct Deserializer {
@@ -16,7 +15,7 @@ pub(crate) struct Deserializer {
 
 impl Deserializer {
     pub(crate) async fn from_reader<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self> {
-        let section: Section = Section::new(CompressionLevel::Best, ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
+        let section: Section = Section::new(COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
         let section_data: SectionData = section.unpack(reader).await.context("failed to unpack section data")?;
         let params: Parameters = postcard::from_bytes(section_data.params.expose_secret()).context("failed to deserialize params")?;
         let metadata: Metadata = postcard::from_bytes(section_data.metadata.expose_secret()).context("failed to deserialize metadata")?;

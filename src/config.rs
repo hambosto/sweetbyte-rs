@@ -14,6 +14,10 @@ pub(crate) const KEY_LEN: usize = 32;
 
 pub(crate) const ORIGINAL_COUNT: usize = 4;
 
+pub(crate) const BLOCK_SIZE: usize = 128;
+
+pub(crate) const COMPRESSION_LEVEL: i32 = 1;
+
 pub(crate) const RECOVERY_COUNT: usize = 10;
 
 pub(crate) const CHUNK_SIZE: usize = 256 * 1024;

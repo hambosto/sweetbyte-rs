@@ -13,8 +13,6 @@ pub(crate) use types::Processing;
 use types::{Task, TaskResult};
 use writer::Writer;
 
-use crate::compression::CompressionLevel;
-use crate::padding::BlockSize;
 use crate::secret::Secret;
 use crate::ui::Progress;
 
@@ -24,9 +22,7 @@ pub(crate) struct Pipeline {
 }
 
 impl Pipeline {
-    pub(crate) fn new(
-        primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: CompressionLevel, block_size: BlockSize, original_count: usize, recovery_count: usize,
-    ) -> Result<Self> {
+    pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: i32, block_size: usize, original_count: usize, recovery_count: usize) -> Result<Self> {
         let process = Process::new(primary_key, secondary_key, processing, compression_level, block_size, original_count, recovery_count).context("failed to initialize process")?;
 
         Ok(Self { processing, process })

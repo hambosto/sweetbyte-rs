@@ -43,7 +43,6 @@ impl Signer {
         }
 
         let mut mac = Hmac::<Sha256>::new_from_slice(self.key.expose_secret()).context("failed to setup key")?;
-
         for part in parts {
             let part_len: u64 = part.len().try_into().context("part length overflow")?;
             mac.update(&part_len.to_be_bytes());

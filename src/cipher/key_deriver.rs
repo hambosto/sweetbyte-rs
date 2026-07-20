@@ -36,7 +36,6 @@ impl KeyDeriver {
             .context("failed to stretch key with argon2")?;
 
         let hkdf = Hkdf::<Sha256>::new(Some(salt.expose_secret()), &stretched);
-
         let mut primary_key = vec![0u8; KEY_LEN];
         let mut secondary_key = vec![0u8; KEY_LEN];
         let mut signer_key = vec![0u8; KEY_LEN];

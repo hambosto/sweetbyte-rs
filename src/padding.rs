@@ -1,52 +1,16 @@
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Result};
 use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{PaddedData, Padding, Pkcs7};
 
-#[derive(Clone, Copy, Default)]
-pub(crate) enum BlockSize {
-    #[default]
-    B16,
-    B32,
-    B64,
-    B128,
-}
-
-impl TryFrom<usize> for BlockSize {
-    type Error = Error;
-
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        match value {
-            16 => Ok(BlockSize::B16),
-            32 => Ok(BlockSize::B32),
-            64 => Ok(BlockSize::B64),
-            128 => Ok(BlockSize::B128),
-            _ => Err(anyhow::anyhow!("invalid block size: {value}. must be 16, 32, 64, or 128.")),
-        }
-    }
-}
-
-impl From<BlockSize> for usize {
-    fn from(block_size: BlockSize) -> Self {
-        match block_size {
-            BlockSize::B16 => 16,
-            BlockSize::B32 => 32,
-            BlockSize::B64 => 64,
-            BlockSize::B128 => 128,
-        }
-    }
-}
-
 pub(crate) struct Pkcs7Padding {
-    block_size: BlockSize,
+    block_size: usize,
 }
 
 impl Pkcs7Padding {
-    pub(crate) fn new(block_size: BlockSize) -> Result<Self> {
-        let size: usize = block_size.into();
-
-        if size > 255 {
-            anyhow::bail!("block size {size} exceeds PKCS#7's maximum of 255 bytes");
+    pub(crate) fn new(block_size: usize) -> Result<Self> {
+        if !matches!(block_size, 16 | 32 | 64 | 128) {
+            anyhow::bail!("invalid block size: {block_size}. must be 16, 32, 64, or 128.");
         }
 
         Ok(Self { block_size })
@@ -59,10 +23,11 @@ impl Pkcs7Padding {
         }
 
         match self.block_size {
-            BlockSize::B16 => Self::pad_with::<U16>(data),
-            BlockSize::B32 => Self::pad_with::<U32>(data),
-            BlockSize::B64 => Self::pad_with::<U64>(data),
-            BlockSize::B128 => Self::pad_with::<U128>(data),
+            16 => Self::pad_with::<U16>(data),
+            32 => Self::pad_with::<U32>(data),
+            64 => Self::pad_with::<U64>(data),
+            128 => Self::pad_with::<U128>(data),
+            other => anyhow::bail!("unsupported block size: {other}"),
         }
     }
 
@@ -73,10 +38,11 @@ impl Pkcs7Padding {
         }
 
         match self.block_size {
-            BlockSize::B16 => Self::unpad_with::<U16>(data),
-            BlockSize::B32 => Self::unpad_with::<U32>(data),
-            BlockSize::B64 => Self::unpad_with::<U64>(data),
-            BlockSize::B128 => Self::unpad_with::<U128>(data),
+            16 => Self::unpad_with::<U16>(data),
+            32 => Self::unpad_with::<U32>(data),
+            64 => Self::unpad_with::<U64>(data),
+            128 => Self::unpad_with::<U128>(data),
+            other => anyhow::bail!("unsupported block size: {other}"),
         }
     }
 

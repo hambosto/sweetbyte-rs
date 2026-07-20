@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 
 use super::types::{Processing, Task, TaskResult};
 use crate::cipher::{Algorithm, Cipher};
-use crate::compression::{Compression, CompressionLevel};
+use crate::compression::Compression;
 use crate::encoding::Encoding;
-use crate::padding::{BlockSize, Pkcs7Padding};
+use crate::padding::Pkcs7Padding;
 use crate::secret::Secret;
 
 pub(super) struct Process {
@@ -16,9 +16,7 @@ pub(super) struct Process {
 }
 
 impl Process {
-    pub(super) fn new(
-        primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: CompressionLevel, block_size: BlockSize, original_count: usize, recovery_count: usize,
-    ) -> Result<Self> {
+    pub(super) fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: i32, block_size: usize, original_count: usize, recovery_count: usize) -> Result<Self> {
         let cipher = Cipher::new(primary_key, secondary_key).context("failed to initialize cipher")?;
         let encoder = Encoding::new(original_count, recovery_count).context("failed to initialize encoder")?;
         let compressor = Compression::new(compression_level).context("failed to initialize compressor")?;

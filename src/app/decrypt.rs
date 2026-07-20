@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
 
 use crate::cipher::KeyDeriver;
-use crate::compression::CompressionLevel;
-use crate::config::{ORIGINAL_COUNT, RECOVERY_COUNT};
+use crate::config::{BLOCK_SIZE, COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::files::{Files, Metadata};
 use crate::header::Deserializer;
-use crate::padding::BlockSize;
 use crate::pipeline::{Pipeline, Processing};
 use crate::secret::Secret;
 
@@ -20,7 +18,7 @@ pub(crate) async fn decrypt(source: &Files, target: &Files, secret: &Secret) -> 
         anyhow::bail!("incorrect password or corrupted file");
     }
 
-    let pipeline = Pipeline::new(&keys.primary_key, &keys.secondary_key, Processing::Decryption, CompressionLevel::Fast, BlockSize::B128, ORIGINAL_COUNT, RECOVERY_COUNT)?;
+    let pipeline = Pipeline::new(&keys.primary_key, &keys.secondary_key, Processing::Decryption, COMPRESSION_LEVEL, BLOCK_SIZE, ORIGINAL_COUNT, RECOVERY_COUNT)?;
     pipeline.process(reader, writer, header.file_size()).await?;
 
     if !crate::files::hash::validate_hash(target, header.file_hash())? {
