@@ -1,9 +1,7 @@
 {
   description = "A very small, very simple, yet very secure encryption tool written in rust.";
 
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-  };
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
   outputs =
     {

@@ -11,7 +11,7 @@ repository = "https://github.com/hambosto/sweetbyte-rs"
 aead              = "0.6.1"
 aes-gcm           = { version = "0.11.0", features = ["zeroize"] }
 anyhow            = "1.0.104"
-argon2            = { version = "0.5.3", features = ["std", "zeroize"] }
+argon2            = { git = "https://github.com/RustCrypto/password-hashes.git", version = "0.6.0-rc.8", features = ["zeroize"] }
 blake3            = { version = "1.8.5", features = ["mmap", "rayon"] }
 block-padding     = "0.4.2"
 chacha20poly1305  = { version = "0.11.0", features = ["zeroize"] }
