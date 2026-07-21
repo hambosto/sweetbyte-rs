@@ -22,6 +22,7 @@ impl Compression {
         zstd::stream::encode_all(data, self.level).context("failed to compress")
     }
 
+    #[expect(clippy::unused_self, reason = "consistent API with compress")]
     pub(crate) fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
             anyhow::bail!("data must not be empty");
