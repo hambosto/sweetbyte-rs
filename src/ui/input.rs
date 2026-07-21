@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use crate::files::Files;
-use crate::pipeline::Processing;
+use crate::pipeline::Operation;
 use crate::secret::Secret;
 
 pub(crate) struct Input {
@@ -18,13 +18,13 @@ impl Input {
         Self { min_password_len, default_overwrite: false, default_delete: false, filter_mode }
     }
 
-    pub(crate) fn password(&self, processing: Processing) -> Result<Secret> {
+    pub(crate) fn password(&self, operation: Operation) -> Result<Secret> {
         let min = self.min_password_len;
         let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("password must be at least {min} characters"));
 
-        let (message, confirm_message) = match processing {
-            Processing::Encryption => ("Enter encryption password", Some("Confirm password")),
-            Processing::Decryption => ("Enter decryption password", None),
+        let (message, confirm_message) = match operation {
+            Operation::Encryption => ("Enter encryption password", Some("Confirm password")),
+            Operation::Decryption => ("Enter decryption password", None),
         };
 
         let password = cliclack::password(message).validate(validate).interact().context("failed to read password")?;
@@ -38,9 +38,9 @@ impl Input {
         Ok(Secret::new(password.as_bytes().to_vec()))
     }
 
-    pub(crate) fn processing_mode(&self) -> Result<Processing> {
+    pub(crate) fn operation_mode(&self) -> Result<Operation> {
         let mut select = cliclack::select("Select operation");
-        for m in Processing::iter() {
+        for m in Operation::iter() {
             select = select.item(m, m.to_string(), "");
         }
 
@@ -71,10 +71,10 @@ impl Input {
             .context("failed to confirm overwrite")
     }
 
-    pub(crate) fn delete(&self, file: &Files, processing: Processing) -> Result<bool> {
-        let process = match processing {
-            Processing::Encryption => "encrypted",
-            Processing::Decryption => "decrypted",
+    pub(crate) fn delete(&self, file: &Files, operation: Operation) -> Result<bool> {
+        let process = match operation {
+            Operation::Encryption => "encrypted",
+            Operation::Decryption => "decrypted",
         };
 
         cliclack::confirm(format!("Delete {} file {}?", process, file.name()))

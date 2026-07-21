@@ -4,7 +4,7 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
 use crate::files::Files;
-use crate::pipeline::Processing;
+use crate::pipeline::Operation;
 
 pub(crate) async fn files(items: &[Files]) -> Result<()> {
     if items.is_empty() {
@@ -27,10 +27,10 @@ pub(crate) async fn files(items: &[Files]) -> Result<()> {
     cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("failed to display files")
 }
 
-pub(crate) fn success(processing: Processing, file: &Files) -> Result<()> {
-    let process = match processing {
-        Processing::Encryption => "encrypted",
-        Processing::Decryption => "decrypted",
+pub(crate) fn success(operation: Operation, file: &Files) -> Result<()> {
+    let process = match operation {
+        Operation::Encryption => "encrypted",
+        Operation::Decryption => "decrypted",
     };
 
     cliclack::log::success(format!("File {process} successfully: {}", file.name())).context("failed to display success message")

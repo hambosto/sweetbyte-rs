@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use crate::cipher::KeyDeriver;
 use crate::files::{Files, Metadata};
 use crate::header::Deserializer;
-use crate::pipeline::{Pipeline, Processing};
+use crate::pipeline::{Operation, Pipeline};
 use crate::secret::Secret;
 
 pub(crate) async fn decrypt(source: &Files, target: &Files, secret: &Secret) -> Result<Metadata> {
@@ -17,7 +17,7 @@ pub(crate) async fn decrypt(source: &Files, target: &Files, secret: &Secret) -> 
         anyhow::bail!("incorrect password or corrupted file");
     }
 
-    let pipeline = Pipeline::new(&keys.primary_key, &keys.secondary_key, Processing::Decryption)?;
+    let pipeline = Pipeline::new(&keys.primary_key, &keys.secondary_key, Operation::Decryption)?;
     pipeline.process(reader, writer, header.file_size()).await?;
 
     if !crate::files::hash::validate_hash(target, header.file_hash())? {

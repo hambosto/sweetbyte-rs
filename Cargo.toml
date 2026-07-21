@@ -39,15 +39,15 @@ tokio             = { version = "1.53.1", features = ["full"] }
 walkdir           = "2.5.0"
 zstd              = { version = "0.13.3", features = ["thin"] }
 
+[dev-dependencies]
+tempfile = "3.27.0"
+
 [profile.release]
 codegen-units = 1
 lto           = "fat"
 opt-level     = 3
 panic         = "abort"
 strip         = true
-
-[dev-dependencies]
-tempfile = "3.27.0"
 
 [lints.clippy]
 string_slice                    = "warn"

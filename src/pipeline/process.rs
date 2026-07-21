@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-use super::types::{Processing, Task, TaskResult};
+use super::types::{Operation, Task, TaskResult};
 use crate::cipher::{Algorithm, Cipher};
 use crate::compression::Compression;
 use crate::config::{BLOCK_SIZE, COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
@@ -13,24 +13,24 @@ pub(super) struct Process {
     encoder: Encoding,
     compressor: Compression,
     padding: Pkcs7Padding,
-    processing: Processing,
+    operation: Operation,
 }
 
 impl Process {
-    pub(super) fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing) -> Result<Self> {
+    pub(super) fn new(primary_key: &Secret, secondary_key: &Secret, operation: Operation) -> Result<Self> {
         let cipher = Cipher::new(primary_key, secondary_key).context("failed to initialize cipher")?;
         let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize encoder")?;
         let compressor = Compression::new(COMPRESSION_LEVEL).context("failed to initialize compressor")?;
         let padding = Pkcs7Padding::new(BLOCK_SIZE).context("failed to initialize padding")?;
 
-        Ok(Self { cipher, encoder, compressor, padding, processing })
+        Ok(Self { cipher, encoder, compressor, padding, operation })
     }
 
     #[inline]
     pub(super) fn process(&self, task: &Task) -> Result<TaskResult> {
-        match self.processing {
-            Processing::Encryption => self.encrypt(task),
-            Processing::Decryption => self.decrypt(task),
+        match self.operation {
+            Operation::Encryption => self.encrypt(task),
+            Operation::Decryption => self.decrypt(task),
         }
     }
 

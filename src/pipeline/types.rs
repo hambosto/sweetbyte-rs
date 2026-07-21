@@ -1,15 +1,15 @@
 use strum::{Display, EnumIter, IntoEnumIterator, IntoStaticStr};
 
 #[non_exhaustive]
-#[derive(Display, Debug, Clone, Copy, Eq, PartialEq, EnumIter, IntoStaticStr)]
-pub(crate) enum Processing {
+#[derive(Display, Clone, Copy, Eq, PartialEq, EnumIter, IntoStaticStr)]
+pub(crate) enum Operation {
     #[strum(to_string = "Encrypt")]
     Encryption,
     #[strum(to_string = "Decrypt")]
     Decryption,
 }
 
-impl Processing {
+impl Operation {
     pub(crate) fn iter() -> impl Iterator<Item = Self> {
         <Self as IntoEnumIterator>::iter()
     }

@@ -5,7 +5,7 @@ use crate::cipher::KeyDeriver;
 use crate::config::ARGON2_SALT_LEN;
 use crate::files::{Files, Metadata};
 use crate::header::Serializer;
-use crate::pipeline::{Pipeline, Processing};
+use crate::pipeline::{Operation, Pipeline};
 use crate::secret::Secret;
 
 pub(crate) async fn encrypt(source: &Files, target: &Files, secret: &Secret) -> Result<Metadata> {
@@ -21,7 +21,7 @@ pub(crate) async fn encrypt(source: &Files, target: &Files, secret: &Secret) -> 
     let serialized = header.serialize(salt.expose_secret(), &keys.signer_key).context("failed to serialize header")?;
     writer.write_all(&serialized).await.context("failed to write header")?;
 
-    let engine = Pipeline::new(&keys.primary_key, &keys.secondary_key, Processing::Encryption)?;
+    let engine = Pipeline::new(&keys.primary_key, &keys.secondary_key, Operation::Encryption)?;
     engine.process(reader, writer, metadata.size).await?;
 
     Ok(Metadata { name: header.file_name().to_owned(), size: header.file_size(), hash: header.file_hash().to_vec() })

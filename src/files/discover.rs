@@ -3,16 +3,16 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
-use crate::pipeline::Processing;
+use crate::pipeline::Operation;
 
 pub(crate) struct Discover {
     root: String,
-    processing: Processing,
+    operation: Operation,
 }
 
 impl Discover {
-    pub(crate) fn new(root: impl Into<String>, processing: Processing) -> Self {
-        Self { root: root.into(), processing }
+    pub(crate) fn new(root: impl Into<String>, operation: Operation) -> Self {
+        Self { root: root.into(), operation }
     }
 
     pub(crate) fn run(&self) -> Vec<PathBuf> {
@@ -45,9 +45,9 @@ impl Discover {
             return false;
         }
 
-        match self.processing {
-            Processing::Encryption => !Self::is_encrypted(path),
-            Processing::Decryption => Self::is_encrypted(path),
+        match self.operation {
+            Operation::Encryption => !Self::is_encrypted(path),
+            Operation::Decryption => Self::is_encrypted(path),
         }
     }
 

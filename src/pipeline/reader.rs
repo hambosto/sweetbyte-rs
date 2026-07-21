@@ -2,48 +2,49 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
-use super::types::{Processing, Task};
+use super::types::{Operation, Task};
 use crate::config::{CHUNK_SIZE, MAX_CHUNK_SIZE};
 
 pub(super) struct Reader {
-    processing: Processing,
+    index: u64,
+    buffer: Vec<u8>,
+    operation: Operation,
 }
 
 impl Reader {
-    pub(super) fn new(processing: Processing) -> Self {
-        Self { processing }
+    pub(super) fn new(operation: Operation) -> Self {
+        Self { index: 0, buffer: Vec::with_capacity(CHUNK_SIZE), operation }
     }
 
-    pub(super) async fn read_all<R: AsyncRead + Unpin>(&self, input: R, sender: &Sender<Task>) -> Result<()> {
+    pub(super) async fn read_all<R: AsyncRead + Unpin>(&mut self, input: R, sender: &Sender<Task>) -> Result<()> {
+        self.index = 0;
+        self.buffer.clear();
         let mut reader = BufReader::new(input);
 
-        match self.processing {
-            Processing::Encryption => Self::read_fixed_chunks(&mut reader, sender).await,
-            Processing::Decryption => Self::read_length_prefixed(&mut reader, sender).await,
+        match self.operation {
+            Operation::Encryption => self.read_fixed_chunks(&mut reader, sender).await,
+            Operation::Decryption => self.read_length_prefixed(&mut reader, sender).await,
         }
     }
 
-    async fn read_fixed_chunks<R: AsyncRead + Unpin>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
-        let mut index = 0u64;
-
+    async fn read_fixed_chunks<R: AsyncRead + Unpin>(&mut self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         loop {
-            let mut buffer = Vec::with_capacity(CHUNK_SIZE);
-            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut buffer).await.context("failed to read chunk")?;
+            self.buffer.clear();
+            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut self.buffer).await.context("failed to read chunk")?;
 
             if bytes_read == 0 {
                 break;
             }
 
-            sender.send(Task { data: buffer, index }).await.context("failed to send chunk")?;
-            index = index.saturating_add(1);
+            let data = std::mem::take(&mut self.buffer);
+            sender.send(Task { data, index: self.index }).await.context("failed to send chunk")?;
+            self.index = self.index.saturating_add(1);
         }
 
         Ok(())
     }
 
-    async fn read_length_prefixed<R: AsyncRead + Unpin>(reader: &mut R, sender: &Sender<Task>) -> Result<()> {
-        let mut index = 0u64;
-
+    async fn read_length_prefixed<R: AsyncRead + Unpin>(&mut self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         loop {
             match reader.read_u32_le().await {
                 Ok(chunk_len) => {
@@ -52,8 +53,8 @@ impl Reader {
                     }
                     let mut data = vec![0u8; chunk_len as usize];
                     reader.read_exact(&mut data).await.context("failed to read chunk")?;
-                    sender.send(Task { data, index }).await.context("failed to send chunk")?;
-                    index = index.saturating_add(1);
+                    sender.send(Task { data, index: self.index }).await.context("failed to send chunk")?;
+                    self.index = self.index.saturating_add(1);
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
                 Err(e) => return Err(e).context("failed to read chunk length"),

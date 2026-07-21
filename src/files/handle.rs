@@ -5,7 +5,7 @@ use tokio::fs::File;
 use tokio::io::{BufReader, BufWriter};
 
 use crate::config::FILE_EXTENSION;
-use crate::pipeline::Processing;
+use crate::pipeline::Operation;
 
 pub(crate) struct Metadata {
     pub(crate) name: String,
@@ -38,10 +38,10 @@ impl Files {
         self.path.extension().and_then(|e| e.to_str()).is_some_and(|e| e == FILE_EXTENSION)
     }
 
-    pub(crate) fn output_path(&self, processing: Processing) -> PathBuf {
-        match processing {
-            Processing::Encryption => self.path.with_added_extension(FILE_EXTENSION),
-            Processing::Decryption => self.path.with_extension(""),
+    pub(crate) fn output_path(&self, operation: Operation) -> PathBuf {
+        match operation {
+            Operation::Encryption => self.path.with_added_extension(FILE_EXTENSION),
+            Operation::Decryption => self.path.with_extension(""),
         }
     }
 

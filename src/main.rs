@@ -16,7 +16,7 @@ use mimalloc::MiMalloc;
 
 use crate::config::PASSWORD_LEN;
 use crate::files::{Discover, Files};
-use crate::pipeline::Processing;
+use crate::pipeline::Operation;
 use crate::ui::Input;
 
 #[global_allocator]
@@ -29,8 +29,8 @@ async fn main() -> Result<()> {
     crate::ui::display::clear()?;
     crate::ui::display::banner()?;
 
-    let processing = input.processing_mode()?;
-    let files: Vec<Files> = Discover::new(".", processing).run().into_iter().map(Files::new).collect();
+    let operation = input.operation_mode()?;
+    let files: Vec<Files> = Discover::new(".", operation).run().into_iter().map(Files::new).collect();
     if files.is_empty() {
         anyhow::bail!("no files available for processing");
     }
@@ -38,22 +38,22 @@ async fn main() -> Result<()> {
     crate::ui::display::files(&files).await?;
 
     let source = Files::new(input.file(&files)?);
-    let target = Files::new(source.output_path(processing));
+    let target = Files::new(source.output_path(operation));
 
     if target.exists() && !input.overwrite(&target)? {
         anyhow::bail!("operation canceled");
     }
 
-    let secret = input.password(processing)?;
-    let header = match processing {
-        Processing::Encryption => app::encrypt(&source, &target, &secret).await?,
-        Processing::Decryption => app::decrypt(&source, &target, &secret).await?,
+    let secret = input.password(operation)?;
+    let header = match operation {
+        Operation::Encryption => app::encrypt(&source, &target, &secret).await?,
+        Operation::Decryption => app::decrypt(&source, &target, &secret).await?,
     };
 
-    crate::ui::display::success(processing, &target)?;
+    crate::ui::display::success(operation, &target)?;
     crate::ui::display::header(&header.name, header.size, &hex::encode(&header.hash))?;
 
-    if input.delete(&source, processing)? {
+    if input.delete(&source, operation)? {
         source.delete().await.context("failed to delete source file")?;
         crate::ui::display::deleted(&source)?;
     }
