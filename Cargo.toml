@@ -18,7 +18,7 @@ chacha20poly1305  = { version = "0.11.0", features = ["zeroize"] }
 cliclack          = "0.5.5"
 comfy-table       = "7.2.2"
 crc32fast         = "1.5.0"
-fast-glob         = "1.0.1"
+fast-glob         = "1.1.0"
 hex               = "0.4.3"
 hkdf              = "0.13.0"
 hmac              = { version = "0.13.0", features = ["zeroize"] }
@@ -35,7 +35,7 @@ serde_with        = { version = "3.21.0", features = ["base64"] }
 sha2              = { version = "0.11.0", features = ["zeroize"] }
 strum             = { version = "0.28.0", features = ["derive"] }
 subtle            = "2.6.1"
-tokio             = { version = "1.53.0", features = ["full"] }
+tokio             = { version = "1.53.1", features = ["full"] }
 walkdir           = "2.5.0"
 zstd              = { version = "0.13.3", features = ["thin"] }
 
