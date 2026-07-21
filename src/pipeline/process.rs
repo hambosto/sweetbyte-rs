@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use super::types::{Processing, Task, TaskResult};
 use crate::cipher::{Algorithm, Cipher};
 use crate::compression::Compression;
+use crate::config::{BLOCK_SIZE, COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::encoding::Encoding;
 use crate::padding::Pkcs7Padding;
 use crate::secret::Secret;
@@ -16,11 +17,11 @@ pub(super) struct Process {
 }
 
 impl Process {
-    pub(super) fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: i32, block_size: usize, original_count: usize, recovery_count: usize) -> Result<Self> {
+    pub(super) fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing) -> Result<Self> {
         let cipher = Cipher::new(primary_key, secondary_key).context("failed to initialize cipher")?;
-        let encoder = Encoding::new(original_count, recovery_count).context("failed to initialize encoder")?;
-        let compressor = Compression::new(compression_level).context("failed to initialize compressor")?;
-        let padding = Pkcs7Padding::new(block_size).context("failed to initialize padding")?;
+        let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize encoder")?;
+        let compressor = Compression::new(COMPRESSION_LEVEL).context("failed to initialize compressor")?;
+        let padding = Pkcs7Padding::new(BLOCK_SIZE).context("failed to initialize padding")?;
 
         Ok(Self { cipher, encoder, compressor, padding, processing })
     }

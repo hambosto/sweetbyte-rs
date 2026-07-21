@@ -22,8 +22,8 @@ pub(crate) struct Pipeline {
 }
 
 impl Pipeline {
-    pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing, compression_level: i32, block_size: usize, original_count: usize, recovery_count: usize) -> Result<Self> {
-        let process = Process::new(primary_key, secondary_key, processing, compression_level, block_size, original_count, recovery_count).context("failed to initialize process")?;
+    pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret, processing: Processing) -> Result<Self> {
+        let process = Process::new(primary_key, secondary_key, processing).context("failed to initialize process")?;
 
         Ok(Self { processing, process })
     }
