@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
-use crate::pipeline::Operation;
+use crate::core::Operation;
 
 pub(crate) struct Discover {
     root: String,

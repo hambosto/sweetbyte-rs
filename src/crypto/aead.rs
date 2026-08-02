@@ -4,8 +4,7 @@ use aead::{Aead, AeadCore, Generate, KeyInit, Nonce};
 use anyhow::{Context, Result};
 use hybrid_array::typenum::Unsigned;
 
-use crate::secret::Secret;
-use crate::validation::KeyBytes;
+use crate::core::{KeyBytes, Secret};
 
 pub(super) struct AeadCipher<Cipher> {
     key: Secret,

@@ -3,9 +3,9 @@ use tokio::io::AsyncRead;
 
 use super::section::{Section, SectionData};
 use super::types::{Metadata, Parameters};
-use crate::cipher::Signer;
 use crate::config::{COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
-use crate::secret::Secret;
+use crate::core::Secret;
+use crate::crypto::Signer;
 
 pub(crate) struct Deserializer {
     params: Parameters,

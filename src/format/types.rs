@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::validation::{FileHash, FileSize, Filename, Magic, Version};
+use crate::core::{FileHash, FileSize, Filename, Magic, Version};
 
 #[derive(Serialize, Deserialize)]
 pub(super) struct Parameters {

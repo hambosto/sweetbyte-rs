@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinSet;
 
 use super::process::Process;
-use super::types::{Task, TaskResult};
+use crate::core::{Task, TaskResult};
 
 pub(super) struct Executor {
     process: Arc<Process>,
@@ -33,7 +33,7 @@ impl Executor {
             let results = results.clone();
 
             workers.spawn_blocking(move || {
-                let result = process.process(&task)?;
+                let result = process.process(&task).context("failed to execute process")?;
                 results.blocking_send(result).context("failed to send result")?;
 
                 drop(permit);

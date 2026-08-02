@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio::sync::mpsc::Sender;
 
-use super::types::{Operation, Task};
 use crate::config::{CHUNK_SIZE, MAX_CHUNK_SIZE};
+use crate::core::{Operation, Task};
 
 pub(super) struct Reader {
     index: u64,

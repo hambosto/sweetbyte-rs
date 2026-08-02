@@ -3,10 +3,10 @@ use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
-use crate::files::Files;
-use crate::pipeline::Operation;
+use crate::core::Operation;
+use crate::fs::FileHandle;
 
-pub(crate) async fn files(items: &[Files]) -> Result<()> {
+pub(crate) async fn files(items: &[FileHandle]) -> Result<()> {
     if items.is_empty() {
         return cliclack::log::warning("No files found").context("failed to display files");
     }
@@ -27,7 +27,7 @@ pub(crate) async fn files(items: &[Files]) -> Result<()> {
     cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("failed to display files")
 }
 
-pub(crate) fn success(operation: Operation, file: &Files) -> Result<()> {
+pub(crate) fn success(operation: Operation, file: &FileHandle) -> Result<()> {
     let process = match operation {
         Operation::Encryption => "encrypted",
         Operation::Decryption => "decrypted",
@@ -36,7 +36,7 @@ pub(crate) fn success(operation: Operation, file: &Files) -> Result<()> {
     cliclack::log::success(format!("File {process} successfully: {}", file.name())).context("failed to display success message")
 }
 
-pub(crate) fn deleted(file: &Files) -> Result<()> {
+pub(crate) fn deleted(file: &FileHandle) -> Result<()> {
     cliclack::log::success(format!("Source file deleted: {}", file.name())).context("failed to display deletion message")
 }
 

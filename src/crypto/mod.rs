@@ -1,16 +1,17 @@
 mod aead;
-mod key_deriver;
+mod hash;
+mod kdf;
 mod signer;
 
 use aead::AeadCipher;
 use aes_gcm::Aes256Gcm;
 use anyhow::{Context, Result};
 use chacha20poly1305::XChaCha20Poly1305;
-pub(crate) use key_deriver::KeyDeriver;
+pub(crate) use hash::{hash, validate_hash};
+pub(crate) use kdf::KeyDerivation;
 pub(crate) use signer::Signer;
 
-use crate::secret::Secret;
-use crate::validation::KeyBytes;
+use crate::core::{KeyBytes, Secret};
 
 pub(crate) enum Algorithm {
     Aes256Gcm,

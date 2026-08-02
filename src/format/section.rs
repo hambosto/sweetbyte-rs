@@ -3,10 +3,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::base64::Base64;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::compression::Compression;
 use crate::config::MAX_SECTION_SIZE;
-use crate::encoding::Encoding;
-use crate::secret::Secret;
+use crate::core::Secret;
+use crate::transform::{Compression, Encoding};
 
 const PREFIX_LEN: usize = 4;
 

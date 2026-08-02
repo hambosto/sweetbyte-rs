@@ -1,12 +1,9 @@
 use anyhow::{Context, Result};
 
-use super::types::{Operation, Task, TaskResult};
-use crate::cipher::{Algorithm, Cipher};
-use crate::compression::Compression;
 use crate::config::{BLOCK_SIZE, COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
-use crate::encoding::Encoding;
-use crate::padding::Pkcs7Padding;
-use crate::secret::Secret;
+use crate::core::{Operation, Secret, Task, TaskResult};
+use crate::crypto::{Algorithm, Cipher};
+use crate::transform::{Compression, Encoding, Pkcs7Padding};
 
 pub(super) struct Process {
     cipher: Cipher,
