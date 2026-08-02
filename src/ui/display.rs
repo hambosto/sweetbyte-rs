@@ -24,7 +24,7 @@ pub(crate) async fn files(items: &[FileHandle]) -> Result<()> {
         table.add_row([Cell::new(i.saturating_add(1)).fg(Color::Green), Cell::new(file.name()).fg(Color::Green), Cell::new(file_size).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
     }
 
-    cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("failed to display files")
+    cliclack::note(format!("Found {} file(s)", items.len()), table).context("failed to display files")
 }
 
 pub(crate) fn success(operation: Operation, file: &FileHandle) -> Result<()> {
@@ -49,7 +49,7 @@ pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &str) -> Result
     table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(&file_size).fg(Color::White)]);
     table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(file_hash).fg(Color::White)]);
 
-    cliclack::note("Header Information", table.to_string()).context("failed to display header")
+    cliclack::note("Header Information", table).context("failed to display header")
 }
 
 pub(crate) fn banner() -> Result<()> {
