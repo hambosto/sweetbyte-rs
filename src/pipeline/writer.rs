@@ -19,7 +19,6 @@ impl Writer {
     }
 
     pub(super) async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
-        self.index = 0;
         let mut pending: VecDeque<Option<TaskResult>> = VecDeque::new();
         let mut writer = BufWriter::new(output);
 

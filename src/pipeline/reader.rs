@@ -16,7 +16,6 @@ impl Reader {
     }
 
     pub(super) async fn read_all<R: AsyncRead + Unpin>(&mut self, input: R, sender: &Sender<Task>) -> Result<()> {
-        self.index = 0;
         let mut reader = BufReader::new(input);
 
         match self.operation {
