@@ -27,15 +27,15 @@ impl Reader {
 
     async fn read_fixed_chunks<R: AsyncRead + Unpin>(&mut self, reader: &mut R, sender: &Sender<Task>) -> Result<()> {
         loop {
-            let mut data = Vec::with_capacity(CHUNK_SIZE);
-            let bytes_read = reader.take(CHUNK_SIZE as u64).read_to_end(&mut data).await.context("failed to read chunk")?;
+            let mut data = vec![0u8; CHUNK_SIZE];
+            let bytes_read = reader.read(&mut data).await.context("failed to read chunk")?;
 
             if bytes_read == 0 {
                 break;
             }
 
-            let index = self.index;
-            sender.send(Task { data, index }).await.context("failed to send chunk")?;
+            data.truncate(bytes_read);
+            sender.send(Task { data, index: self.index }).await.context("failed to send chunk")?;
             self.index = self.index.checked_add(1).context("chunk index overflowed u64")?;
         }
 
@@ -57,8 +57,7 @@ impl Reader {
             let mut data = vec![0u8; chunk_len as usize];
             reader.read_exact(&mut data).await.context("failed to read chunk")?;
 
-            let index = self.index;
-            sender.send(Task { data, index }).await.context("failed to send chunk")?;
+            sender.send(Task { data, index: self.index }).await.context("failed to send chunk")?;
             self.index = self.index.checked_add(1).context("chunk index overflowed u64")?;
         }
 
