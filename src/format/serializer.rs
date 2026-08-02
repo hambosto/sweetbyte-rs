@@ -2,8 +2,7 @@ use anyhow::{Context, Result};
 
 use super::section::Section;
 use crate::config::{COMPRESSION_LEVEL, CURRENT_VERSION, MAGIC_BYTES, ORIGINAL_COUNT, RECOVERY_COUNT};
-use crate::core::Secret;
-use crate::core::{Metadata, Parameters};
+use crate::core::{Metadata, Parameters, Secret};
 use crate::crypto::Signer;
 
 pub(crate) struct Serializer {
