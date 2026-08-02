@@ -34,13 +34,13 @@ impl Input {
             }
         }
 
-        Ok(Secret::new(password.as_bytes().to_vec()))
+        Ok(Secret::new(password.as_bytes().into()))
     }
 
     pub(crate) fn operation_mode(&self) -> Result<Operation> {
         let mut select = cliclack::select("Select operation");
         for m in Operation::iter() {
-            select = select.item(m, m.to_string(), "");
+            select = select.item(m, m, "");
         }
 
         if self.filter_mode {

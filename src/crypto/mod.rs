@@ -25,8 +25,8 @@ pub(crate) struct Cipher {
 
 impl Cipher {
     pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret) -> Result<Self> {
-        let primary_key = KeyBytes::try_new(primary_key.expose_secret().to_vec()).context("primary key must be 32 bytes")?;
-        let secondary_key = KeyBytes::try_new(secondary_key.expose_secret().to_vec()).context("secondary key must be 32 bytes")?;
+        let primary_key = KeyBytes::try_new(primary_key.expose_secret().into()).context("primary key must be 32 bytes")?;
+        let secondary_key = KeyBytes::try_new(secondary_key.expose_secret().into()).context("secondary key must be 32 bytes")?;
         let primary_cipher = AeadCipher::<Aes256Gcm>::new(&primary_key.into()).context("failed to initialize primary cipher")?;
         let secondary_cipher = AeadCipher::<XChaCha20Poly1305>::new(&secondary_key.into()).context("failed to initialize secondary cipher")?;
 

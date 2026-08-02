@@ -12,7 +12,7 @@ use mimalloc::MiMalloc;
 use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
-use crate::core::{FileMetadata, Operation, Secret};
+use crate::core::{Metadata, Operation, Secret};
 use crate::crypto::KeyDerivation;
 use crate::format::{Deserializer, Serializer};
 use crate::fs::{Discover, FileHandle};
@@ -80,7 +80,7 @@ async fn finalize_source(source: &FileHandle, operation: Operation) -> Result<()
     Ok(())
 }
 
-async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<FileMetadata> {
+async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
     let mut writer = target.writer().await.context("failed to create target file")?;
     let reader = source.reader().await.context("failed to open source file")?;
     let metadata = source.metadata().await.context("failed to read metadata")?;
@@ -89,17 +89,17 @@ async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
     let key = KeyDerivation::new(secret)?;
     let keys = key.derive_keys(&salt)?;
 
-    let header = Serializer::new(metadata.name(), metadata.size(), metadata.hash().to_vec())?;
+    let header = Serializer::new(metadata.name(), metadata.size(), metadata.hash())?;
     let serialized = header.serialize(salt.expose_secret(), &keys.signer_key).context("failed to serialize header")?;
     writer.write_all(&serialized).await.context("failed to write header")?;
 
     let engine = Pipeline::new(&keys.primary_key, &keys.secondary_key, Operation::Encryption)?;
     engine.process(reader, writer, metadata.size()).await?;
 
-    FileMetadata::new(header.file_name().to_owned(), header.file_size(), header.file_hash().to_vec())
+    Metadata::new(header.file_name(), header.file_size(), header.file_hash())
 }
 
-async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<FileMetadata> {
+async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
     let mut reader = source.reader().await.context("failed to open source file")?;
     let writer = target.writer().await.context("failed to create target file")?;
     let header = Deserializer::from_reader(reader.get_mut()).await.context("failed to deserialize header")?;
@@ -119,7 +119,7 @@ async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
         anyhow::bail!("hash verification failed");
     }
 
-    FileMetadata::new(header.file_name().to_owned(), header.file_size(), header.file_hash().to_vec())
+    Metadata::new(header.file_name(), header.file_size(), header.file_hash())
 }
 
 #[cfg(test)]
@@ -140,7 +140,7 @@ mod tests {
 
         fs::write(&source_path, b"test content").await.unwrap();
 
-        let secret = Secret::new(b"password".to_vec());
+        let secret = Secret::new(b"password".into());
 
         let source = FileHandle::new(&source_path);
         let encrypted = FileHandle::new(&encrypted_path);

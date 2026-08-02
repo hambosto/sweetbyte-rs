@@ -5,7 +5,7 @@ use tokio::fs::File;
 use tokio::io::{BufReader, BufWriter};
 
 use crate::config::FILE_EXTENSION;
-use crate::core::{FileMetadata, Operation};
+use crate::core::{Metadata, Operation};
 
 pub(crate) struct FileHandle {
     path: PathBuf,
@@ -70,11 +70,11 @@ impl FileHandle {
         tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to read metadata")
     }
 
-    pub(crate) async fn metadata(&self) -> Result<FileMetadata> {
+    pub(crate) async fn metadata(&self) -> Result<Metadata> {
         let name = self.name().to_owned();
         let size = self.size().await?;
         let hash = crate::crypto::hash(self.path())?;
 
-        FileMetadata::new(name, size, hash)
+        Metadata::new(name, size, &hash)
     }
 }

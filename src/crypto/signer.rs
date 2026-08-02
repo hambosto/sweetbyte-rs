@@ -15,7 +15,7 @@ pub(crate) struct Signer {
 
 impl Signer {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
 
         Ok(Self { key: key.into() })
     }

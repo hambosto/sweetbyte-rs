@@ -11,10 +11,10 @@ pub(crate) struct Metadata {
 }
 
 impl Metadata {
-    pub(crate) fn new(name: impl Into<String>, size: u64, hash: Vec<u8>) -> Result<Self> {
+    pub(crate) fn new(name: impl Into<String>, size: u64, hash: &[u8]) -> Result<Self> {
         let name = Filename::try_new(name.into()).context("invalid filename")?;
         let size = FileSize::try_new(size).context("invalid file size")?;
-        let hash = FileHash::try_new(hash).context("invalid file hash")?;
+        let hash = FileHash::try_new(hash.into()).context("invalid file hash")?;
 
         Ok(Self { name, size, hash })
     }
