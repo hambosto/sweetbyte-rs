@@ -22,7 +22,7 @@ impl KeyDerivation {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
         let key = NonEmptyKey::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
 
-        Ok(Self { key: key.into_secret() })
+        Ok(Self { key: key.into() })
     }
 
     pub(crate) fn derive_keys(&self, salt: &Secret) -> Result<DerivedKeys> {

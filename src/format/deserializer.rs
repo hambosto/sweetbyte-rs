@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use tokio::io::AsyncRead;
 
 use super::section::{Section, SectionData};
-use super::types::{Metadata, Parameters};
 use crate::config::{COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::Secret;
+use crate::core::{Metadata, Parameters};
 use crate::crypto::Signer;
 
 pub(crate) struct Deserializer {

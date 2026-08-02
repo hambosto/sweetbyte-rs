@@ -6,9 +6,9 @@ use hybrid_array::typenum::Unsigned;
 
 use crate::core::{KeyBytes, Secret};
 
-pub(super) struct AeadCipher<Cipher> {
+pub(super) struct AeadCipher<T> {
     key: Secret,
-    cipher: PhantomData<Cipher>,
+    cipher: PhantomData<T>,
 }
 
 impl<T> AeadCipher<T>
@@ -18,7 +18,7 @@ where
     pub(super) fn new(key: &Secret) -> Result<Self> {
         let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: key.into_secret(), cipher: PhantomData })
+        Ok(Self { key: key.into(), cipher: PhantomData })
     }
 
     #[inline]
