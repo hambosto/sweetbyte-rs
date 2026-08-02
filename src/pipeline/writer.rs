@@ -26,8 +26,10 @@ impl Writer {
         while let Some(result) = receiver.recv().await {
             let delta = result.index.checked_sub(self.index).context("chunk index behind writer")?;
             let offset = usize::try_from(delta).context("chunk index overflow")?;
-            if offset >= self.pending.len() {
-                self.pending.resize_with(offset.saturating_add(1), || None);
+            let required_len = offset.checked_add(1).context("chunk offset overflow")?;
+
+            if required_len > self.pending.len() {
+                self.pending.resize_with(required_len, || None);
             }
 
             let slot = self.pending.get_mut(offset).context("chunk slot missing")?;
@@ -38,8 +40,12 @@ impl Writer {
                 self.pending.pop_front();
 
                 self.write_result(&mut writer, &result, progress).await?;
-                self.index = self.index.saturating_add(1);
+                self.index = self.index.checked_add(1).context("chunk index overflowed u64")?;
             }
+        }
+
+        if !self.pending.is_empty() {
+            anyhow::bail!("incomplete chunk stream: {} chunk(s) never arrived starting at index {}", self.pending.len(), self.index);
         }
 
         writer.flush().await.context("failed to flush")
