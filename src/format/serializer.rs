@@ -18,18 +18,6 @@ impl Serializer {
         Ok(Self { params, metadata })
     }
 
-    pub(crate) fn file_name(&self) -> &str {
-        self.metadata.name()
-    }
-
-    pub(crate) fn file_size(&self) -> u64 {
-        self.metadata.size()
-    }
-
-    pub(crate) fn file_hash(&self) -> &[u8] {
-        self.metadata.hash()
-    }
-
     pub(crate) fn serialize(&self, salt: &[u8], signer_key: &Secret) -> Result<Vec<u8>> {
         let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
         let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
