@@ -6,26 +6,22 @@ use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::core::Operation;
 
 pub(crate) struct Discover {
-    root: String,
+    root: PathBuf,
     operation: Operation,
 }
 
 impl Discover {
-    pub(crate) fn new(root: impl Into<String>, operation: Operation) -> Self {
+    pub(crate) fn new(root: impl Into<PathBuf>, operation: Operation) -> Self {
         Self { root: root.into(), operation }
     }
 
     pub(crate) fn run(&self) -> Vec<PathBuf> {
         let mut paths = Vec::new();
 
-        for entry in WalkDir::new(&self.root).follow_links(false) {
+        for entry in WalkDir::new(&self.root).min_depth(1).same_file_system(true).sort_by_file_name() {
             let Ok(entry) = entry else {
                 continue;
             };
-
-            if !entry.file_type().is_file() {
-                continue;
-            }
 
             let path = entry.into_path();
             if self.is_eligible(&path) {
@@ -37,6 +33,10 @@ impl Discover {
     }
 
     fn is_eligible(&self, path: &Path) -> bool {
+        if !path.is_file() {
+            return false;
+        }
+
         if Self::is_hidden(path) {
             return false;
         }
