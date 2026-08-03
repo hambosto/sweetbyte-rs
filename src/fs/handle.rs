@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use blake3::Hasher;
 use tokio::fs::File;
 use tokio::io::{BufReader, BufWriter};
 
@@ -71,9 +72,12 @@ impl FileHandle {
     }
 
     pub(crate) async fn metadata(&self) -> Result<Metadata> {
-        let name = self.name().to_owned();
-        let size = self.size().await?;
-        let hash = crate::crypto::hash(self.path())?;
+        let mut hasher = Hasher::new();
+        hasher.update_mmap_rayon(self.path()).context("failed to memory-map file for hashing")?;
+
+        let hash = *hasher.finalize().as_bytes();
+        let name = self.name();
+        let size = self.size().await.context("failed to get file size")?;
 
         Metadata::new(name, size, &hash)
     }

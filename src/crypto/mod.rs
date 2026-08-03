@@ -7,7 +7,7 @@ use aead::AeadCipher;
 use aes_gcm::Aes256Gcm;
 use anyhow::{Context, Result};
 use chacha20poly1305::XChaCha20Poly1305;
-pub(crate) use hash::{hash, validate_hash};
+pub(crate) use hash::validate_hash;
 pub(crate) use kdf::KeyDerivation;
 pub(crate) use signer::Signer;
 

@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
     };
 
     crate::ui::success(operation, &target)?;
-    crate::ui::header(header.name(), header.size(), &hex::encode(header.hash()))?;
+    crate::ui::header(header.name(), header.size(), header.hash())?;
 
     finalize_source(&source, operation).await?;
 

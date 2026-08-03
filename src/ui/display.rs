@@ -40,14 +40,13 @@ pub(crate) fn deleted(file: &FileHandle) -> Result<()> {
     cliclack::log::success(format!("Source file deleted: {}", file.name())).context("failed to display deletion message")
 }
 
-pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &str) -> Result<()> {
+pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
 
-    let file_size = humansize::format_size(file_size, humansize::DECIMAL);
     table.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(file_name).fg(Color::White)]);
-    table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(&file_size).fg(Color::White)]);
-    table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(file_hash).fg(Color::White)]);
+    table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(humansize::format_size(file_size, humansize::DECIMAL)).fg(Color::White)]);
+    table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hex::encode(file_hash)).fg(Color::White)]);
 
     cliclack::note("Header Information", table).context("failed to display header")
 }
