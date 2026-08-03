@@ -102,7 +102,7 @@ async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
 async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
     let mut reader = source.reader().await.context("failed to open source file")?;
     let writer = target.writer().await.context("failed to create target file")?;
-    let header = Deserializer::from_reader(reader.get_mut()).await.context("failed to deserialize header")?;
+    let header = Deserializer::from_reader(&mut reader).await.context("failed to deserialize header")?;
 
     let key = KeyDerivation::new(secret)?;
     let keys = key.derive_keys(header.salt())?;

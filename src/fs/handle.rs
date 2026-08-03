@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use blake3::Hasher;
 use tokio::fs::File;
-use tokio::io::{BufReader, BufWriter};
 
 use crate::config::FILE_EXTENSION;
 use crate::core::{Metadata, Operation};
@@ -40,11 +39,11 @@ impl FileHandle {
         }
     }
 
-    pub(crate) async fn reader(&self) -> Result<BufReader<File>> {
-        File::open(&self.path).await.map(BufReader::new).context("failed to open file")
+    pub(crate) async fn reader(&self) -> Result<File> {
+        File::open(&self.path).await.context("failed to open file")
     }
 
-    pub(crate) async fn writer(&self) -> Result<BufWriter<File>> {
+    pub(crate) async fn writer(&self) -> Result<File> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
             tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
         }
@@ -55,7 +54,6 @@ impl FileHandle {
             .truncate(true)
             .open(&self.path)
             .await
-            .map(BufWriter::new)
             .context("failed to create file")
     }
 
