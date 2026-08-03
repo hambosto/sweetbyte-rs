@@ -5,7 +5,7 @@ permissions:
 
 on:
   workflow_run:
-    workflows: ["Code Quality"]
+    workflows: [Code Quality]
     types: [completed]
     branches: [main]
 
