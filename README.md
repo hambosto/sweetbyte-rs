@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="SweetByte" width="256" height="256">
+<img src="assets/logo.png" alt="SweetByte" width="256">
 
 **File encryption that doesn't suck.**
 
-[![CI](https://github.com/hambosto/sweetbyte-rs/actions/workflows/check.yml/badge.svg)](https://github.com/hambosto/sweetbyte-rs/actions)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/Rust-nightly-orange.svg)](https://www.rust-lang.org/)
-[![Nix](https://img.shields.io/badge/Nix-flake-purple.svg)](https://nixos.org/)
-
-</div>
+[![CI](https://img.shields.io/badge/CI-passing-brightgreen?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/hambosto/sweetbyte-rs/actions)
+[![Rust](https://img.shields.io/badge/Rust-nightly-orange?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square&logo=opensourceinitiative&logoColor=white)](https://opensource.org/licenses/MIT)
+[![Nix](https://img.shields.io/badge/Nix-flake-purple?style=flat-square&logo=nixos&logoColor=white)](https://nixos.org/)
 
 ---
+
+</div>
 
 SweetByte encrypts your files. It does this well.
 
@@ -29,8 +29,6 @@ This is a Rust rewrite of my [original Go version](https://github.com/hambosto/s
   - [Key derivation](#key-derivation)
   - [Processing pipeline](#processing-pipeline)
   - [Reed-Solomon encoding](#reed-solomon-encoding)
-- [Code structure](#code-structure)
-- [Dependencies](#dependencies)
 - [Security notes](#security-notes)
 - [Development](#development)
 - [License](#license)
@@ -39,7 +37,7 @@ This is a Rust rewrite of my [original Go version](https://github.com/hambosto/s
 
 Most encryption tools do one thing: encrypt. SweetByte does more:
 
-- **Cascading encryption.** AES-256-GCM then ChaCha20-Poly1305. An attacker would need to break both ciphers, not just one.
+- **Cascading encryption.** AES-256-GCM then XChaCha20-Poly1305. An attacker would need to break both ciphers, not just one.
 - **Error correction.** Reed-Solomon encoding (4 data + 10 parity shards) means your encrypted file can survive some bit rot and still decrypt.
 - **Proper key derivation.** Argon2id with 64MB memory cost. Brute-forcing your password won't be practical.
 - **Concurrent processing.** Async pipeline with parallel chunk processing for fast encryption/decryption.
@@ -122,7 +120,7 @@ The encryption pipeline, in order:
 1. **Compress** with zstd level 1
 2. **Pad** with PKCS7 to 128-byte blocks
 3. **Encrypt** with AES-256-GCM (12-byte random nonce)
-4. **Encrypt again** with ChaCha20-Poly1305 (12-byte random nonce)
+4. **Encrypt again** with XChaCha20-Poly1305 (24-byte random nonce)
 5. **Encode** with Reed-Solomon (4 data + 10 parity shards)
 
 Decryption runs this in reverse. After decryption, the BLAKE3 hash of the output is checked against what's stored in the header.
@@ -158,7 +156,7 @@ Argon2id with these parameters:
 The 64-byte Argon2id output is fed through HKDF-SHA256 to derive three independent keys:
 
 - **First key** (32 bytes): Used for AES-256-GCM encryption
-- **Second key** (32 bytes): Used for ChaCha20-Poly1305 encryption
+- **Second key** (32 bytes): Used for XChaCha20-Poly1305 encryption
 - **Third key** (32 bytes): Used for HMAC-SHA256 signing
 
 ### Processing pipeline
@@ -181,22 +179,6 @@ Each encoded block has this format:
 ```
 
 CRC32 validates each shard before decoding. Corrupted shards get reconstructed from parity.
-
-## Dependencies
-
-| Crate | Purpose |
-|---|---|
-| `aws-lc-rs` | AES-256-GCM, ChaCha20-Poly1305, HKDF-SHA256, HMAC-SHA256, secure RNG |
-| `argon2` | Argon2id password-based key derivation |
-| `blake3` | Fast hashing with memory-mapped parallel computation |
-| `reed-solomon-simd` | SIMD-accelerated Reed-Solomon error correction |
-| `tokio` | Async runtime for concurrent pipeline processing |
-| `mimalloc` | High-performance memory allocator |
-| `zstd` | Zstandard compression |
-| `cliclack` | Interactive terminal UI (prompts, progress bars) |
-| `secrecy` | Secret values with zeroize-on-drop |
-| `subtle` | Constant-time comparison for MAC verification |
-| `nutype` | Validated newtypes for compile-time correctness |
 
 ## Security notes
 
