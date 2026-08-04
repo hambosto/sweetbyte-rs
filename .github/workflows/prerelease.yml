@@ -1,0 +1,108 @@
+name: Prerelease
+
+permissions:
+  contents: read
+
+on:
+  workflow_run:
+    workflows: [Code Quality]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  create-release:
+    name: Create prerelease tag
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source code at Code Quality's commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Resolve project name from Cargo.toml
+        id: meta
+        shell: bash
+        run: |
+          NAME=$(cargo metadata --no-deps --format-version=1 | \
+            grep -o '"name":"[^"]*"' | head -n1 | cut -d'"' -f4)
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Delete previous tip release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete tip --yes --cleanup-tag || true
+
+      - name: Create fresh tip release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md << 'NOTES'
+          This tip release is automatically built and generated on every commit to `main` that passes CI.
+
+          > [!WARNING]
+          > This is a nightly build, not a tagged release. We recommend using tagged releases for daily use.
+
+          Commit: ${{ github.event.workflow_run.head_sha }}
+          NOTES
+
+          gh release create tip \
+            --title "${{ steps.meta.outputs.name }} Tip (\"Nightly\")" \
+            --notes-file notes.md \
+            --prerelease \
+            --target ${{ github.event.workflow_run.head_sha }}
+
+  build:
+    name: Build & upload (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+    steps:
+      - name: Checkout source code at Code Quality's commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          cache: false
+
+      - name: Resolve binary name from Cargo.toml
+        id: meta
+        shell: bash
+        run: |
+          NAME=$(cargo metadata --no-deps --format-version=1 | \
+            grep -o '"name":"[^"]*"' | head -n1 | cut -d'"' -f4)
+          echo "bin_name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build, archive, checksum, and upload
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: ${{ steps.meta.outputs.bin_name }}
+          target: ${{ matrix.target }}
+          archive: $bin-$target
+          checksum: sha256
+          ref: refs/tags/tip
+          token: ${{ secrets.GITHUB_TOKEN }}

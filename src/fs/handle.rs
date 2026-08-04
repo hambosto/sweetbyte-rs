@@ -1,23 +1,17 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use blake3::Hasher;
 use tokio::fs::File;
-use tokio::io::{BufReader, BufWriter};
 
 use crate::config::FILE_EXTENSION;
-use crate::pipeline::Operation;
+use crate::core::{Metadata, Operation};
 
-pub(crate) struct Metadata {
-    pub(crate) name: String,
-    pub(crate) size: u64,
-    pub(crate) hash: Vec<u8>,
-}
-
-pub(crate) struct Files {
+pub(crate) struct FileHandle {
     path: PathBuf,
 }
 
-impl Files {
+impl FileHandle {
     pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
@@ -45,11 +39,11 @@ impl Files {
         }
     }
 
-    pub(crate) async fn reader(&self) -> Result<BufReader<File>> {
-        File::open(&self.path).await.map(BufReader::new).context("failed to open file")
+    pub(crate) async fn reader(&self) -> Result<File> {
+        File::open(&self.path).await.context("failed to open file")
     }
 
-    pub(crate) async fn writer(&self) -> Result<BufWriter<File>> {
+    pub(crate) async fn writer(&self) -> Result<File> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
             tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
         }
@@ -60,7 +54,6 @@ impl Files {
             .truncate(true)
             .open(&self.path)
             .await
-            .map(BufWriter::new)
             .context("failed to create file")
     }
 
@@ -77,6 +70,13 @@ impl Files {
     }
 
     pub(crate) async fn metadata(&self) -> Result<Metadata> {
-        Ok(Metadata { name: self.name().to_owned(), size: self.size().await?, hash: super::hash::hash(self)? })
+        let mut hasher = Hasher::new();
+        hasher.update_mmap_rayon(self.path()).context("failed to memory-map file for hashing")?;
+
+        let hash = *hasher.finalize().as_bytes();
+        let name = self.name();
+        let size = self.size().await.context("failed to get file size")?;
+
+        Metadata::new(name, size, &hash)
     }
 }

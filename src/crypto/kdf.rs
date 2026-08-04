@@ -6,8 +6,7 @@ use rand::rngs::SysRng;
 use sha2::Sha256;
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
-use crate::secret::Secret;
-use crate::validation::NonEmptyKey;
+use crate::core::{NonEmptyKey, Secret};
 
 pub(crate) struct DerivedKeys {
     pub(crate) primary_key: Secret,
@@ -15,15 +14,15 @@ pub(crate) struct DerivedKeys {
     pub(crate) signer_key: Secret,
 }
 
-pub(crate) struct KeyDeriver {
+pub(crate) struct KeyDerivation {
     key: Secret,
 }
 
-impl KeyDeriver {
+impl KeyDerivation {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = NonEmptyKey::try_new(key.expose_secret().to_vec()).context("key must not be empty")?;
+        let key = NonEmptyKey::try_new(key.expose_secret().into()).context("key must not be empty")?;
 
-        Ok(Self { key: key.into_secret() })
+        Ok(Self { key: key.into() })
     }
 
     pub(crate) fn derive_keys(&self, salt: &Secret) -> Result<DerivedKeys> {

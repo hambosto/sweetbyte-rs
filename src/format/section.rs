@@ -1,25 +1,22 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_with::base64::Base64;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::compression::Compression;
 use crate::config::MAX_SECTION_SIZE;
-use crate::encoding::Encoding;
-use crate::secret::Secret;
+use crate::core::Secret;
+use crate::transform::{Compression, Encoding};
 
 const PREFIX_LEN: usize = 4;
 
-#[serde_with::serde_as]
 #[derive(Serialize, Deserialize)]
 struct SectionList {
-    #[serde_as(as = "Base64")]
+    #[serde(with = "serde_bytes")]
     salt: Vec<u8>,
-    #[serde_as(as = "Base64")]
+    #[serde(with = "serde_bytes")]
     params: Vec<u8>,
-    #[serde_as(as = "Base64")]
+    #[serde(with = "serde_bytes")]
     metadata: Vec<u8>,
-    #[serde_as(as = "Base64")]
+    #[serde(with = "serde_bytes")]
     mac: Vec<u8>,
 }
 
@@ -55,7 +52,8 @@ impl Section {
         let compressed_section = self.compressor.compress(&serialized_section).context("failed to compress section")?;
         let compressed_length = u32::try_from(compressed_section.len()).context("section too large")?;
 
-        let mut result = Vec::with_capacity(PREFIX_LEN.saturating_add(compressed_section.len()));
+        let capacity = PREFIX_LEN.checked_add(compressed_section.len()).context("section length overflow")?;
+        let mut result = Vec::with_capacity(capacity);
         result.extend_from_slice(&compressed_length.to_le_bytes());
         result.extend_from_slice(&compressed_section);
 

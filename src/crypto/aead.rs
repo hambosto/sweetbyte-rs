@@ -3,13 +3,13 @@ use std::marker::PhantomData;
 use aead::{Aead, AeadCore, Generate, KeyInit, Nonce};
 use anyhow::{Context, Result};
 use hybrid_array::typenum::Unsigned;
+use rand::rngs::SysRng;
 
-use crate::secret::Secret;
-use crate::validation::KeyBytes;
+use crate::core::{KeyBytes, Secret};
 
-pub(super) struct AeadCipher<Cipher> {
+pub(super) struct AeadCipher<T> {
     key: Secret,
-    cipher: PhantomData<Cipher>,
+    cipher: PhantomData<T>,
 }
 
 impl<T> AeadCipher<T>
@@ -17,9 +17,9 @@ where
     T: Aead + AeadCore + KeyInit,
 {
     pub(super) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: key.into_secret(), cipher: PhantomData })
+        Ok(Self { key: key.into(), cipher: PhantomData })
     }
 
     #[inline]
@@ -29,7 +29,7 @@ where
         }
 
         let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to setup key")?;
-        let nonce = Nonce::<T>::generate();
+        let nonce = Nonce::<T>::try_generate_from_rng(&mut SysRng).context("failed to generate nonce")?;
         let ciphertext = cipher.encrypt(&nonce, plaintext).context("failed to encrypt")?;
 
         let mut result = Vec::with_capacity(nonce.len().saturating_add(ciphertext.len()));

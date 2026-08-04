@@ -32,7 +32,8 @@ impl Encoding {
         }
 
         let mut result = Vec::with_capacity(LEN.saturating_add(self.total_count.saturating_mul(CRC.saturating_add(shard_size))));
-        result.extend_from_slice(&u32::try_from(data.len())?.to_le_bytes());
+        let original_len = u32::try_from(data.len()).context("data length exceeds u32")?;
+        result.extend_from_slice(&original_len.to_le_bytes());
 
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, original.chunks(shard_size)).context("failed to encode reed-solomon shards")?;
         for shard in original.chunks(shard_size).chain(recovery.iter().map(Vec::as_slice)) {

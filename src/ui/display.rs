@@ -3,10 +3,10 @@ use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
-use crate::files::Files;
-use crate::pipeline::Operation;
+use crate::core::Operation;
+use crate::fs::FileHandle;
 
-pub(crate) async fn files(items: &[Files]) -> Result<()> {
+pub(crate) async fn files(items: &[FileHandle]) -> Result<()> {
     if items.is_empty() {
         return cliclack::log::warning("No files found").context("failed to display files");
     }
@@ -24,10 +24,10 @@ pub(crate) async fn files(items: &[Files]) -> Result<()> {
         table.add_row([Cell::new(i.saturating_add(1)).fg(Color::Green), Cell::new(file.name()).fg(Color::Green), Cell::new(file_size).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
     }
 
-    cliclack::note(format!("Found {} file(s)", items.len()), table.to_string()).context("failed to display files")
+    cliclack::note(format!("Found {} file(s)", items.len()), table).context("failed to display files")
 }
 
-pub(crate) fn success(operation: Operation, file: &Files) -> Result<()> {
+pub(crate) fn success(operation: Operation, file: &FileHandle) -> Result<()> {
     let process = match operation {
         Operation::Encryption => "encrypted",
         Operation::Decryption => "decrypted",
@@ -36,20 +36,19 @@ pub(crate) fn success(operation: Operation, file: &Files) -> Result<()> {
     cliclack::log::success(format!("File {process} successfully: {}", file.name())).context("failed to display success message")
 }
 
-pub(crate) fn deleted(file: &Files) -> Result<()> {
+pub(crate) fn deleted(file: &FileHandle) -> Result<()> {
     cliclack::log::success(format!("Source file deleted: {}", file.name())).context("failed to display deletion message")
 }
 
-pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &str) -> Result<()> {
+pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
 
-    let file_size = humansize::format_size(file_size, humansize::DECIMAL);
     table.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(file_name).fg(Color::White)]);
-    table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(&file_size).fg(Color::White)]);
-    table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(file_hash).fg(Color::White)]);
+    table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(humansize::format_size(file_size, humansize::DECIMAL)).fg(Color::White)]);
+    table.add_row([Cell::new("Original Hash").fg(Color::Green), Cell::new(hex::encode(file_hash)).fg(Color::White)]);
 
-    cliclack::note("Header Information", table.to_string()).context("failed to display header")
+    cliclack::note("Header Information", table).context("failed to display header")
 }
 
 pub(crate) fn banner() -> Result<()> {

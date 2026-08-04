@@ -82,6 +82,6 @@ impl Pkcs7Padding {
         }
         let unpadded = Pkcs7::unpad_blocks::<B>(&blocks).context("failed to unpad data: invalid padding")?;
 
-        Ok(unpadded.to_vec())
+        Ok(unpadded.into())
     }
 }

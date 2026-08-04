@@ -2,9 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use crate::files::Files;
-use crate::pipeline::Operation;
-use crate::secret::Secret;
+use crate::core::{Operation, Secret};
+use crate::fs::FileHandle;
 
 pub(crate) struct Input {
     min_password_len: usize,
@@ -35,13 +34,13 @@ impl Input {
             }
         }
 
-        Ok(Secret::new(password.as_bytes().to_vec()))
+        Ok(Secret::new(password.as_bytes().into()))
     }
 
     pub(crate) fn operation_mode(&self) -> Result<Operation> {
         let mut select = cliclack::select("Select operation");
         for m in Operation::iter() {
-            select = select.item(m, m.to_string(), "");
+            select = select.item(m, m, "");
         }
 
         if self.filter_mode {
@@ -51,7 +50,7 @@ impl Input {
         select.interact().context("failed to select operation")
     }
 
-    pub(crate) fn file(&self, files: &[Files]) -> Result<PathBuf> {
+    pub(crate) fn file(&self, files: &[FileHandle]) -> Result<PathBuf> {
         let mut select = cliclack::select("Select file");
         for f in files {
             select = select.item(f.path().to_path_buf(), f.name(), "");
@@ -64,14 +63,14 @@ impl Input {
         select.interact().context("failed to select file")
     }
 
-    pub(crate) fn overwrite(&self, file: &Files) -> Result<bool> {
+    pub(crate) fn overwrite(&self, file: &FileHandle) -> Result<bool> {
         cliclack::confirm(format!("Output file {} already exists. Overwrite?", file.name()))
             .initial_value(self.default_overwrite)
             .interact()
             .context("failed to confirm overwrite")
     }
 
-    pub(crate) fn delete(&self, file: &Files, operation: Operation) -> Result<bool> {
+    pub(crate) fn delete(&self, file: &FileHandle, operation: Operation) -> Result<bool> {
         let process = match operation {
             Operation::Encryption => "encrypted",
             Operation::Decryption => "decrypted",

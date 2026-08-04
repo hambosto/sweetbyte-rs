@@ -1,7 +1,6 @@
 mod executor;
 mod process;
 mod reader;
-mod types;
 mod writer;
 
 use anyhow::{Context, Result};
@@ -9,11 +8,9 @@ use executor::Executor;
 use process::Process;
 use reader::Reader;
 use tokio::io::{AsyncRead, AsyncWrite};
-pub(crate) use types::Operation;
-use types::{Task, TaskResult};
 use writer::Writer;
 
-use crate::secret::Secret;
+use crate::core::{Operation, Secret, Task, TaskResult};
 use crate::ui::Progress;
 
 pub(crate) struct Pipeline {

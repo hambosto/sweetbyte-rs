@@ -3,8 +3,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::secret::Secret;
-use crate::validation::KeyBytes;
+use crate::core::{KeyBytes, Secret};
 
 const MAX_PARTS: usize = 1 << 10;
 const MAX_PART_LEN: usize = 1 << 20;
@@ -16,9 +15,9 @@ pub(crate) struct Signer {
 
 impl Signer {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().to_vec()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
 
-        Ok(Self { key: key.into_secret() })
+        Ok(Self { key: key.into() })
     }
 
     pub(crate) fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {

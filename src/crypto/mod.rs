@@ -1,20 +1,21 @@
 mod aead;
-mod key_deriver;
+mod hash;
+mod kdf;
 mod signer;
 
 use aead::AeadCipher;
 use aes_gcm::Aes256Gcm;
 use anyhow::{Context, Result};
 use chacha20poly1305::XChaCha20Poly1305;
-pub(crate) use key_deriver::KeyDeriver;
+pub(crate) use hash::validate_hash;
+pub(crate) use kdf::KeyDerivation;
 pub(crate) use signer::Signer;
 
-use crate::secret::Secret;
-use crate::validation::KeyBytes;
+use crate::core::{KeyBytes, Secret};
 
 pub(crate) enum Algorithm {
     Aes256Gcm,
-    ChaCha20Poly1305,
+    XChaCha20Poly1305,
 }
 
 pub(crate) struct Cipher {
@@ -24,10 +25,10 @@ pub(crate) struct Cipher {
 
 impl Cipher {
     pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret) -> Result<Self> {
-        let primary_key = KeyBytes::try_new(primary_key.expose_secret().to_vec()).context("primary key must be 32 bytes")?;
-        let secondary_key = KeyBytes::try_new(secondary_key.expose_secret().to_vec()).context("secondary key must be 32 bytes")?;
-        let primary_cipher = AeadCipher::<Aes256Gcm>::new(&primary_key.into_secret()).context("failed to initialize primary cipher")?;
-        let secondary_cipher = AeadCipher::<XChaCha20Poly1305>::new(&secondary_key.into_secret()).context("failed to initialize secondary cipher")?;
+        let primary_key = KeyBytes::try_new(primary_key.expose_secret().into()).context("primary key must be 32 bytes")?;
+        let secondary_key = KeyBytes::try_new(secondary_key.expose_secret().into()).context("secondary key must be 32 bytes")?;
+        let primary_cipher = AeadCipher::<Aes256Gcm>::new(&primary_key.into()).context("failed to initialize primary cipher")?;
+        let secondary_cipher = AeadCipher::<XChaCha20Poly1305>::new(&secondary_key.into()).context("failed to initialize secondary cipher")?;
 
         Ok(Self { primary_cipher, secondary_cipher })
     }
@@ -36,7 +37,7 @@ impl Cipher {
     pub(crate) fn encrypt(&self, algorithm: &Algorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
         match algorithm {
             Algorithm::Aes256Gcm => self.primary_cipher.encrypt(plaintext),
-            Algorithm::ChaCha20Poly1305 => self.secondary_cipher.encrypt(plaintext),
+            Algorithm::XChaCha20Poly1305 => self.secondary_cipher.encrypt(plaintext),
         }
     }
 
@@ -44,7 +45,7 @@ impl Cipher {
     pub(crate) fn decrypt(&self, algorithm: &Algorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
         match algorithm {
             Algorithm::Aes256Gcm => self.primary_cipher.decrypt(ciphertext),
-            Algorithm::ChaCha20Poly1305 => self.secondary_cipher.decrypt(ciphertext),
+            Algorithm::XChaCha20Poly1305 => self.secondary_cipher.decrypt(ciphertext),
         }
     }
 }
