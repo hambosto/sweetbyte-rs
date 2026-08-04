@@ -31,16 +31,15 @@ async fn main() -> Result<()> {
     let (source, target, operation) = select_files(&input).await?;
     let secret = input.password(operation).context("failed to read password")?;
 
-    let header = match operation {
+    let metadata = match operation {
         Operation::Encryption => encrypt(&source, &target, &secret).await?,
         Operation::Decryption => decrypt(&source, &target, &secret).await?,
     };
 
     ui::success(operation, &target)?;
-    ui::header(header.name(), header.size(), header.hash())?;
+    ui::header(metadata.name(), metadata.size(), metadata.hash())?;
 
-    let should_delete = input.delete(&source, operation).context("failed to confirm deletion")?;
-    if should_delete {
+    if input.delete(&source, operation).context("failed to confirm deletion")? {
         source.delete().await.context("failed to delete source file")?;
         ui::deleted(&source)?;
     }
@@ -61,8 +60,7 @@ async fn select_files(input: &Input) -> Result<(FileHandle, FileHandle, Operatio
     let source = FileHandle::new(input.file(&files).context("failed to select file")?);
     let target = FileHandle::new(source.output_path(operation));
 
-    let allowed = input.overwrite(&target).context("failed to confirm overwrite")?;
-    if target.exists() && !allowed {
+    if target.exists() && !input.overwrite(&target).context("failed to confirm overwrite")? {
         anyhow::bail!("operation canceled");
     }
 
@@ -75,11 +73,11 @@ async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
     let kdf = KeyDerivation::new(secret).context("failed to initialize key derivation")?;
     let keys = kdf.derive_keys(&salt).context("failed to derive keys")?;
 
-    let header = Serializer::new(metadata.name(), metadata.size(), metadata.hash()).context("failed to initialize serializer")?;
-    let serialized = header.serialize(salt.expose_secret(), &keys.signer_key).context("failed to serialize header")?;
+    let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash()).context("failed to initialize serializer")?;
+    let header = serializer.serialize(salt.expose_secret(), &keys.signer_key).context("failed to serialize header")?;
 
     let mut writer = target.writer().await.context("failed to create target file")?;
-    writer.write_all(&serialized).await.context("failed to write header")?;
+    writer.write_all(&header).await.context("failed to write header")?;
 
     let reader = source.reader().await.context("failed to open source file")?;
     let pipeline = Pipeline::new(&keys.primary_key, &keys.secondary_key, Operation::Encryption).context("failed to initialize pipeline")?;
@@ -94,6 +92,7 @@ async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
 
     let kdf = KeyDerivation::new(secret).context("failed to initialize key derivation")?;
     let keys = kdf.derive_keys(header.salt()).context("failed to derive keys")?;
+
     if !header.verify(&keys.signer_key)? {
         anyhow::bail!("incorrect password or corrupted file");
     }
@@ -116,27 +115,134 @@ mod tests {
 
     use super::*;
 
+    fn secret(password: &[u8]) -> Secret {
+        Secret::new(password.to_vec())
+    }
+
     #[tokio::test]
     async fn roundtrip_preserves_content() {
+        // Arrange
         let dir = tempdir().unwrap();
         let source_path = dir.path().join("test.txt");
         let encrypted_path = dir.path().join("test.txt.swx");
         let decrypted_path = dir.path().join("test_dec.txt");
-
         fs::write(&source_path, b"test content").await.unwrap();
 
-        let secret = Secret::new(b"password".into());
-
+        let secret = secret(b"password");
         let source = FileHandle::new(&source_path);
         let encrypted = FileHandle::new(&encrypted_path);
         let decrypted = FileHandle::new(&decrypted_path);
 
+        // Act
         encrypt(&source, &encrypted, &secret).await.unwrap();
-        assert!(encrypted.exists());
-
         decrypt(&encrypted, &decrypted, &secret).await.unwrap();
-        assert!(decrypted.exists());
 
+        // Assert
         assert_eq!(fs::read(&decrypted_path).await.unwrap(), b"test content");
+    }
+
+    #[tokio::test]
+    async fn encrypt_produces_different_output() {
+        // Arrange
+        let dir = tempdir().unwrap();
+        let source_path = dir.path().join("plain.txt");
+        let encrypted_path = dir.path().join("plain.txt.swx");
+        fs::write(&source_path, b"sensitive data").await.unwrap();
+
+        let secret = secret(b"pass123");
+        let source = FileHandle::new(&source_path);
+        let encrypted = FileHandle::new(&encrypted_path);
+
+        // Act
+        encrypt(&source, &encrypted, &secret).await.unwrap();
+
+        // Assert
+        let original = fs::read(&source_path).await.unwrap();
+        let ciphertext = fs::read(&encrypted_path).await.unwrap();
+        assert_ne!(original, ciphertext);
+    }
+
+    #[tokio::test]
+    async fn decrypt_wrong_password_fails() {
+        // Arrange
+        let dir = tempdir().unwrap();
+        let source_path = dir.path().join("file.txt");
+        let encrypted_path = dir.path().join("file.txt.swx");
+        let decrypted_path = dir.path().join("file_dec.txt");
+        fs::write(&source_path, b"secret").await.unwrap();
+
+        let source = FileHandle::new(&source_path);
+        let encrypted = FileHandle::new(&encrypted_path);
+        let decrypted = FileHandle::new(&decrypted_path);
+        encrypt(&source, &encrypted, &secret(b"correct")).await.unwrap();
+
+        // Act
+        let result = decrypt(&encrypted, &decrypted, &secret(b"wrong")).await;
+
+        // Assert
+        assert!(result.is_err());
+        assert!(!decrypted.exists());
+    }
+
+    #[tokio::test]
+    async fn roundtrip_preserves_metadata() {
+        // Arrange
+        let dir = tempdir().unwrap();
+        let source_path = dir.path().join("data.bin");
+        let encrypted_path = dir.path().join("data.bin.swx");
+        let decrypted_path = dir.path().join("data_dec.bin");
+        fs::write(&source_path, vec![42u8; 4096].as_slice()).await.unwrap();
+
+        let secret = secret(b"metadata-test");
+        let source = FileHandle::new(&source_path);
+        let encrypted = FileHandle::new(&encrypted_path);
+        let decrypted = FileHandle::new(&decrypted_path);
+        let original_meta = source.metadata().await.unwrap();
+
+        // Act
+        encrypt(&source, &encrypted, &secret).await.unwrap();
+        let decrypted_meta = decrypt(&encrypted, &decrypted, &secret).await.unwrap();
+
+        // Assert
+        assert_eq!(decrypted_meta.name(), original_meta.name());
+        assert_eq!(decrypted_meta.size(), original_meta.size());
+        assert_eq!(decrypted_meta.hash(), original_meta.hash());
+    }
+
+    #[tokio::test]
+    async fn encrypt_empty_file_fails() {
+        // Arrange
+        let dir = tempdir().unwrap();
+        let source_path = dir.path().join("empty.txt");
+        let encrypted_path = dir.path().join("empty.txt.swx");
+        fs::write(&source_path, b"").await.unwrap();
+
+        let source = FileHandle::new(&source_path);
+        let encrypted = FileHandle::new(&encrypted_path);
+
+        // Act
+        let result = encrypt(&source, &encrypted, &secret(b"pass")).await;
+
+        // Assert
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn encrypted_file_has_swx_extension() {
+        // Arrange
+        let dir = tempdir().unwrap();
+        let source_path = dir.path().join("report.pdf");
+        let encrypted_path = dir.path().join("report.pdf.swx");
+        fs::write(&source_path, b"pdf content").await.unwrap();
+
+        let source = FileHandle::new(&source_path);
+        let encrypted = FileHandle::new(&encrypted_path);
+
+        // Act
+        encrypt(&source, &encrypted, &secret(b"pass")).await.unwrap();
+
+        // Assert
+        assert_eq!(encrypted_path.extension().unwrap(), "swx");
+        assert!(encrypted.exists());
     }
 }

@@ -15,7 +15,7 @@ use crate::core::{KeyBytes, Secret};
 
 pub(crate) enum Algorithm {
     Aes256Gcm,
-    ChaCha20Poly1305,
+    XChaCha20Poly1305,
 }
 
 pub(crate) struct Cipher {
@@ -37,7 +37,7 @@ impl Cipher {
     pub(crate) fn encrypt(&self, algorithm: &Algorithm, plaintext: &[u8]) -> Result<Vec<u8>> {
         match algorithm {
             Algorithm::Aes256Gcm => self.primary_cipher.encrypt(plaintext),
-            Algorithm::ChaCha20Poly1305 => self.secondary_cipher.encrypt(plaintext),
+            Algorithm::XChaCha20Poly1305 => self.secondary_cipher.encrypt(plaintext),
         }
     }
 
@@ -45,7 +45,7 @@ impl Cipher {
     pub(crate) fn decrypt(&self, algorithm: &Algorithm, ciphertext: &[u8]) -> Result<Vec<u8>> {
         match algorithm {
             Algorithm::Aes256Gcm => self.primary_cipher.decrypt(ciphertext),
-            Algorithm::ChaCha20Poly1305 => self.secondary_cipher.decrypt(ciphertext),
+            Algorithm::XChaCha20Poly1305 => self.secondary_cipher.decrypt(ciphertext),
         }
     }
 }

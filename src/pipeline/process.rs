@@ -37,7 +37,7 @@ impl Process {
             .compress(&task.data)
             .and_then(|data| self.padding.pad(&data))
             .and_then(|data| self.cipher.encrypt(&Algorithm::Aes256Gcm, &data))
-            .and_then(|data| self.cipher.encrypt(&Algorithm::ChaCha20Poly1305, &data))
+            .and_then(|data| self.cipher.encrypt(&Algorithm::XChaCha20Poly1305, &data))
             .and_then(|data| self.encoder.encode(&data))
             .map(|data| {
                 let size = task.data.len();
@@ -49,7 +49,7 @@ impl Process {
     fn decrypt(&self, task: &Task) -> Result<TaskResult> {
         self.encoder
             .decode(&task.data)
-            .and_then(|data| self.cipher.decrypt(&Algorithm::ChaCha20Poly1305, &data))
+            .and_then(|data| self.cipher.decrypt(&Algorithm::XChaCha20Poly1305, &data))
             .and_then(|data| self.cipher.decrypt(&Algorithm::Aes256Gcm, &data))
             .and_then(|data| self.padding.unpad(&data))
             .and_then(|data| self.compressor.decompress(&data))
