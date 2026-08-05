@@ -20,7 +20,7 @@ pub(crate) struct Pipeline {
 
 impl Pipeline {
     pub(crate) fn new(primary_key: &Secret, secondary_key: &Secret, operation: Operation) -> Result<Self> {
-        let process = Process::new(primary_key, secondary_key, operation).context("failed to initialize process")?;
+        let process = Process::new(primary_key, secondary_key, operation).context("failed to initialize chunk processor")?;
 
         Ok(Self { operation, process })
     }
@@ -43,13 +43,13 @@ impl Pipeline {
         let (reader_result, executor_result, writer_result) = tokio::join!(reader_handle, executor_handle, writer_handle);
 
         let reader_inner = reader_result.context("reader panicked")?;
-        reader_inner.context("failed to read")?;
+        reader_inner.context("failed to read chunks")?;
 
         let executor_inner = executor_result.context("executor panicked")?;
-        executor_inner.context("failed to execute")?;
+        executor_inner.context("failed to execute chunks")?;
 
         let writer_inner = writer_result.context("writer panicked")?;
-        writer_inner.context("failed to write")?;
+        writer_inner.context("failed to write chunks")?;
 
         Ok(())
     }

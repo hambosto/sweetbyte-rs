@@ -71,7 +71,7 @@ impl FileHandle {
 
     pub(crate) async fn metadata(&self) -> Result<Metadata> {
         let mut hasher = Hasher::new();
-        hasher.update_mmap_rayon(self.path()).context("failed to memory-map file for hashing")?;
+        hasher.update_mmap_rayon(self.path()).context("failed to hash file")?;
 
         let hash = *hasher.finalize().as_bytes();
         let name = self.name();

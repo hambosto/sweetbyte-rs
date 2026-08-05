@@ -71,17 +71,17 @@ async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
     let metadata = source.metadata().await.context("failed to read metadata")?;
     let salt = KeyDerivation::generate_salt(ARGON2_SALT_LEN).context("failed to generate salt")?;
     let kdf = KeyDerivation::new(secret).context("failed to initialize key derivation")?;
-    let keys = kdf.derive_keys(&salt).context("failed to derive keys")?;
+    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(&salt).context("failed to derive keys")?;
 
     let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash()).context("failed to initialize serializer")?;
-    let header = serializer.serialize(salt.expose_secret(), &keys.signer_key).context("failed to serialize header")?;
+    let header = serializer.serialize(salt.expose_secret(), &signer_key).context("failed to serialize header")?;
 
     let mut writer = target.writer().await.context("failed to create target file")?;
     writer.write_all(&header).await.context("failed to write header")?;
 
     let reader = source.reader().await.context("failed to open source file")?;
-    let pipeline = Pipeline::new(&keys.primary_key, &keys.secondary_key, Operation::Encryption).context("failed to initialize pipeline")?;
-    pipeline.process(reader, writer, metadata.size()).await?;
+    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Encryption).context("failed to initialize pipeline")?;
+    pipeline.process(reader, writer, metadata.size()).await.context("failed to encrypt file")?;
 
     Ok(metadata)
 }
@@ -91,15 +91,15 @@ async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
     let header = Deserializer::from_reader(&mut reader).await.context("failed to deserialize header")?;
 
     let kdf = KeyDerivation::new(secret).context("failed to initialize key derivation")?;
-    let keys = kdf.derive_keys(header.salt()).context("failed to derive keys")?;
+    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(header.salt()).context("failed to derive keys")?;
 
-    if !header.verify(&keys.signer_key)? {
+    if !header.verify(&signer_key)? {
         anyhow::bail!("incorrect password or corrupted file");
     }
 
     let writer = target.writer().await.context("failed to create target file")?;
-    let pipeline = Pipeline::new(&keys.primary_key, &keys.secondary_key, Operation::Decryption).context("failed to initialize pipeline")?;
-    pipeline.process(reader, writer, header.file_size()).await?;
+    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Decryption).context("failed to initialize pipeline")?;
+    pipeline.process(reader, writer, header.file_size()).await.context("failed to decrypt file")?;
 
     if !validate_hash(target.path(), header.file_hash())? {
         anyhow::bail!("hash verification failed");
@@ -110,13 +110,15 @@ async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
 
 #[cfg(test)]
 mod tests {
+    use sha2::Digest;
     use tempfile::tempdir;
     use tokio::fs;
 
     use super::*;
 
     fn secret(password: &[u8]) -> Secret {
-        Secret::new(password.to_vec())
+        let key = sha2::Sha256::digest(password);
+        Secret::new(key.to_vec())
     }
 
     #[tokio::test]

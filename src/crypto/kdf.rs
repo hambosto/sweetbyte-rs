@@ -6,13 +6,7 @@ use rand::rngs::SysRng;
 use sha2::Sha256;
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
-use crate::core::{NonEmptyKey, Secret};
-
-pub(crate) struct DerivedKeys {
-    pub(crate) primary_key: Secret,
-    pub(crate) secondary_key: Secret,
-    pub(crate) signer_key: Secret,
-}
+use crate::core::{KeyBytes, Secret};
 
 pub(crate) struct KeyDerivation {
     key: Secret,
@@ -20,20 +14,19 @@ pub(crate) struct KeyDerivation {
 
 impl KeyDerivation {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = NonEmptyKey::try_new(key.expose_secret().into()).context("key must not be empty")?;
+        let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
 
         Ok(Self { key: key.into() })
     }
 
-    pub(crate) fn derive_keys(&self, salt: &Secret) -> Result<DerivedKeys> {
-        let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(ARGON2_KEY_LEN)).context("invalid argon2 parameters")?;
+    pub(crate) fn derive_keys(&self, salt: &Secret) -> Result<(Secret, Secret, Secret)> {
+        let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(ARGON2_KEY_LEN)).context("failed to initialize argon2 parameters")?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
         let mut stretched = vec![0u8; ARGON2_KEY_LEN];
         argon2
             .hash_password_into(self.key.expose_secret(), salt.expose_secret(), &mut stretched)
             .context("failed to stretch key with argon2")?;
-
         let hkdf = Hkdf::<Sha256>::new(Some(salt.expose_secret()), &stretched);
 
         let mut primary_key = vec![0u8; KEY_LEN];
@@ -45,7 +38,7 @@ impl KeyDerivation {
         let mut signer_key = vec![0u8; KEY_LEN];
         hkdf.expand(&KDF_INFO[2], &mut signer_key).context("failed to expand signer key")?;
 
-        Ok(DerivedKeys { primary_key: Secret::new(primary_key), secondary_key: Secret::new(secondary_key), signer_key: Secret::new(signer_key) })
+        Ok((Secret::new(primary_key), Secret::new(secondary_key), Secret::new(signer_key)))
     }
 
     pub(crate) fn generate_salt(salt_size: usize) -> Result<Secret> {

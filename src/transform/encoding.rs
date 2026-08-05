@@ -14,7 +14,7 @@ pub(crate) struct Encoding {
 impl Encoding {
     pub(crate) fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
         if !reed_solomon_simd::ReedSolomonEncoder::supports(original_count, recovery_count) {
-            anyhow::bail!("unsupported shard config");
+            anyhow::bail!("unsupported reed-solomon shard config");
         }
         let total_count = original_count.saturating_add(recovery_count);
 
@@ -77,7 +77,7 @@ impl Encoding {
         } else {
             let restored = reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode reed-solomon shards")?;
             for index in 0..self.original_count {
-                result.extend_from_slice(restored.get(&index).with_context(|| format!("missing shard {index}"))?);
+                result.extend_from_slice(restored.get(&index).with_context(|| format!("failed to restore shard {index}"))?);
             }
         }
         result.truncate(original_size);

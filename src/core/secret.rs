@@ -1,6 +1,6 @@
 use secrecy::{ExposeSecret, SecretBox};
 
-use super::key::{KeyBytes, NonEmptyKey};
+use super::key::KeyBytes;
 
 pub(crate) struct Secret {
     secret: SecretBox<Vec<u8>>,
@@ -18,12 +18,6 @@ impl Secret {
 
 impl From<KeyBytes> for Secret {
     fn from(key: KeyBytes) -> Self {
-        Secret::new(key.into_inner())
-    }
-}
-
-impl From<NonEmptyKey> for Secret {
-    fn from(key: NonEmptyKey) -> Self {
         Secret::new(key.into_inner())
     }
 }

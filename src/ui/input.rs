@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use sha2::{Digest, Sha256};
 
 use crate::core::{Operation, Secret};
 use crate::fs::FileHandle;
@@ -34,7 +35,7 @@ impl Input {
             }
         }
 
-        Ok(Secret::new(password.as_bytes().into()))
+        Ok(Secret::new(Sha256::digest(password.as_bytes()).to_vec()))
     }
 
     pub(crate) fn operation_mode(&self) -> Result<Operation> {

@@ -24,7 +24,7 @@ impl Writer {
 
         while let Some(result) = receiver.recv().await {
             let delta = result.index.checked_sub(self.index).context("chunk index behind writer")?;
-            let offset = usize::try_from(delta).context("chunk index overflow")?;
+            let offset = usize::try_from(delta).context("chunk index exceeded usize")?;
             let required_len = offset.checked_add(1).context("chunk offset overflow")?;
 
             if required_len > pending.len() {
@@ -62,7 +62,7 @@ impl Writer {
         }
 
         writer.write_all(&result.data).await.context("failed to write chunk")?;
-        progress_bar.add(u64::try_from(result.size).context("size overflow")?);
+        progress_bar.add(u64::try_from(result.size).context("failed to convert chunk size to u64")?);
 
         Ok(())
     }

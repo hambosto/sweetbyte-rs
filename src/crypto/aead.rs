@@ -28,7 +28,7 @@ where
             anyhow::bail!("plaintext must not be empty");
         }
 
-        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to setup key")?;
+        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to initialize cipher")?;
         let nonce = Nonce::<T>::try_generate_from_rng(&mut SysRng).context("failed to generate nonce")?;
         let ciphertext = cipher.encrypt(&nonce, plaintext).context("failed to encrypt")?;
 
@@ -47,12 +47,12 @@ where
 
         let nonce_len = <T as AeadCore>::NonceSize::USIZE;
         if ciphertext.len() < nonce_len {
-            anyhow::bail!("ciphertext shorter than nonce");
+            anyhow::bail!("ciphertext too short for nonce");
         }
 
         let (nonce_bytes, body) = ciphertext.split_at(nonce_len);
         let nonce = Nonce::<T>::try_from(nonce_bytes).context("invalid nonce")?;
-        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to setup key")?;
+        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to initialize cipher")?;
         let plaintext = cipher.decrypt(&nonce, body).context("failed to decrypt")?;
 
         Ok(plaintext)

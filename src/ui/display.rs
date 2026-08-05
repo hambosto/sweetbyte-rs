@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
@@ -12,7 +11,7 @@ pub(crate) async fn files(items: &[FileHandle]) -> Result<()> {
     }
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
+    table.load_style(UTF8_FULL.with_rounded_corners()).set_content_arrangement(ContentArrangement::Dynamic);
     table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
     for (i, file) in items.iter().enumerate() {
@@ -33,16 +32,16 @@ pub(crate) fn success(operation: Operation, file: &FileHandle) -> Result<()> {
         Operation::Decryption => "decrypted",
     };
 
-    cliclack::log::success(format!("File {process} successfully: {}", file.name())).context("failed to display success message")
+    cliclack::log::success(format!("File {process}: {}", file.name())).context("failed to display success message")
 }
 
 pub(crate) fn deleted(file: &FileHandle) -> Result<()> {
-    cliclack::log::success(format!("Source file deleted: {}", file.name())).context("failed to display deletion message")
+    cliclack::log::success(format!("File deleted: {}", file.name())).context("failed to display deletion message")
 }
 
 pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).set_content_arrangement(ContentArrangement::Dynamic);
+    table.load_style(UTF8_FULL.with_rounded_corners()).set_content_arrangement(ContentArrangement::Dynamic);
 
     table.add_row([Cell::new("Original Filename").fg(Color::Green), Cell::new(file_name).fg(Color::White)]);
     table.add_row([Cell::new("Original Size").fg(Color::Green), Cell::new(humansize::format_size(file_size, humansize::DECIMAL)).fg(Color::White)]);

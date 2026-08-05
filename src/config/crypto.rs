@@ -1,5 +1,3 @@
-pub(crate) const FILE_EXTENSION: &str = "swx";
-
 pub(crate) const ARGON2_M_COST: u32 = 65536;
 
 pub(crate) const ARGON2_T_COST: u32 = 3;
@@ -11,28 +9,6 @@ pub(crate) const ARGON2_KEY_LEN: usize = 64;
 pub(crate) const ARGON2_SALT_LEN: usize = 32;
 
 pub(crate) const KEY_LEN: usize = 32;
-
-pub(crate) const ORIGINAL_COUNT: usize = 4;
-
-pub(crate) const BLOCK_SIZE: usize = 128;
-
-pub(crate) const COMPRESSION_LEVEL: i32 = 1;
-
-pub(crate) const RECOVERY_COUNT: usize = 10;
-
-pub(crate) const CHUNK_SIZE: usize = 256 * 1024;
-
-pub(crate) const MAGIC_BYTES: u32 = 0xDEAD_BEEF;
-
-pub(crate) const CURRENT_VERSION: u16 = 0x0002;
-
-pub(crate) const MAX_FILENAME_LEN: usize = 256;
-
-pub(crate) const MAX_CHUNK_SIZE: u32 = 1024 * 1024;
-
-pub(crate) const MAX_SECTION_SIZE: u32 = 1024;
-
-pub(crate) const PASSWORD_LEN: usize = 8;
 
 pub(crate) const KDF_INFO: [[u8; 64]; 3] = [
     [
@@ -48,5 +24,3 @@ pub(crate) const KDF_INFO: [[u8; 64]; 3] = [
         0x31, 0x65, 0x62, 0x34, 0x33, 0x35, 0x65, 0x62, 0x64, 0x33, 0x65, 0x30, 0x32, 0x62, 0x61, 0x66, 0x62, 0x35, 0x38, 0x31, 0x30, 0x39, 0x65, 0x63, 0x61, 0x63, 0x36, 0x66, 0x36, 0x30, 0x61, 0x31,
     ], // sweetbyte/v1/hkdf-sha256/key-derivation/role=third
 ];
-
-pub(crate) const EXCLUDED_PATTERNS: &[&str] = &["target", "vendor", "node_modules", ".git", ".github", ".config", ".local", ".cache", ".ssh", ".gnupg", "*.rs", "*.go", "*.nix", "*.toml", "*.lock"];
