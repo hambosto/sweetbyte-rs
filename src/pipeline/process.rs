@@ -1,10 +1,8 @@
-use aes_gcm::Aes256Gcm;
 use anyhow::{Context, Result};
-use chacha20poly1305::XChaCha20Poly1305;
 
 use crate::config::{BLOCK_SIZE, COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::{Operation, Secret, Task, TaskResult};
-use crate::crypto::Cipher;
+use crate::crypto::{Aes256Gcm, Cipher, XChaCha20Poly1305};
 use crate::transform::{Compression, Encoding, Pkcs7Padding};
 
 pub(super) struct Process {
