@@ -7,23 +7,23 @@ use rand::rngs::SysRng;
 
 use crate::core::{KeyBytes, Secret};
 
-pub(super) struct AeadCipher<T> {
+pub(crate) struct Cipher<T> {
     key: Secret,
     cipher: PhantomData<T>,
 }
 
-impl<T> AeadCipher<T>
+impl<T> Cipher<T>
 where
     T: Aead + AeadCore + KeyInit,
 {
-    pub(super) fn new(key: &Secret) -> Result<Self> {
+    pub(crate) fn new(key: &Secret) -> Result<Self> {
         let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
 
         Ok(Self { key: key.into(), cipher: PhantomData })
     }
 
     #[inline]
-    pub(super) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         if plaintext.is_empty() {
             anyhow::bail!("plaintext must not be empty");
         }
@@ -40,7 +40,7 @@ where
     }
 
     #[inline]
-    pub(super) fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         if ciphertext.is_empty() {
             anyhow::bail!("ciphertext must not be empty");
         }
