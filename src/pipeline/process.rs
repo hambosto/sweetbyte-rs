@@ -25,7 +25,6 @@ impl Process {
         Ok(Self { primary_cipher, secondary_cipher, encoder, compressor, padding, operation })
     }
 
-    #[inline]
     pub(super) fn process(&self, task: &Task) -> Result<TaskResult> {
         match self.operation {
             Operation::Encryption => self.encrypt(task),
@@ -33,7 +32,6 @@ impl Process {
         }
     }
 
-    #[inline]
     fn encrypt(&self, task: &Task) -> Result<TaskResult> {
         self.compressor
             .compress(&task.data)
@@ -47,7 +45,6 @@ impl Process {
             })
     }
 
-    #[inline]
     fn decrypt(&self, task: &Task) -> Result<TaskResult> {
         self.encoder
             .decode(&task.data)

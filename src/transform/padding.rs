@@ -16,7 +16,6 @@ impl Pkcs7Padding {
         Ok(Self { block_size })
     }
 
-    #[inline]
     pub(crate) fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
             anyhow::bail!("data must not be empty");
@@ -31,7 +30,6 @@ impl Pkcs7Padding {
         }
     }
 
-    #[inline]
     pub(crate) fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
             anyhow::bail!("data must not be empty");
@@ -46,7 +44,6 @@ impl Pkcs7Padding {
         }
     }
 
-    #[inline]
     fn pad_with<B: ArraySize>(data: &[u8]) -> Result<Vec<u8>> {
         match Pkcs7::pad_detached::<B>(data) {
             PaddedData::Pad { blocks, tail_block } => {
@@ -70,7 +67,6 @@ impl Pkcs7Padding {
         }
     }
 
-    #[inline]
     fn unpad_with<B: ArraySize + Unsigned>(data: &[u8]) -> Result<Vec<u8>> {
         let num_blocks = data.len().checked_div(B::USIZE).unwrap_or(0);
         let mut blocks = Vec::with_capacity(num_blocks);

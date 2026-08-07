@@ -22,7 +22,6 @@ where
         Ok(Self { key: key.into(), cipher: PhantomData })
     }
 
-    #[inline]
     pub(crate) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         if plaintext.is_empty() {
             anyhow::bail!("plaintext must not be empty");
@@ -39,7 +38,6 @@ where
         Ok(result)
     }
 
-    #[inline]
     pub(crate) fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         if ciphertext.is_empty() {
             anyhow::bail!("ciphertext must not be empty");
