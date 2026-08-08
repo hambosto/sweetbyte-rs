@@ -71,11 +71,11 @@ Or add as a flake input:
 
 ```sh
 git clone https://github.com/hambosto/sweetbyte-rs.git
-cd sweetbyte-rs
+cd sweetbyte
 cargo build --release
 ```
 
-Binary ends up at `target/release/sweetbyte-rs`.
+Binary ends up at `target/release/sweetbyte`.
 
 ### Install to system
 
@@ -90,7 +90,7 @@ cargo install --path .
 Just run it:
 
 ```sh
-sweetbyte-rs
+sweetbyte
 ```
 
 You'll get prompts for everything. Pick encrypt or decrypt, choose a file, enter your password. Done.

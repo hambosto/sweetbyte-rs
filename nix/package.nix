@@ -14,7 +14,7 @@ let
     "${year}-${month}-${day}";
 in
 rustPlatform.buildRustPackage {
-  pname = "sweetbyte-rs";
+  pname = "sweetbyte";
   version = "unstable-${fmtDate self.lastModifiedDate}-${self.shortRev or "dirty"}";
 
   src = lib.cleanSourceWith {
@@ -37,7 +37,7 @@ rustPlatform.buildRustPackage {
     description = "A very small, very simple, yet very secure encryption tool written in rust.";
     homepage = "https://github.com/hambosto/sweetbyte-rs";
     license = lib.licenses.mit;
-    mainProgram = "sweetbyte-rs";
+    mainProgram = "sweetbyte";
     platforms = lib.platforms.unix;
   };
 }

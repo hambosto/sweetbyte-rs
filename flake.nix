@@ -29,7 +29,7 @@
     in
     {
       overlays.default = final: prev: {
-        sweetbyte-rs = final.callPackage ./nix/package.nix { inherit self; };
+        sweetbyte = final.callPackage ./nix/package.nix { inherit self; };
       };
 
       packages = forEachSystem (
@@ -41,7 +41,7 @@
       devShells = forEachSystem (
         { pkgs, system }: {
           default = pkgs.callPackage ./nix/shell.nix {
-            sweetbyte-rs = self.packages.${system}.default;
+            sweetbyte = self.packages.${system}.default;
           };
         }
       );

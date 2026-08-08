@@ -1,9 +1,9 @@
 {
   mkShell,
-  sweetbyte-rs,
+  sweetbyte,
 }:
 mkShell {
   inputsFrom = [
-    sweetbyte-rs
+    sweetbyte
   ];
 }
