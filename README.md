@@ -55,14 +55,23 @@ Files encrypted with the Go version won't work here. The file format changed. If
 nix run github:hambosto/sweetbyte-rs
 ```
 
-Or add as a flake input:
+Or add as a flake input and use the overlay:
 
 ```nix
 {
   inputs.sweetbyte.url = "github:hambosto/sweetbyte-rs";
 
-  outputs = { self, nixpkgs, sweetbyte, ... }: {
-    # Use sweetbyte.packages.${system}.default
+  outputs = { self, nixpkgs, sweetbyte, ... }:
+  {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, ... }: {
+          nixpkgs.overlays = [ sweetbyte.overlays.default ];
+          environment.systemPackages = [ pkgs.sweetbyte ];
+        })
+      ];
+    };
   };
 }
 ```
@@ -71,7 +80,7 @@ Or add as a flake input:
 
 ```sh
 git clone https://github.com/hambosto/sweetbyte-rs.git
-cd sweetbyte
+cd sweetbyte-rs
 cargo build --release
 ```
 
@@ -192,7 +201,7 @@ CRC32 validates each shard before decoding. Corrupted shards get reconstructed f
 
 ### Prerequisites
 
-- Rust nightly toolchain
+- Rust 1.85+ toolchain
 - Nix (optional, for reproducible builds)
 
 ### Commands
@@ -204,7 +213,7 @@ cargo test             # Run tests
 cargo build --release  # Build optimized binary
 ```
 
-The project enforces strict code quality via ~40 aggressive clippy lints, including warnings for: indexing/slicing, unwrap/expect usage, panics, unsafe blocks, arithmetic side effects, async anti-patterns, float comparisons, and cast issues. These are relaxed in test code via `clippy.toml`.
+The project enforces strict code quality via 50 aggressive clippy lints, including warnings for: indexing/slicing, unwrap/expect usage, panics, unsafe blocks, arithmetic side effects, async anti-patterns, float comparisons, and cast issues. These are relaxed in test code via `clippy.toml`.
 
 Release builds use maximum optimizations: `codegen-units = 1`, `lto = "fat"`, `opt-level = 3`, `panic = "abort"`, and debug symbol stripping.
 
