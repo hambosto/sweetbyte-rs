@@ -15,7 +15,7 @@ argon2            = { git = "https://github.com/RustCrypto/password-hashes.git",
 blake3            = { version = "1.8.6", features = ["mmap", "rayon"] }
 block-padding     = "0.4.2"
 chacha20poly1305  = { version = "0.11.0", features = ["zeroize"] }
-cliclack          = "0.5.5"
+cliclack          = "0.5.6"
 comfy-table       = "8.0.0"
 crc32fast         = "1.5.0"
 fast-glob         = "1.1.0"
@@ -36,6 +36,7 @@ sha2              = { version = "0.11.0", features = ["zeroize"] }
 strum             = { version = "0.28.0", features = ["derive"] }
 subtle            = "2.6.1"
 tokio             = { version = "1.53.1", features = ["full"] }
+tui-banner        = "0.2.3"
 walkdir           = "2.5.0"
 zstd              = { version = "0.13.3", features = ["thin"] }
 

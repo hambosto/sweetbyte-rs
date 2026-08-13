@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
+use tui_banner::{Banner, BannerError, Font, Style};
 
 use crate::core::Operation;
 use crate::fs::FileHandle;
@@ -53,8 +54,11 @@ pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Resul
 pub(crate) fn banner() -> Result<()> {
     let app_name = env!("CARGO_PKG_NAME");
     let version = option_env!("SWEETBYTE_BUILD_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
+    let font = Font::from_figlet_str(include_str!("../../assets/ansii-shadow.flf")).map_err(BannerError::from)?;
+    let banner = Banner::new(app_name).context("failed to initialize banner")?;
+    let render = banner.font(font).style(Style::ForestSky).render();
 
-    cliclack::intro(format!("{app_name} {version}")).context("failed to display banner")
+    cliclack::note(format!("{app_name} {version}"), render).context("failed to display banner")
 }
 
 pub(crate) fn exit() -> Result<()> {
