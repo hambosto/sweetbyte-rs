@@ -39,7 +39,6 @@ impl Pipeline {
         let reader_handle = tokio::spawn(async move { Reader::new(self.operation).read_all(input, &task_tx).await });
         let writer_handle = tokio::spawn(async move { Writer::new(self.operation).write_all(output, result_rx, &progress_bar).await });
         let executor_handle = tokio::spawn(async move { Executor::new(self.process, channel_size).execute(task_rx, result_tx).await });
-
         let (reader_result, executor_result, writer_result) = tokio::join!(reader_handle, executor_handle, writer_handle);
 
         let reader_inner = reader_result.context("reader panicked")?;
