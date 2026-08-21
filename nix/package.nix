@@ -28,7 +28,6 @@ rustPlatform.buildRustPackage {
   };
 
   cargoLock.lockFile = ../Cargo.lock;
-  cargoLock.allowBuiltinFetchGit = true;
   doCheck = false;
 
   SWEETBYTE_BUILD_VERSION = "unstable ${fmtDate self.lastModifiedDate} (commit ${self.rev or "dirty"})";
