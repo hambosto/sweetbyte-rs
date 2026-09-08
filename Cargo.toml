@@ -4,7 +4,6 @@ version    = "26.1.0"
 edition    = "2024"
 license    = "MIT"
 authors    = ["Ilham Putra Husada <hambosto@gmail.com>"]
-homepage   = "https://github.com/hambosto/sweetbyte-rs"
 repository = "https://github.com/hambosto/sweetbyte-rs"
 
 [dependencies]
@@ -23,7 +22,7 @@ hex               = "0.4.3"
 hkdf              = "0.13.0"
 hmac              = { version = "0.13.0", features = ["zeroize"] }
 humansize         = "2.1.3"
-hybrid-array      = { version = "0.4.13", features = ["zeroize"] }
+hybrid-array      = { version = "0.4.15", features = ["zeroize"] }
 mimalloc          = { version = "=0.1.48", features = ["override", "v3"] }
 nutype            = { version = "0.7.0", features = ["serde"] }
 postcard          = { version = "1.1.3", features = ["use-std"] }
@@ -37,7 +36,7 @@ strum             = { version = "0.28.0", features = ["derive"] }
 subtle            = "2.6.1"
 tokio             = { version = "1.53.1", features = ["full"] }
 walkdir           = "2.5.0"
-zstd              = { version = "0.13.3", features = ["thin"] }
+zstd              = { version = "0.14.0", features = ["thin"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
