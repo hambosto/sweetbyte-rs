@@ -60,8 +60,6 @@
             inherit (self.packages.${system}) sweetbyte;
           };
         };
-
-        formatter = pkgs.nixfmt-tree;
       }
     )
     // {
