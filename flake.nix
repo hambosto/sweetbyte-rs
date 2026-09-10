@@ -1,49 +1,73 @@
 {
   description = "A very small, very simple, yet very secure encryption tool written in rust.";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay/stable";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
     {
       self,
       nixpkgs,
+      rust-overlay,
+      flake-utils,
       ...
     }:
-    let
-      inherit (nixpkgs.lib) genAttrs;
-      systems = [
-        "aarch64-darwin"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "x86_64-linux"
-      ];
-      forEachSystem =
-        perSystem:
-        genAttrs systems (
-          system:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ rust-overlay.overlays.default ];
+        };
+        toolchain = pkgs.rust-bin.stable.latest.default;
+        rustPlatform = pkgs.makeRustPlatform {
+          cargo = toolchain;
+          rustc = toolchain;
+        };
+        fmtDate =
+          raw:
           let
-            pkgs = nixpkgs.legacyPackages.${system};
+            year = builtins.substring 0 4 raw;
+            month = builtins.substring 4 2 raw;
+            day = builtins.substring 6 2 raw;
           in
-          perSystem { inherit pkgs system; }
-        );
-    in
-    {
-      overlays.default = final: prev: {
-        sweetbyte = final.callPackage ./nix/package.nix { inherit self; };
-      };
-
-      packages = forEachSystem (
-        { pkgs, ... }: {
-          default = pkgs.callPackage ./nix/package.nix { inherit self; };
-        }
-      );
-
-      devShells = forEachSystem (
-        { pkgs, system }: {
-          default = pkgs.callPackage ./nix/shell.nix {
-            sweetbyte = self.packages.${system}.default;
+          "${year}-${month}-${day}";
+        rev = self.shortRev or "dirty";
+        date = "${fmtDate self.lastModifiedDate}";
+        version = "unstable-${fmtDate self.lastModifiedDate}-${self.shortRev or "dirty"}";
+      in
+      {
+        packages = {
+          sweetbyte = pkgs.callPackage ./nix/package.nix {
+            inherit
+              version
+              rev
+              date
+              rustPlatform
+              ;
           };
-        }
-      );
+          default = self.packages.${system}.sweetbyte;
+        };
+
+        devShells = {
+          default = pkgs.callPackage ./nix/shell.nix {
+            inherit toolchain;
+            inherit (self.packages.${system}) sweetbyte;
+          };
+        };
+
+        formatter = pkgs.nixfmt-tree;
+      }
+    )
+    // {
+      overlays.default = _: prev: {
+        inherit (self.packages.${prev.stdenv.system}) sweetbyte;
+      };
     };
 }

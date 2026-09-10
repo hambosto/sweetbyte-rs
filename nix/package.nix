@@ -1,36 +1,20 @@
 {
-  self,
+  date ? "19700101",
   lib,
+  rev ? "unknown",
   rustPlatform,
+  version ? "git",
 }:
-let
-  fmtDate =
-    raw:
-    let
-      year = builtins.substring 0 4 raw;
-      month = builtins.substring 4 2 raw;
-      day = builtins.substring 6 2 raw;
-    in
-    "${year}-${month}-${day}";
-in
 rustPlatform.buildRustPackage {
   pname = "sweetbyte";
-  version = "unstable-${fmtDate self.lastModifiedDate}-${self.shortRev or "dirty"}";
+  inherit version;
 
-  src = lib.cleanSourceWith {
-    filter =
-      name: _:
-      let
-        baseName = baseNameOf (toString name);
-      in
-      !(lib.hasSuffix ".nix" baseName);
-    src = lib.cleanSource ../.;
-  };
+  src = ../.;
 
   cargoLock.lockFile = ../Cargo.lock;
   doCheck = false;
 
-  SWEETBYTE_BUILD_VERSION = "unstable ${fmtDate self.lastModifiedDate} (commit ${self.rev or "dirty"})";
+  SWEETBYTE_BUILD_VERSION = "unstable ${date} (commit ${rev})";
 
   meta = {
     description = "A very small, very simple, yet very secure encryption tool written in rust.";
