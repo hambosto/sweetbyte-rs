@@ -46,10 +46,10 @@
         packages = {
           sweetbyte = pkgs.callPackage ./nix/package.nix {
             inherit
-              version
-              rev
               date
+              rev
               rustPlatform
+              version
               ;
           };
           default = self.packages.${system}.sweetbyte;
