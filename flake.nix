@@ -38,7 +38,7 @@
             day = builtins.substring 6 2 raw;
           in
           "${year}-${month}-${day}";
-        rev = self.shortRev or "dirty";
+        rev = self.rev or "dirty";
         date = "${fmtDate self.lastModifiedDate}";
         version = "unstable-${fmtDate self.lastModifiedDate}-${self.shortRev or "dirty"}";
       in
