@@ -57,7 +57,6 @@
 
         devShells = {
           default = pkgs.callPackage ./nix/shell.nix {
-            inherit toolchain;
             inherit (self.packages.${system}) sweetbyte;
           };
         };
