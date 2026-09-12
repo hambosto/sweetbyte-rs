@@ -21,6 +21,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           cache: false
+          components: rustfmt, clippy
           toolchain: nightly
 
       - name: Verify code formatting
