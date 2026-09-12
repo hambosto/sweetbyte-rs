@@ -21,7 +21,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           cache: false
-          toolchain: stable
+          toolchain: nightly
 
       - name: Verify code formatting
         run: cargo fmt --check
