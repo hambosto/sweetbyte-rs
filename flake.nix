@@ -50,7 +50,7 @@
       }
     )
     // {
-      overlays.default = _: prev: {
+      overlays.default = final: prev: {
         inherit (self.packages.${prev.stdenv.hostPlatform.system}) sweetbyte;
       };
     };
