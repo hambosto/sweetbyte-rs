@@ -40,6 +40,7 @@
               version
               ;
           };
+          default = self.packages.${system}.sweetbyte;
         };
 
         devShells = {
@@ -51,7 +52,7 @@
     )
     // {
       overlays.default = final: prev: {
-        inherit (self.packages.${prev.stdenv.hostPlatform.system}) sweetbyte;
+        inherit (self.packages.${prev.stdenv.system}) sweetbyte;
       };
     };
 }
