@@ -8,19 +8,15 @@ mod transform;
 mod ui;
 
 use anyhow::{Context, Result};
-use mimalloc::MiMalloc;
 use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
-use crate::core::{Metadata, Operation, Secret};
+use crate::core::{ExposeSecret, Metadata, Operation, Secret};
 use crate::crypto::{KeyDerivation, validate_hash};
 use crate::format::{Deserializer, Serializer};
 use crate::fs::{Discover, FileHandle};
 use crate::pipeline::Pipeline;
 use crate::ui::Input;
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<()> {

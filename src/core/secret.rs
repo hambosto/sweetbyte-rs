@@ -1,6 +1,48 @@
-use secrecy::{ExposeSecret, SecretBox};
+use std::fmt::{Debug, Formatter, Result};
+
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::key::KeyBytes;
+
+pub(crate) trait ExposeSecret<S: ?Sized> {
+    fn expose_secret(&self) -> &S;
+}
+
+pub(crate) struct SecretBox<S: Zeroize + ?Sized> {
+    inner_secret: Box<S>,
+}
+
+impl<S: Zeroize + ?Sized> SecretBox<S> {
+    pub(crate) fn new(boxed_secret: Box<S>) -> Self {
+        Self { inner_secret: boxed_secret }
+    }
+}
+
+impl<S: Zeroize + ?Sized> ExposeSecret<S> for SecretBox<S> {
+    fn expose_secret(&self) -> &S {
+        self.inner_secret.as_ref()
+    }
+}
+
+impl<S: Zeroize + ?Sized> Zeroize for SecretBox<S> {
+    fn zeroize(&mut self) {
+        self.inner_secret.as_mut().zeroize();
+    }
+}
+
+impl<S: Zeroize + ?Sized> Drop for SecretBox<S> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl<S: Zeroize + ?Sized> ZeroizeOnDrop for SecretBox<S> {}
+
+impl<S: Zeroize + ?Sized> Debug for SecretBox<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "[REDACTED]")
+    }
+}
 
 pub(crate) struct Secret {
     secret: SecretBox<Vec<u8>>,
@@ -10,8 +52,10 @@ impl Secret {
     pub(crate) fn new(secret: Vec<u8>) -> Self {
         Self { secret: SecretBox::new(Box::new(secret)) }
     }
+}
 
-    pub(crate) fn expose_secret(&self) -> &[u8] {
+impl ExposeSecret<[u8]> for Secret {
+    fn expose_secret(&self) -> &[u8] {
         self.secret.expose_secret()
     }
 }

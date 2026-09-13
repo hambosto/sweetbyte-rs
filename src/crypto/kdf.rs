@@ -6,7 +6,7 @@ use rand::rngs::SysRng;
 use sha2::Sha256;
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
-use crate::core::{KeyBytes, Secret};
+use crate::core::{ExposeSecret, KeyBytes, Secret};
 
 pub(crate) struct KeyDerivation {
     key: Secret,

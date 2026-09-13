@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use hybrid_array::typenum::Unsigned;
 use rand::rngs::SysRng;
 
-use crate::core::{KeyBytes, Secret};
+use crate::core::{ExposeSecret, KeyBytes, Secret};
 
 pub(crate) struct Cipher<T> {
     key: Secret,
