@@ -7,7 +7,7 @@ mod pipeline;
 mod transform;
 mod ui;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     let input = Input::new(PASSWORD_LEN, true);
     let (source, target, operation) = select_files(&input).await?;
-    let secret = input.password(operation).context("failed to read password")?;
+    let secret = input.password(operation)?;
 
     let metadata = match operation {
         Operation::Encryption => encrypt(&source, &target, &secret).await?,
@@ -35,8 +35,8 @@ async fn main() -> Result<()> {
     ui::success(operation, &target)?;
     ui::header(metadata.name(), metadata.size(), metadata.hash())?;
 
-    if input.delete(&source, operation).context("failed to confirm deletion")? {
-        source.delete().await.context("failed to delete source file")?;
+    if input.delete(&source, operation)? {
+        source.delete().await?;
         ui::deleted(&source)?;
     }
 
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
 }
 
 async fn select_files(input: &Input) -> Result<(FileHandle, FileHandle, Operation)> {
-    let operation = input.operation_mode().context("failed to select operation")?;
+    let operation = input.operation_mode()?;
     let files: Vec<FileHandle> = Discover::new(".", operation).run().into_iter().map(FileHandle::new).collect();
 
     if files.is_empty() {
@@ -53,10 +53,10 @@ async fn select_files(input: &Input) -> Result<(FileHandle, FileHandle, Operatio
 
     ui::files(&files).await?;
 
-    let source = FileHandle::new(input.file(&files).context("failed to select file")?);
+    let source = FileHandle::new(input.file(&files)?);
     let target = FileHandle::new(source.output_path(operation));
 
-    if target.exists() && !input.overwrite(&target).context("failed to confirm overwrite")? {
+    if target.exists() && !input.overwrite(&target)? {
         anyhow::bail!("operation canceled");
     }
 
@@ -64,44 +64,40 @@ async fn select_files(input: &Input) -> Result<(FileHandle, FileHandle, Operatio
 }
 
 async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
-    let metadata = source.metadata().await.context("failed to read metadata")?;
-    let salt = KeyDerivation::generate_salt(ARGON2_SALT_LEN).context("failed to generate salt")?;
-    let kdf = KeyDerivation::new(secret).context("failed to initialize key derivation")?;
-    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(&salt).context("failed to derive keys")?;
+    let metadata = source.metadata().await?;
+    let salt = KeyDerivation::generate_salt(ARGON2_SALT_LEN)?;
+    let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(&salt)?;
 
-    let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash()).context("failed to initialize serializer")?;
-    let header = serializer.serialize(salt.expose_secret(), &signer_key).context("failed to serialize header")?;
+    let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash())?;
+    let header = serializer.serialize(salt.expose_secret(), &signer_key)?;
 
-    let mut writer = target.writer().await.context("failed to create target file")?;
-    writer.write_all(&header).await.context("failed to write header")?;
+    let mut writer = target.writer().await?;
+    writer.write_all(&header).await?;
 
-    let reader = source.reader().await.context("failed to open source file")?;
-    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Encryption).context("failed to initialize pipeline")?;
-    pipeline.process(reader, writer, metadata.size()).await.context("failed to encrypt file")?;
+    let reader = source.reader().await?;
+    Pipeline::new(&primary_key, &secondary_key, Operation::Encryption)?.process(reader, writer, metadata.size()).await?;
 
     Ok(metadata)
 }
 
 async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
-    let mut reader = source.reader().await.context("failed to open source file")?;
-    let header = Deserializer::from_reader(&mut reader).await.context("failed to deserialize header")?;
+    let mut reader = source.reader().await?;
+    let header = Deserializer::from_reader(&mut reader).await?;
 
-    let kdf = KeyDerivation::new(secret).context("failed to initialize key derivation")?;
-    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(header.salt()).context("failed to derive keys")?;
+    let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(header.salt())?;
 
     if !header.verify(&signer_key)? {
         anyhow::bail!("incorrect password or corrupted file");
     }
 
-    let writer = target.writer().await.context("failed to create target file")?;
-    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Decryption).context("failed to initialize pipeline")?;
-    pipeline.process(reader, writer, header.file_size()).await.context("failed to decrypt file")?;
+    let writer = target.writer().await?;
+    Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?.process(reader, writer, header.file_size()).await?;
 
     if !validate_hash(target.path(), header.file_hash())? {
         anyhow::bail!("hash verification failed");
     }
 
-    Metadata::new(header.file_name(), header.file_size(), header.file_hash()).context("failed to build metadata")
+    Metadata::new(header.file_name(), header.file_size(), header.file_hash())
 }
 
 #[cfg(test)]

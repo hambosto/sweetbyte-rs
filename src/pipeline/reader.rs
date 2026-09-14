@@ -16,7 +16,7 @@ impl Reader {
     }
 
     pub(super) async fn read_all<R: AsyncRead + Unpin>(&mut self, input: R, sender: &Sender<Task>) -> Result<()> {
-        let mut reader = BufReader::new(input);
+        let mut reader = BufReader::with_capacity(CHUNK_SIZE, input);
 
         match self.operation {
             Operation::Encryption => self.read_fixed_chunks(&mut reader, sender).await,

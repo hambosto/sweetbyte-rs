@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use blake3::Hasher;
-use tokio::fs::File;
+use tokio::fs::{File, OpenOptions};
 
 use crate::config::FILE_EXTENSION;
 use crate::core::{Metadata, Operation};
@@ -48,13 +48,7 @@ impl FileHandle {
             tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
         }
 
-        tokio::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&self.path)
-            .await
-            .context("failed to create file")
+        OpenOptions::new().write(true).create(true).truncate(true).open(&self.path).await.context("failed to create file")
     }
 
     pub(crate) async fn delete(&self) -> Result<()> {

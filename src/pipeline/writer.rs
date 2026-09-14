@@ -20,7 +20,7 @@ impl Writer {
 
     pub(super) async fn write_all<W: AsyncWrite + Unpin>(&mut self, output: W, mut receiver: Receiver<TaskResult>, progress: &Progress) -> Result<()> {
         let mut pending: VecDeque<Option<TaskResult>> = VecDeque::new();
-        let mut writer = BufWriter::new(output);
+        let mut writer = BufWriter::with_capacity(MAX_CHUNK_SIZE as usize, output);
 
         while let Some(result) = receiver.recv().await {
             let delta = result.index.checked_sub(self.index).context("chunk index behind writer")?;

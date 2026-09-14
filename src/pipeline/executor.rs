@@ -41,8 +41,6 @@ impl Executor {
             });
         }
 
-        drop(tasks);
-
         while let Some(join_result) = workers.join_next().await {
             let worker_result = join_result.context("executor panicked")?;
             worker_result.context("failed to process task")?;
