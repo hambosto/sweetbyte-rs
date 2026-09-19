@@ -35,8 +35,8 @@ impl Executor {
             workers.spawn_blocking(move || {
                 let result = process.process(&task).context("failed to execute process")?;
                 results.blocking_send(result).context("failed to send result")?;
-
                 drop(permit);
+
                 Ok(())
             });
         }
