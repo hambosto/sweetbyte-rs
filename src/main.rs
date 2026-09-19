@@ -83,7 +83,6 @@ async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
 async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
     let mut reader = source.reader().await?;
     let header = Deserializer::from_reader(&mut reader).await?;
-
     let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(header.salt())?;
 
     if !header.verify(&signer_key)? {

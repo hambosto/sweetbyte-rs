@@ -51,6 +51,9 @@ impl Section {
         let serialized_section = postcard::to_allocvec(&encoded_section).context("failed to serialize section")?;
         let compressed_section = self.compressor.compress(&serialized_section).context("failed to compress section")?;
         let compressed_length = u32::try_from(compressed_section.len()).context("failed to convert section length to u32")?;
+        if compressed_length > MAX_SECTION_SIZE {
+            anyhow::bail!("section size {compressed_length} exceeds maximum {MAX_SECTION_SIZE}");
+        }
 
         let capacity = PREFIX_LEN.checked_add(compressed_section.len()).context("section length overflow")?;
         let mut packed_section = Vec::with_capacity(capacity);
