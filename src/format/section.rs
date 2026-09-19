@@ -53,23 +53,23 @@ impl Section {
         let compressed_length = u32::try_from(compressed_section.len()).context("failed to convert section length to u32")?;
 
         let capacity = PREFIX_LEN.checked_add(compressed_section.len()).context("section length overflow")?;
-        let mut result = Vec::with_capacity(capacity);
-        result.extend_from_slice(&compressed_length.to_le_bytes());
-        result.extend_from_slice(&compressed_section);
+        let mut packed_section = Vec::with_capacity(capacity);
+        packed_section.extend_from_slice(&compressed_length.to_le_bytes());
+        packed_section.extend_from_slice(&compressed_section);
 
-        Ok(result)
+        Ok(packed_section)
     }
 
     pub(super) async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<SectionData> {
-        let buffer_size = reader.read_u32_le().await.context("failed to read section length")?;
-        if buffer_size > MAX_SECTION_SIZE {
-            anyhow::bail!("section size {buffer_size} exceeds maximum {MAX_SECTION_SIZE}");
+        let compressed_length = reader.read_u32_le().await.context("failed to read section length")?;
+        if compressed_length > MAX_SECTION_SIZE {
+            anyhow::bail!("section size {compressed_length} exceeds maximum {MAX_SECTION_SIZE}");
         }
 
-        let mut buffer = vec![0u8; buffer_size as usize];
-        reader.read_exact(&mut buffer).await.context("failed to read section")?;
+        let mut compressed_section = vec![0u8; compressed_length as usize];
+        reader.read_exact(&mut compressed_section).await.context("failed to read section")?;
 
-        let decompressed_section = self.compressor.decompress(&buffer).context("failed to decompress section")?;
+        let decompressed_section = self.compressor.decompress(&compressed_section).context("failed to decompress section")?;
         let encoded_section: SectionList = postcard::from_bytes(&decompressed_section).context("failed to deserialize section")?;
 
         Ok(SectionData {
