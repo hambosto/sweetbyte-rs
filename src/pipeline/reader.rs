@@ -13,14 +13,14 @@ pub(super) async fn read_all<R: AsyncRead + Unpin>(operation: Operation, input: 
 }
 
 async fn read_fixed_chunks<R: AsyncRead + Unpin>(mut input: R, tasks: Sender<Task>) -> Result<()> {
-    let limit = u64::try_from(CHUNK_SIZE).context("chunk size exceeds u64")?;
+    let limit = u64::try_from(CHUNK_SIZE).context("invalid plain chunk size")?;
 
     for index in 0_u64.. {
         let mut data = Vec::with_capacity(CHUNK_SIZE);
         let mut window = (&mut input).take(limit);
 
         while data.len() < CHUNK_SIZE {
-            let read = window.read_buf(&mut data).await.context("failed to read chunk")?;
+            let read = window.read_buf(&mut data).await.context("failed to read plain chunk")?;
             if read == 0 {
                 break;
             }
@@ -50,12 +50,12 @@ async fn read_length_prefixed_chunks<R: AsyncRead + Unpin>(input: R, tasks: Send
 
         let chunk_len = reader.read_u32_le().await.context("truncated chunk length")?;
         if chunk_len > MAX_CHUNK_SIZE {
-            anyhow::bail!("chunk size {chunk_len} exceeds maximum {MAX_CHUNK_SIZE}");
+            anyhow::bail!("encrypted chunk exceeds limit");
         }
 
-        let chunk_len = usize::try_from(chunk_len).context("chunk size exceeds usize")?;
+        let chunk_len = usize::try_from(chunk_len).context("invalid encrypted chunk size")?;
         let mut data = vec![0_u8; chunk_len];
-        reader.read_exact(&mut data).await.context("truncated chunk")?;
+        reader.read_exact(&mut data).await.context("truncated chunk data")?;
 
         let sent = tasks.send(Task { data, index }).await;
         if sent.is_err() {

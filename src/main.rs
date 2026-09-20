@@ -48,7 +48,7 @@ async fn select_files(input: &Input) -> Result<(FileHandle, FileHandle, Operatio
     let files: Vec<FileHandle> = Discover::new(".", operation).run().into_iter().map(FileHandle::new).collect();
 
     if files.is_empty() {
-        anyhow::bail!("no files available for processing");
+        anyhow::bail!("no files found");
     }
 
     ui::files(&files).await?;
@@ -57,7 +57,7 @@ async fn select_files(input: &Input) -> Result<(FileHandle, FileHandle, Operatio
     let target = FileHandle::new(source.output_path(operation));
 
     if target.exists() && !input.overwrite(&target)? {
-        anyhow::bail!("operation canceled");
+        anyhow::bail!("operation aborted");
     }
 
     Ok((source, target, operation))
@@ -86,14 +86,14 @@ async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> R
     let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(header.salt())?;
 
     if !header.verify(&signer_key)? {
-        anyhow::bail!("incorrect password or corrupted file");
+        anyhow::bail!("invalid password or corrupt file");
     }
 
     let writer = target.writer().await?;
     Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?.process(reader, writer, header.file_size()).await?;
 
     if !validate_hash(target.path(), header.file_hash())? {
-        anyhow::bail!("hash verification failed");
+        anyhow::bail!("file hash mismatch");
     }
 
     Metadata::new(header.file_name(), header.file_size(), header.file_hash())

@@ -8,7 +8,7 @@ impl Compression {
     pub(crate) fn new(level: i32) -> Result<Self> {
         let supported_range = zstd::compression_level_range();
         if !supported_range.contains(&level) {
-            anyhow::bail!("compression level {level} out of range: valid range is {} to {}", supported_range.start(), supported_range.end());
+            anyhow::bail!("invalid compression level");
         }
 
         Ok(Self { level })
@@ -16,18 +16,18 @@ impl Compression {
 
     pub(crate) fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
-            anyhow::bail!("data must not be empty");
+            anyhow::bail!("empty input data");
         }
 
-        zstd::stream::encode_all(data, self.level).context("failed to compress")
+        zstd::stream::encode_all(data, self.level).context("failed to compress data")
     }
 
     #[expect(clippy::unused_self, reason = "consistent API with compress")]
     pub(crate) fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
-            anyhow::bail!("data must not be empty");
+            anyhow::bail!("empty input data");
         }
 
-        zstd::stream::decode_all(data).context("failed to decompress")
+        zstd::stream::decode_all(data).context("failed to decompress data")
     }
 }

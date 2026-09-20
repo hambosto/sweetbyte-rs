@@ -15,35 +15,35 @@ pub(crate) struct Signer {
 
 impl Signer {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().into()).context("invalid HMAC key")?;
 
         Ok(Self { key: key.into() })
     }
 
     pub(crate) fn compute_parts(&self, parts: &[&[u8]]) -> Result<Vec<u8>> {
         if parts.is_empty() {
-            anyhow::bail!("no input parts provided");
+            anyhow::bail!("missing auth input");
         }
 
         if parts.len() > MAX_PARTS {
-            anyhow::bail!("too many input parts");
+            anyhow::bail!("too many auth inputs");
         }
 
         let mut total_len: usize = 0;
-        for (i, part) in parts.iter().enumerate() {
+        for part in parts.iter() {
             if part.len() > MAX_PART_LEN {
-                anyhow::bail!("part {i} exceeds size limit");
+                anyhow::bail!("auth input too large");
             }
 
             total_len = total_len.saturating_add(part.len());
             if total_len > MAX_TOTAL_LEN {
-                anyhow::bail!("total input size exceeds limit");
+                anyhow::bail!("auth input exceeds limit");
             }
         }
 
-        let mut mac = Hmac::<Sha256>::new_from_slice(self.key.expose_secret()).context("failed to initialize hmac")?;
+        let mut mac = Hmac::<Sha256>::new_from_slice(self.key.expose_secret()).context("failed to init HMAC")?;
         for part in parts {
-            let part_len: u64 = part.len().try_into().context("part length overflow")?;
+            let part_len: u64 = part.len().try_into().context("auth length overflow")?;
             mac.update(&part_len.to_be_bytes());
             mac.update(part);
         }

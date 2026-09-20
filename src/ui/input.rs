@@ -20,7 +20,7 @@ impl Input {
 
     pub(crate) fn password(&self, operation: Operation) -> Result<Secret> {
         let min = self.min_password_len;
-        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or_else(|| format!("password must be at least {min} characters"));
+        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or("password too short");
 
         let (message, confirm_message) = match operation {
             Operation::Encryption => ("Enter encryption password", Some("Confirm password")),
@@ -31,7 +31,7 @@ impl Input {
         if let Some(message) = confirm_message {
             let confirmed = cliclack::password(message).validate(validate).interact().context("failed to confirm password")?;
             if password != confirmed {
-                anyhow::bail!("passwords do not match");
+                anyhow::bail!("password mismatch");
             }
         }
 

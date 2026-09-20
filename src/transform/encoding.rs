@@ -14,7 +14,7 @@ pub(crate) struct Encoding {
 impl Encoding {
     pub(crate) fn new(original_count: usize, recovery_count: usize) -> Result<Self> {
         if !reed_solomon_simd::ReedSolomonEncoder::supports(original_count, recovery_count) {
-            anyhow::bail!("unsupported reed-solomon shard config");
+            anyhow::bail!("unsupported shard config");
         }
         let total_count = original_count.saturating_add(recovery_count);
 
@@ -31,10 +31,10 @@ impl Encoding {
         }
 
         let mut result = Vec::with_capacity(LEN.saturating_add(self.total_count.saturating_mul(CRC.saturating_add(shard_size))));
-        let original_len = u32::try_from(data.len()).context("data length exceeds u32")?;
+        let original_len = u32::try_from(data.len()).context("data size overflow")?;
         result.extend_from_slice(&original_len.to_le_bytes());
 
-        let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, original.chunks(shard_size)).context("failed to encode reed-solomon shards")?;
+        let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, original.chunks(shard_size)).context("failed to encode shards")?;
         for shard in original.chunks(shard_size).chain(recovery.iter().map(Vec::as_slice)) {
             result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
             result.extend_from_slice(shard);
@@ -44,8 +44,8 @@ impl Encoding {
     }
 
     pub(crate) fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let (len_bytes, shard_bytes) = data.split_at_checked(LEN).context("data too short")?;
-        let len_bytes: [u8; LEN] = len_bytes.try_into().context("invalid header length")?;
+        let (len_bytes, shard_bytes) = data.split_at_checked(LEN).context("encoded data too short")?;
+        let len_bytes: [u8; LEN] = len_bytes.try_into().context("invalid length prefix")?;
         let original_size = u32::from_le_bytes(len_bytes) as usize;
         let shard_size = shard_bytes.len().checked_div(self.total_count).context("invalid shard count")?;
         if shard_size <= CRC {
@@ -73,9 +73,9 @@ impl Encoding {
                 result.extend_from_slice(shard);
             }
         } else {
-            let restored = reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode reed-solomon shards")?;
+            let restored = reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode shards")?;
             for index in 0..self.original_count {
-                result.extend_from_slice(restored.get(&index).with_context(|| format!("failed to restore shard {index}"))?);
+                result.extend_from_slice(restored.get(&index).context("failed to restore shard")?);
             }
         }
         result.truncate(original_size);

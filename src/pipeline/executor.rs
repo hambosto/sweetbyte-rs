@@ -24,17 +24,17 @@ impl Executor {
 
         while let Some(task) = tasks.recv().await {
             while let Some(join_result) = workers.try_join_next() {
-                let worker_result = join_result.context("executor panicked")?;
-                worker_result.context("failed to process task")?;
+                let worker_result = join_result.context("worker task panicked")?;
+                worker_result.context("failed to complete chunk task")?;
             }
 
-            let permit = Arc::clone(&semaphore).acquire_owned().await.context("failed to acquire semaphore permit")?;
+            let permit = Arc::clone(&semaphore).acquire_owned().await.context("failed to acquire worker slot")?;
             let process = Arc::clone(&self.process);
             let results = results.clone();
 
             workers.spawn_blocking(move || {
-                let result = process.process(&task).context("failed to execute process")?;
-                results.blocking_send(result).context("failed to send result")?;
+                let result = process.process(&task).context("failed to execute chunk task")?;
+                results.blocking_send(result).context("failed to dispatch chunk result")?;
                 drop(permit);
 
                 Ok(())
@@ -42,8 +42,8 @@ impl Executor {
         }
 
         while let Some(join_result) = workers.join_next().await {
-            let worker_result = join_result.context("executor panicked")?;
-            worker_result.context("failed to process task")?;
+            let worker_result = join_result.context("worker task panicked")?;
+            worker_result.context("failed to complete chunk task")?;
         }
 
         Ok(())

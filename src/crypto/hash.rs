@@ -6,7 +6,7 @@ use subtle::ConstantTimeEq;
 
 pub(crate) fn validate_hash(path: &Path, expected: &[u8]) -> Result<bool> {
     let mut hasher = Hasher::new();
-    hasher.update_mmap_rayon(path).context("failed to hash file")?;
+    hasher.update_mmap_rayon(path).context("failed to verify file hash")?;
 
     let actual = *hasher.finalize().as_bytes();
 

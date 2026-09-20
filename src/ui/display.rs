@@ -15,7 +15,7 @@ pub(crate) async fn files(items: &[FileHandle]) -> Result<()> {
     table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
     for (i, file) in items.iter().enumerate() {
-        let file_size = file.size().await.context("failed to get file size")?;
+        let file_size = file.size().await.context("failed to read file size")?;
         let file_size = humansize::format_size(file_size, humansize::DECIMAL);
         let file_status = if file.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
         let status_color = if file.is_encrypted() { Color::Cyan } else { Color::Green };
@@ -32,11 +32,11 @@ pub(crate) fn success(operation: Operation, file: &FileHandle) -> Result<()> {
         Operation::Decryption => "decrypted",
     };
 
-    cliclack::log::success(format!("File {process}: {}", file.name())).context("failed to display success message")
+    cliclack::log::success(format!("File {process}: {}", file.name())).context("failed to display success")
 }
 
 pub(crate) fn deleted(file: &FileHandle) -> Result<()> {
-    cliclack::log::success(format!("File deleted: {}", file.name())).context("failed to display deletion message")
+    cliclack::log::success(format!("File deleted: {}", file.name())).context("failed to display deletion")
 }
 
 pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {
@@ -58,7 +58,7 @@ pub(crate) fn banner() -> Result<()> {
 }
 
 pub(crate) fn exit() -> Result<()> {
-    cliclack::outro("Exiting").context("failed to display exit message")
+    cliclack::outro("Exiting").context("failed to display exit")
 }
 
 pub(crate) fn clear() -> Result<()> {

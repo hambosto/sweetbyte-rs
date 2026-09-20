@@ -12,19 +12,19 @@ pub(crate) struct Serializer {
 
 impl Serializer {
     pub(crate) fn new(name: impl Into<String>, size: u64, hash: &[u8]) -> Result<Self> {
-        let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION).context("failed to initialize params")?;
-        let metadata = Metadata::new(name, size, hash).context("failed to initialize metadata")?;
+        let params = Parameters::new(MAGIC_BYTES, CURRENT_VERSION).context("failed to construct params")?;
+        let metadata = Metadata::new(name, size, hash).context("failed to construct metadata")?;
 
         Ok(Self { params, metadata })
     }
 
     pub(crate) fn serialize(&self, salt: &[u8], signer_key: &Secret) -> Result<Vec<u8>> {
-        let params_bytes = postcard::to_allocvec(&self.params).context("failed to serialize params")?;
-        let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to serialize metadata")?;
-        let signer = Signer::new(signer_key).context("failed to initialize signer")?;
-        let mac = signer.compute_parts(&[salt, &params_bytes, &metadata_bytes]).context("failed to compute mac")?;
-        let section = Section::new(COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize section encoder")?;
+        let params_bytes = postcard::to_allocvec(&self.params).context("failed to encode header params")?;
+        let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to encode header metadata")?;
+        let signer = Signer::new(signer_key).context("failed to init auth signer")?;
+        let mac = signer.compute_parts(&[salt, &params_bytes, &metadata_bytes]).context("failed to sign header")?;
+        let section = Section::new(COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to init header encoder")?;
 
-        section.pack(salt, &params_bytes, &metadata_bytes, &mac).context("failed to pack header sections")
+        section.pack(salt, &params_bytes, &metadata_bytes, &mac).context("failed to construct header")
     }
 }

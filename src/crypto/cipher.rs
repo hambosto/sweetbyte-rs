@@ -17,19 +17,19 @@ where
     T: Aead + AeadCore + KeyInit,
 {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().into()).context("invalid encryption key")?;
 
         Ok(Self { key: key.into(), cipher: PhantomData })
     }
 
     pub(crate) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         if plaintext.is_empty() {
-            anyhow::bail!("plaintext must not be empty");
+            anyhow::bail!("empty plaintext");
         }
 
-        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to initialize cipher")?;
+        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to init cipher")?;
         let nonce = Nonce::<T>::try_generate_from_rng(&mut SysRng).context("failed to generate nonce")?;
-        let ciphertext = cipher.encrypt(&nonce, plaintext).context("failed to encrypt")?;
+        let ciphertext = cipher.encrypt(&nonce, plaintext).context("failed to encrypt data")?;
 
         let mut result = Vec::with_capacity(nonce.len().saturating_add(ciphertext.len()));
         result.extend_from_slice(&nonce);
@@ -40,18 +40,18 @@ where
 
     pub(crate) fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         if ciphertext.is_empty() {
-            anyhow::bail!("ciphertext must not be empty");
+            anyhow::bail!("empty ciphertext");
         }
 
         let nonce_len = <T as AeadCore>::NonceSize::USIZE;
         if ciphertext.len() < nonce_len {
-            anyhow::bail!("ciphertext too short for nonce");
+            anyhow::bail!("ciphertext too short");
         }
 
         let (nonce_bytes, body) = ciphertext.split_at(nonce_len);
         let nonce = Nonce::<T>::try_from(nonce_bytes).context("invalid nonce")?;
-        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to initialize cipher")?;
-        let plaintext = cipher.decrypt(&nonce, body).context("failed to decrypt")?;
+        let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to init cipher")?;
+        let plaintext = cipher.decrypt(&nonce, body).context("failed to decrypt data")?;
 
         Ok(plaintext)
     }

@@ -10,7 +10,7 @@ pub(crate) struct Pkcs7Padding {
 impl Pkcs7Padding {
     pub(crate) fn new(block_size: usize) -> Result<Self> {
         if !matches!(block_size, 16 | 32 | 64 | 128) {
-            anyhow::bail!("invalid block size: {block_size}. must be 16, 32, 64, or 128.");
+            anyhow::bail!("invalid block size");
         }
 
         Ok(Self { block_size })
@@ -18,7 +18,7 @@ impl Pkcs7Padding {
 
     pub(crate) fn pad(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
-            anyhow::bail!("data must not be empty");
+            anyhow::bail!("empty input data");
         }
 
         match self.block_size {
@@ -26,13 +26,13 @@ impl Pkcs7Padding {
             32 => Self::pad_with::<U32>(data),
             64 => Self::pad_with::<U64>(data),
             128 => Self::pad_with::<U128>(data),
-            other => anyhow::bail!("unsupported block size: {other}"),
+            _ => anyhow::bail!("unsupported block size"),
         }
     }
 
     pub(crate) fn unpad(&self, data: &[u8]) -> Result<Vec<u8>> {
         if data.is_empty() {
-            anyhow::bail!("data must not be empty");
+            anyhow::bail!("empty input data");
         }
 
         match self.block_size {
@@ -40,7 +40,7 @@ impl Pkcs7Padding {
             32 => Self::unpad_with::<U32>(data),
             64 => Self::unpad_with::<U64>(data),
             128 => Self::unpad_with::<U128>(data),
-            other => anyhow::bail!("unsupported block size: {other}"),
+            _ => anyhow::bail!("unsupported block size"),
         }
     }
 

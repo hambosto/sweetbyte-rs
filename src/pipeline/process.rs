@@ -16,11 +16,11 @@ pub(super) struct Process {
 
 impl Process {
     pub(super) fn new(primary_key: &Secret, secondary_key: &Secret, operation: Operation) -> Result<Self> {
-        let primary_cipher = Cipher::<Aes256Gcm>::new(primary_key).context("failed to initialize primary cipher")?;
-        let secondary_cipher = Cipher::<XChaCha20Poly1305>::new(secondary_key).context("failed to initialize secondary cipher")?;
-        let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to initialize encoder")?;
-        let compressor = Compression::new(COMPRESSION_LEVEL).context("failed to initialize compressor")?;
-        let padding = Pkcs7Padding::new(BLOCK_SIZE).context("failed to initialize padding")?;
+        let primary_cipher = Cipher::<Aes256Gcm>::new(primary_key).context("failed to init AES cipher")?;
+        let secondary_cipher = Cipher::<XChaCha20Poly1305>::new(secondary_key).context("failed to init XChaCha cipher")?;
+        let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to init erasure encoder")?;
+        let compressor = Compression::new(COMPRESSION_LEVEL).context("failed to init zstd compressor")?;
+        let padding = Pkcs7Padding::new(BLOCK_SIZE).context("failed to init PKCS7 padding")?;
 
         Ok(Self { primary_cipher, secondary_cipher, encoder, compressor, padding, operation })
     }

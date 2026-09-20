@@ -40,36 +40,42 @@ impl FileHandle {
     }
 
     pub(crate) async fn reader(&self) -> Result<File> {
-        File::open(&self.path).await.context("failed to open file")
+        File::open(&self.path).await.context("failed to open source file")
     }
 
     pub(crate) async fn writer(&self) -> Result<File> {
         if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            tokio::fs::create_dir_all(parent).await.context("failed to create directory")?;
+            tokio::fs::create_dir_all(parent).await.context("failed to create output directory")?;
         }
 
-        OpenOptions::new().write(true).create(true).truncate(true).open(&self.path).await.context("failed to create file")
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&self.path)
+            .await
+            .context("failed to create output file")
     }
 
     pub(crate) async fn delete(&self) -> Result<()> {
         if !self.exists() {
-            anyhow::bail!("file does not exist: {}", self.path.display());
+            anyhow::bail!("source file not found");
         }
 
-        tokio::fs::remove_file(&self.path).await.context("failed to delete file")
+        tokio::fs::remove_file(&self.path).await.context("failed to remove source file")
     }
 
     pub(crate) async fn size(&self) -> Result<u64> {
-        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to read metadata")
+        tokio::fs::metadata(&self.path).await.map(|m| m.len()).context("failed to stat source file")
     }
 
     pub(crate) async fn metadata(&self) -> Result<Metadata> {
         let mut hasher = Hasher::new();
-        hasher.update_mmap_rayon(self.path()).context("failed to hash file")?;
+        hasher.update_mmap_rayon(self.path()).context("failed to hash source file")?;
 
         let hash = *hasher.finalize().as_bytes();
         let name = self.name();
-        let size = self.size().await.context("failed to get file size")?;
+        let size = self.size().await.context("failed to read source size")?;
 
         Metadata::new(name, size, &hash)
     }

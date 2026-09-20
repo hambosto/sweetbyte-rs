@@ -12,7 +12,7 @@ pub(crate) struct Parameters {
 impl Parameters {
     pub(crate) fn new(magic: u32, version: u16) -> Result<Self> {
         let magic = Magic::try_new(magic).context("invalid magic bytes")?;
-        let version = Version::try_new(version).context("invalid version")?;
+        let version = Version::try_new(version).context("invalid file version")?;
 
         Ok(Self { magic, version })
     }

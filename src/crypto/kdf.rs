@@ -14,29 +14,29 @@ pub(crate) struct KeyDerivation {
 
 impl KeyDerivation {
     pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().into()).context("key must be 32 bytes")?;
+        let key = KeyBytes::try_new(key.expose_secret().into()).context("invalid KDF input key")?;
 
         Ok(Self { key: key.into() })
     }
 
     pub(crate) fn derive_keys(&self, salt: &Secret) -> Result<(Secret, Secret, Secret)> {
-        let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(ARGON2_KEY_LEN)).context("failed to initialize argon2 parameters")?;
+        let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(ARGON2_KEY_LEN)).context("failed to init password hasher")?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
         let mut stretched = vec![0u8; ARGON2_KEY_LEN];
         argon2
             .hash_password_into(self.key.expose_secret(), salt.expose_secret(), &mut stretched)
-            .context("failed to stretch key with argon2")?;
+            .context("failed to hash password")?;
         let hkdf = Hkdf::<Sha256>::new(Some(salt.expose_secret()), &stretched);
 
         let mut primary_key = vec![0u8; KEY_LEN];
-        hkdf.expand(&KDF_INFO[0], &mut primary_key).context("failed to expand primary key")?;
+        hkdf.expand(&KDF_INFO[0], &mut primary_key).context("failed to derive AES key")?;
 
         let mut secondary_key = vec![0u8; KEY_LEN];
-        hkdf.expand(&KDF_INFO[1], &mut secondary_key).context("failed to expand secondary key")?;
+        hkdf.expand(&KDF_INFO[1], &mut secondary_key).context("failed to derive XChaCha key")?;
 
         let mut signer_key = vec![0u8; KEY_LEN];
-        hkdf.expand(&KDF_INFO[2], &mut signer_key).context("failed to expand signer key")?;
+        hkdf.expand(&KDF_INFO[2], &mut signer_key).context("failed to derive auth key")?;
 
         Ok((Secret::new(primary_key), Secret::new(secondary_key), Secret::new(signer_key)))
     }
