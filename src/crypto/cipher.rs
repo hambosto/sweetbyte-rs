@@ -9,7 +9,7 @@ use crate::core::{ExposeSecret, KeyBytes, Secret};
 
 pub(crate) struct Cipher<T> {
     key: Secret,
-    cipher: PhantomData<T>,
+    _marker: PhantomData<T>,
 }
 
 impl<T> Cipher<T>
@@ -19,7 +19,7 @@ where
     pub(crate) fn new(key: &Secret) -> Result<Self> {
         let key = KeyBytes::try_new(key.expose_secret().into()).context("invalid encryption key")?;
 
-        Ok(Self { key: key.into(), cipher: PhantomData })
+        Ok(Self { key: key.into(), _marker: PhantomData })
     }
 
     pub(crate) fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
