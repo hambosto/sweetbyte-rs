@@ -33,7 +33,7 @@ impl Executor {
             let channel = result_tx.clone();
 
             workers.spawn_blocking(move || {
-                let output = processor.transform(&task).context("failed to execute chunk task")?;
+                let output = processor.transform(&task).context("failed to transform chunk task")?;
                 channel.blocking_send(output).context("failed to dispatch chunk result")?;
                 drop(permit);
 

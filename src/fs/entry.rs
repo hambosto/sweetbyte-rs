@@ -7,11 +7,11 @@ use tokio::fs::{File, OpenOptions};
 use crate::config::FILE_EXTENSION;
 use crate::core::{Metadata, Operation};
 
-pub(crate) struct FileHandle {
+pub(crate) struct Entry {
     path: PathBuf,
 }
 
-impl FileHandle {
+impl Entry {
     pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }

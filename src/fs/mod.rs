@@ -1,5 +1,5 @@
-mod discover;
-mod handle;
+mod entry;
+mod scanner;
 
-pub(crate) use discover::Scanner;
-pub(crate) use handle::FileHandle;
+pub(crate) use entry::Entry;
+pub(crate) use scanner::Scanner;

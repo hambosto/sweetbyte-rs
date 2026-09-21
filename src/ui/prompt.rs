@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
 use crate::core::{Operation, Secret};
-use crate::fs::FileHandle;
+use crate::fs::Entry;
 
 pub(crate) struct Prompt {
     password_len: usize,
@@ -51,10 +51,10 @@ impl Prompt {
         select.interact().context("failed to select operation")
     }
 
-    pub(crate) fn select_file(&self, files: &[FileHandle]) -> Result<PathBuf> {
+    pub(crate) fn select_file(&self, entries: &[Entry]) -> Result<PathBuf> {
         let mut select = cliclack::select("Select file");
-        for file in files {
-            select = select.item(file.path().to_path_buf(), file.name(), "");
+        for entry in entries {
+            select = select.item(entry.path().to_path_buf(), entry.name(), "");
         }
 
         if self.filter_mode {
@@ -64,20 +64,20 @@ impl Prompt {
         select.interact().context("failed to select file")
     }
 
-    pub(crate) fn confirm_overwrite(&self, file: &FileHandle) -> Result<bool> {
-        cliclack::confirm(format!("Output file {} already exists. Overwrite?", file.name()))
+    pub(crate) fn confirm_overwrite(&self, entry: &Entry) -> Result<bool> {
+        cliclack::confirm(format!("Output file {} already exists. Overwrite?", entry.name()))
             .initial_value(self.default_overwrite)
             .interact()
             .context("failed to confirm overwrite")
     }
 
-    pub(crate) fn confirm_deletion(&self, file: &FileHandle, operation: Operation) -> Result<bool> {
+    pub(crate) fn confirm_deletion(&self, entry: &Entry, operation: Operation) -> Result<bool> {
         let action = match operation {
             Operation::Encryption => "encrypted",
             Operation::Decryption => "decrypted",
         };
 
-        cliclack::confirm(format!("Delete {} file {}?", action, file.name()))
+        cliclack::confirm(format!("Delete {} file {}?", action, entry.name()))
             .initial_value(self.default_delete)
             .interact()
             .context("failed to confirm deletion")

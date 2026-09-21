@@ -3,14 +3,14 @@ use anyhow::{Context, Result};
 use crate::config::{BLOCK_SIZE, COMPRESSION_LEVEL, ORIGINAL_COUNT, RECOVERY_COUNT};
 use crate::core::{Operation, Secret, Task, TaskResult};
 use crate::crypto::{Aes256Gcm, Cipher, XChaCha20Poly1305};
-use crate::transform::{Compression, Encoding, Pkcs7Padding};
+use crate::transform::{Compression, Encoding, Padding};
 
 pub(super) struct Processor {
     primary_cipher: Cipher<Aes256Gcm>,
     secondary_cipher: Cipher<XChaCha20Poly1305>,
     encoder: Encoding,
     compressor: Compression,
-    padding: Pkcs7Padding,
+    padding: Padding,
     operation: Operation,
 }
 
@@ -20,7 +20,7 @@ impl Processor {
         let secondary_cipher = Cipher::<XChaCha20Poly1305>::new(secondary_key).context("failed to init XChaCha cipher")?;
         let encoder = Encoding::new(ORIGINAL_COUNT, RECOVERY_COUNT).context("failed to init erasure encoder")?;
         let compressor = Compression::new(COMPRESSION_LEVEL).context("failed to init zstd compressor")?;
-        let padding = Pkcs7Padding::new(BLOCK_SIZE).context("failed to init PKCS7 padding")?;
+        let padding = Padding::new(BLOCK_SIZE).context("failed to init PKCS7 padding")?;
 
         Ok(Self { primary_cipher, secondary_cipher, encoder, compressor, padding, operation })
     }

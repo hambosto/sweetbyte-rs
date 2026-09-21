@@ -3,10 +3,10 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
 use crate::core::Operation;
-use crate::fs::FileHandle;
+use crate::fs::Entry;
 
-pub(crate) async fn list_files(items: &[FileHandle]) -> Result<()> {
-    if items.is_empty() {
+pub(crate) async fn list_files(entries: &[Entry]) -> Result<()> {
+    if entries.is_empty() {
         return cliclack::log::warning("No files found").context("failed to display files");
     }
 
@@ -14,29 +14,29 @@ pub(crate) async fn list_files(items: &[FileHandle]) -> Result<()> {
     table.load_style(UTF8_FULL.with_rounded_corners()).set_content_arrangement(ContentArrangement::Dynamic);
     table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
-    for (index, file) in items.iter().enumerate() {
-        let size = file.size().await.context("failed to read file size")?;
+    for (index, entry) in entries.iter().enumerate() {
+        let size = entry.size().await.context("failed to read file size")?;
         let formatted = humansize::format_size(size, humansize::DECIMAL);
-        let file_status = if file.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
-        let status_color = if file.is_encrypted() { Color::Cyan } else { Color::Green };
+        let file_status = if entry.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
+        let status_color = if entry.is_encrypted() { Color::Cyan } else { Color::Green };
 
-        table.add_row([Cell::new(index.saturating_add(1)).fg(Color::Green), Cell::new(file.name()).fg(Color::Green), Cell::new(formatted).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
+        table.add_row([Cell::new(index.saturating_add(1)).fg(Color::Green), Cell::new(entry.name()).fg(Color::Green), Cell::new(formatted).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
     }
 
-    cliclack::note(format!("Found {} file(s)", items.len()), table).context("failed to display files")
+    cliclack::note(format!("Found {} file(s)", entries.len()), table).context("failed to display files")
 }
 
-pub(crate) fn show_success(operation: Operation, file: &FileHandle) -> Result<()> {
+pub(crate) fn show_success(operation: Operation, entry: &Entry) -> Result<()> {
     let action = match operation {
         Operation::Encryption => "encrypted",
         Operation::Decryption => "decrypted",
     };
 
-    cliclack::log::success(format!("File {action}: {}", file.name())).context("failed to display success")
+    cliclack::log::success(format!("File {action}: {}", entry.name())).context("failed to display success")
 }
 
-pub(crate) fn show_deletion(file: &FileHandle) -> Result<()> {
-    cliclack::log::success(format!("File deleted: {}", file.name())).context("failed to display deletion")
+pub(crate) fn show_deletion(entry: &Entry) -> Result<()> {
+    cliclack::log::success(format!("File deleted: {}", entry.name())).context("failed to display deletion")
 }
 
 pub(crate) fn show_header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {

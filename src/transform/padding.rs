@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
 use block_padding::array::{Array, ArraySize};
-use block_padding::{PaddedData, Padding, Pkcs7};
+use block_padding::{PaddedData, Padding as _, Pkcs7};
 
-pub(crate) struct Pkcs7Padding {
+pub(crate) struct Padding {
     block_size: usize,
 }
 
-impl Pkcs7Padding {
+impl Padding {
     pub(crate) fn new(block_size: usize) -> Result<Self> {
         if !matches!(block_size, 16 | 32 | 64 | 128) {
             anyhow::bail!("invalid block size");
