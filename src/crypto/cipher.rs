@@ -16,8 +16,8 @@ impl<T> Cipher<T>
 where
     T: Aead + AeadCore + KeyInit,
 {
-    pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().into()).context("invalid encryption key")?;
+    pub(crate) fn new(secret: &Secret) -> Result<Self> {
+        let key = KeyBytes::try_new(secret.expose_secret().into()).context("invalid encryption key")?;
 
         Ok(Self { key: key.into(), _marker: PhantomData })
     }
@@ -48,8 +48,8 @@ where
             anyhow::bail!("ciphertext too short");
         }
 
-        let (nonce_bytes, body) = ciphertext.split_at(nonce_len);
-        let nonce = Nonce::<T>::try_from(nonce_bytes).context("invalid nonce")?;
+        let (nonce_part, body) = ciphertext.split_at(nonce_len);
+        let nonce = Nonce::<T>::try_from(nonce_part).context("invalid nonce")?;
         let cipher = T::new_from_slice(self.key.expose_secret()).context("failed to init cipher")?;
         let plaintext = cipher.decrypt(&nonce, body).context("failed to decrypt data")?;
 

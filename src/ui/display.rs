@@ -5,7 +5,7 @@ use comfy_table::{Cell, Color, ContentArrangement, Table};
 use crate::core::Operation;
 use crate::fs::FileHandle;
 
-pub(crate) async fn files(items: &[FileHandle]) -> Result<()> {
+pub(crate) async fn list_files(items: &[FileHandle]) -> Result<()> {
     if items.is_empty() {
         return cliclack::log::warning("No files found").context("failed to display files");
     }
@@ -14,32 +14,32 @@ pub(crate) async fn files(items: &[FileHandle]) -> Result<()> {
     table.load_style(UTF8_FULL.with_rounded_corners()).set_content_arrangement(ContentArrangement::Dynamic);
     table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
-    for (i, file) in items.iter().enumerate() {
-        let file_size = file.size().await.context("failed to read file size")?;
-        let file_size = humansize::format_size(file_size, humansize::DECIMAL);
+    for (index, file) in items.iter().enumerate() {
+        let size = file.size().await.context("failed to read file size")?;
+        let formatted = humansize::format_size(size, humansize::DECIMAL);
         let file_status = if file.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
         let status_color = if file.is_encrypted() { Color::Cyan } else { Color::Green };
 
-        table.add_row([Cell::new(i.saturating_add(1)).fg(Color::Green), Cell::new(file.name()).fg(Color::Green), Cell::new(file_size).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
+        table.add_row([Cell::new(index.saturating_add(1)).fg(Color::Green), Cell::new(file.name()).fg(Color::Green), Cell::new(formatted).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
     }
 
     cliclack::note(format!("Found {} file(s)", items.len()), table).context("failed to display files")
 }
 
-pub(crate) fn success(operation: Operation, file: &FileHandle) -> Result<()> {
-    let process = match operation {
+pub(crate) fn show_success(operation: Operation, file: &FileHandle) -> Result<()> {
+    let action = match operation {
         Operation::Encryption => "encrypted",
         Operation::Decryption => "decrypted",
     };
 
-    cliclack::log::success(format!("File {process}: {}", file.name())).context("failed to display success")
+    cliclack::log::success(format!("File {action}: {}", file.name())).context("failed to display success")
 }
 
-pub(crate) fn deleted(file: &FileHandle) -> Result<()> {
+pub(crate) fn show_deletion(file: &FileHandle) -> Result<()> {
     cliclack::log::success(format!("File deleted: {}", file.name())).context("failed to display deletion")
 }
 
-pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {
+pub(crate) fn show_header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {
     let mut table = Table::new();
     table.load_style(UTF8_FULL.with_rounded_corners()).set_content_arrangement(ContentArrangement::Dynamic);
 
@@ -50,17 +50,17 @@ pub(crate) fn header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Resul
     cliclack::note("Header Information", table).context("failed to display header")
 }
 
-pub(crate) fn banner() -> Result<()> {
+pub(crate) fn show_banner() -> Result<()> {
     let app_name = env!("CARGO_PKG_NAME");
     let version = option_env!("SWEETBYTE_BUILD_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
 
     cliclack::intro(format!("{app_name} {version}")).context("failed to display banner")
 }
 
-pub(crate) fn exit() -> Result<()> {
+pub(crate) fn show_exit() -> Result<()> {
     cliclack::outro("Exiting").context("failed to display exit")
 }
 
-pub(crate) fn clear() -> Result<()> {
+pub(crate) fn clear_screen() -> Result<()> {
     cliclack::clear_screen().context("failed to clear screen")
 }

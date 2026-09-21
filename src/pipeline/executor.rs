@@ -5,36 +5,36 @@ use tokio::sync::Semaphore;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinSet;
 
-use super::process::Process;
+use super::processor::Processor;
 use crate::core::{Task, TaskResult};
 
 pub(super) struct Executor {
-    process: Arc<Process>,
+    processor: Arc<Processor>,
     concurrency: usize,
 }
 
 impl Executor {
-    pub(super) fn new(process: Process, concurrency: usize) -> Self {
-        Self { process: Arc::new(process), concurrency }
+    pub(super) fn new(processor: Processor, concurrency: usize) -> Self {
+        Self { processor: Arc::new(processor), concurrency }
     }
 
-    pub(super) async fn execute(&self, mut tasks: Receiver<Task>, results: Sender<TaskResult>) -> Result<()> {
+    pub(super) async fn execute(&self, mut task_rx: Receiver<Task>, result_tx: Sender<TaskResult>) -> Result<()> {
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
         let mut workers: JoinSet<Result<()>> = JoinSet::new();
 
-        while let Some(task) = tasks.recv().await {
+        while let Some(task) = task_rx.recv().await {
             while let Some(join_result) = workers.try_join_next() {
                 let worker_result = join_result.context("worker task panicked")?;
                 worker_result.context("failed to complete chunk task")?;
             }
 
             let permit = Arc::clone(&semaphore).acquire_owned().await.context("failed to acquire worker slot")?;
-            let process = Arc::clone(&self.process);
-            let results = results.clone();
+            let processor = Arc::clone(&self.processor);
+            let channel = result_tx.clone();
 
             workers.spawn_blocking(move || {
-                let result = process.process(&task).context("failed to execute chunk task")?;
-                results.blocking_send(result).context("failed to dispatch chunk result")?;
+                let output = processor.transform(&task).context("failed to execute chunk task")?;
+                channel.blocking_send(output).context("failed to dispatch chunk result")?;
                 drop(permit);
 
                 Ok(())

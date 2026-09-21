@@ -38,11 +38,11 @@ impl Deserializer {
         &self.section_data.salt
     }
 
-    pub(crate) fn verify(&self, signer_key: &Secret) -> Result<bool> {
-        let params_bytes = postcard::to_allocvec(&self.params).context("failed to encode header params")?;
-        let metadata_bytes = postcard::to_allocvec(&self.metadata).context("failed to encode header metadata")?;
+    pub(crate) fn verify_tag(&self, signer_key: &Secret) -> Result<bool> {
+        let encoded_params = postcard::to_allocvec(&self.params).context("failed to encode header params")?;
+        let encoded_metadata = postcard::to_allocvec(&self.metadata).context("failed to encode header metadata")?;
         let signer = Signer::new(signer_key).context("failed to init auth signer")?;
 
-        Ok(signer.verify_parts(self.section_data.mac.expose_secret(), &[self.section_data.salt.expose_secret(), &params_bytes, &metadata_bytes]))
+        Ok(signer.verify_parts(self.section_data.mac.expose_secret(), &[self.section_data.salt.expose_secret(), &encoded_params, &encoded_metadata]))
     }
 }

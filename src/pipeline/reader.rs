@@ -5,32 +5,32 @@ use tokio::sync::mpsc::Sender;
 use crate::config::{CHUNK_SIZE, MAX_CHUNK_SIZE};
 use crate::core::{Operation, Task};
 
-pub(super) async fn read_all<R: AsyncRead + Unpin>(operation: Operation, input: R, tasks: Sender<Task>) -> Result<()> {
+pub(super) async fn read_all<R: AsyncRead + Unpin>(operation: Operation, source: R, task_tx: Sender<Task>) -> Result<()> {
     match operation {
-        Operation::Encryption => read_fixed_chunks(input, tasks).await,
-        Operation::Decryption => read_length_prefixed_chunks(input, tasks).await,
+        Operation::Encryption => read_fixed_chunks(source, task_tx).await,
+        Operation::Decryption => read_length_prefixed_chunks(source, task_tx).await,
     }
 }
 
-async fn read_fixed_chunks<R: AsyncRead + Unpin>(mut input: R, tasks: Sender<Task>) -> Result<()> {
-    let limit = u64::try_from(CHUNK_SIZE).context("invalid plain chunk size")?;
+async fn read_fixed_chunks<R: AsyncRead + Unpin>(mut source: R, task_tx: Sender<Task>) -> Result<()> {
+    let chunk_limit = u64::try_from(CHUNK_SIZE).context("invalid plain chunk size")?;
 
-    for index in 0_u64.. {
-        let mut data = Vec::with_capacity(CHUNK_SIZE);
-        let mut window = (&mut input).take(limit);
+    for chunk_index in u64::MIN.. {
+        let mut chunk_data = Vec::with_capacity(CHUNK_SIZE);
+        let mut limited = (&mut source).take(chunk_limit);
 
-        while data.len() < CHUNK_SIZE {
-            let read = window.read_buf(&mut data).await.context("failed to read plain chunk")?;
-            if read == 0 {
+        while chunk_data.len() < CHUNK_SIZE {
+            let count = limited.read_buf(&mut chunk_data).await.context("failed to read plain chunk")?;
+            if count == 0 {
                 break;
             }
         }
 
-        if data.is_empty() {
+        if chunk_data.is_empty() {
             break;
         }
 
-        let sent = tasks.send(Task { data, index }).await;
+        let sent = task_tx.send(Task { data: chunk_data, index: chunk_index }).await;
         if sent.is_err() {
             break;
         }
@@ -39,25 +39,25 @@ async fn read_fixed_chunks<R: AsyncRead + Unpin>(mut input: R, tasks: Sender<Tas
     Ok(())
 }
 
-async fn read_length_prefixed_chunks<R: AsyncRead + Unpin>(input: R, tasks: Sender<Task>) -> Result<()> {
-    let mut reader = BufReader::with_capacity(CHUNK_SIZE, input);
+async fn read_length_prefixed_chunks<R: AsyncRead + Unpin>(source: R, task_tx: Sender<Task>) -> Result<()> {
+    let mut chunk_reader = BufReader::with_capacity(CHUNK_SIZE, source);
 
-    for index in 0_u64.. {
-        let buffered = reader.fill_buf().await.context("failed to read chunk length")?;
-        if buffered.is_empty() {
+    for chunk_index in u64::MIN.. {
+        let peeked = chunk_reader.fill_buf().await.context("failed to read chunk length")?;
+        if peeked.is_empty() {
             break;
         }
 
-        let chunk_len = reader.read_u32_le().await.context("truncated chunk length")?;
-        if chunk_len > MAX_CHUNK_SIZE {
+        let declared = chunk_reader.read_u32_le().await.context("truncated chunk length")?;
+        if declared > MAX_CHUNK_SIZE {
             anyhow::bail!("encrypted chunk exceeds limit");
         }
 
-        let chunk_len = usize::try_from(chunk_len).context("invalid encrypted chunk size")?;
-        let mut data = vec![0_u8; chunk_len];
-        reader.read_exact(&mut data).await.context("truncated chunk data")?;
+        let chunk_len = usize::try_from(declared).context("invalid encrypted chunk size")?;
+        let mut chunk_data = vec![u8::MIN; chunk_len];
+        chunk_reader.read_exact(&mut chunk_data).await.context("truncated chunk data")?;
 
-        let sent = tasks.send(Task { data, index }).await;
+        let sent = task_tx.send(Task { data: chunk_data, index: chunk_index }).await;
         if sent.is_err() {
             break;
         }

@@ -6,30 +6,30 @@ use sha2::{Digest, Sha256};
 use crate::core::{Operation, Secret};
 use crate::fs::FileHandle;
 
-pub(crate) struct Input {
-    min_password_len: usize,
+pub(crate) struct Prompt {
+    password_len: usize,
     default_overwrite: bool,
     default_delete: bool,
     filter_mode: bool,
 }
 
-impl Input {
-    pub(crate) fn new(min_password_len: usize, filter_mode: bool) -> Self {
-        Self { min_password_len, default_overwrite: false, default_delete: false, filter_mode }
+impl Prompt {
+    pub(crate) fn new(password_len: usize, filter_mode: bool) -> Self {
+        Self { password_len, default_overwrite: false, default_delete: false, filter_mode }
     }
 
-    pub(crate) fn password(&self, operation: Operation) -> Result<Secret> {
-        let min = self.min_password_len;
-        let validate = move |s: &String| (s.len() >= min).then_some(()).ok_or("password too short");
+    pub(crate) fn read_password(&self, operation: Operation) -> Result<Secret> {
+        let minimum = self.password_len;
+        let validate = move |s: &String| (s.len() >= minimum).then_some(()).ok_or("password too short");
 
-        let (message, confirm_message) = match operation {
+        let (prompt, confirm_prompt) = match operation {
             Operation::Encryption => ("Enter encryption password", Some("Confirm password")),
             Operation::Decryption => ("Enter decryption password", None),
         };
 
-        let password = cliclack::password(message).validate(validate).interact().context("failed to read password")?;
-        if let Some(message) = confirm_message {
-            let confirmed = cliclack::password(message).validate(validate).interact().context("failed to confirm password")?;
+        let password = cliclack::password(prompt).validate(validate).interact().context("failed to read password")?;
+        if let Some(confirm_prompt) = confirm_prompt {
+            let confirmed = cliclack::password(confirm_prompt).validate(validate).interact().context("failed to confirm password")?;
             if password != confirmed {
                 anyhow::bail!("password mismatch");
             }
@@ -38,10 +38,10 @@ impl Input {
         Ok(Secret::new(Sha256::digest(password.as_bytes()).to_vec()))
     }
 
-    pub(crate) fn operation_mode(&self) -> Result<Operation> {
+    pub(crate) fn select_operation(&self) -> Result<Operation> {
         let mut select = cliclack::select("Select operation");
-        for m in Operation::iter() {
-            select = select.item(m, m, "");
+        for op in Operation::all() {
+            select = select.item(op, op, "");
         }
 
         if self.filter_mode {
@@ -51,10 +51,10 @@ impl Input {
         select.interact().context("failed to select operation")
     }
 
-    pub(crate) fn file(&self, files: &[FileHandle]) -> Result<PathBuf> {
+    pub(crate) fn select_file(&self, files: &[FileHandle]) -> Result<PathBuf> {
         let mut select = cliclack::select("Select file");
-        for f in files {
-            select = select.item(f.path().to_path_buf(), f.name(), "");
+        for file in files {
+            select = select.item(file.path().to_path_buf(), file.name(), "");
         }
 
         if self.filter_mode {
@@ -64,20 +64,20 @@ impl Input {
         select.interact().context("failed to select file")
     }
 
-    pub(crate) fn overwrite(&self, file: &FileHandle) -> Result<bool> {
+    pub(crate) fn confirm_overwrite(&self, file: &FileHandle) -> Result<bool> {
         cliclack::confirm(format!("Output file {} already exists. Overwrite?", file.name()))
             .initial_value(self.default_overwrite)
             .interact()
             .context("failed to confirm overwrite")
     }
 
-    pub(crate) fn delete(&self, file: &FileHandle, operation: Operation) -> Result<bool> {
-        let process = match operation {
+    pub(crate) fn confirm_deletion(&self, file: &FileHandle, operation: Operation) -> Result<bool> {
+        let action = match operation {
             Operation::Encryption => "encrypted",
             Operation::Decryption => "decrypted",
         };
 
-        cliclack::confirm(format!("Delete {} file {}?", process, file.name()))
+        cliclack::confirm(format!("Delete {} file {}?", action, file.name()))
             .initial_value(self.default_delete)
             .interact()
             .context("failed to confirm deletion")

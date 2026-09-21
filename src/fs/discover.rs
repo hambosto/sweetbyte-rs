@@ -5,17 +5,17 @@ use walkdir::WalkDir;
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::core::Operation;
 
-pub(crate) struct Discover {
+pub(crate) struct Scanner {
     root: PathBuf,
     operation: Operation,
 }
 
-impl Discover {
+impl Scanner {
     pub(crate) fn new(root: impl Into<PathBuf>, operation: Operation) -> Self {
         Self { root: root.into(), operation }
     }
 
-    pub(crate) fn run(&self) -> Vec<PathBuf> {
+    pub(crate) fn scan(&self) -> Vec<PathBuf> {
         let mut paths = Vec::new();
 
         for entry in WalkDir::new(&self.root).min_depth(1).same_file_system(true).sort_by_file_name() {
@@ -52,25 +52,25 @@ impl Discover {
     }
 
     fn is_hidden(path: &Path) -> bool {
-        let Some(file_name) = path.file_name() else {
+        let Some(raw) = path.file_name() else {
             return false;
         };
 
-        let Some(file_name) = file_name.to_str() else {
+        let Some(name) = raw.to_str() else {
             return false;
         };
 
-        file_name.starts_with('.')
+        name.starts_with('.')
     }
 
     fn is_excluded(path: &Path) -> bool {
         for component in path {
-            let Some(part) = component.to_str() else {
+            let Some(segment) = component.to_str() else {
                 continue;
             };
 
             for pattern in EXCLUDED_PATTERNS {
-                if fast_glob::glob_match(pattern, part) {
+                if fast_glob::glob_match(pattern, segment) {
                     return true;
                 }
             }
@@ -84,10 +84,10 @@ impl Discover {
             return false;
         };
 
-        let Some(extension) = extension.to_str() else {
+        let Some(name) = extension.to_str() else {
             return false;
         };
 
-        extension == FILE_EXTENSION
+        name == FILE_EXTENSION
     }
 }

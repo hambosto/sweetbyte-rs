@@ -14,8 +14,8 @@ pub(crate) struct Signer {
 }
 
 impl Signer {
-    pub(crate) fn new(key: &Secret) -> Result<Self> {
-        let key = KeyBytes::try_new(key.expose_secret().into()).context("invalid HMAC key")?;
+    pub(crate) fn new(secret: &Secret) -> Result<Self> {
+        let key = KeyBytes::try_new(secret.expose_secret().into()).context("invalid HMAC key")?;
 
         Ok(Self { key: key.into() })
     }

@@ -9,24 +9,24 @@ pub(crate) trait ExposeSecret<S: ?Sized> {
 }
 
 pub(crate) struct SecretBox<S: Zeroize + ?Sized> {
-    inner_secret: Box<S>,
+    boxed_secret: Box<S>,
 }
 
 impl<S: Zeroize + ?Sized> SecretBox<S> {
     pub(crate) fn new(boxed_secret: Box<S>) -> Self {
-        Self { inner_secret: boxed_secret }
+        Self { boxed_secret }
     }
 }
 
 impl<S: Zeroize + ?Sized> ExposeSecret<S> for SecretBox<S> {
     fn expose_secret(&self) -> &S {
-        self.inner_secret.as_ref()
+        self.boxed_secret.as_ref()
     }
 }
 
 impl<S: Zeroize + ?Sized> Zeroize for SecretBox<S> {
     fn zeroize(&mut self) {
-        self.inner_secret.as_mut().zeroize();
+        self.boxed_secret.as_mut().zeroize();
     }
 }
 

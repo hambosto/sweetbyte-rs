@@ -10,11 +10,11 @@ pub(crate) enum Operation {
 }
 
 impl Operation {
-    pub(crate) fn iter() -> impl Iterator<Item = Self> {
+    pub(crate) fn all() -> impl Iterator<Item = Self> {
         <Self as IntoEnumIterator>::iter()
     }
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn progress_label(self) -> &'static str {
         match self {
             Self::Encryption => "Encrypting...",
             Self::Decryption => "Decrypting...",

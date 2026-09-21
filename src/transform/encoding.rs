@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use subtle::ConstantTimeEq;
 
-const LEN: usize = 4;
-const CRC: usize = 4;
-const MIN: usize = 2;
+const PREFIX_LEN: usize = 4;
+const CRC_LEN: usize = 4;
+const MIN_SHARD: usize = 2;
 
 pub(crate) struct Encoding {
     original_count: usize,
@@ -22,41 +22,41 @@ impl Encoding {
     }
 
     pub(crate) fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let shard_size = data.len().div_ceil(self.original_count).next_multiple_of(MIN).max(MIN);
+        let shard_size = data.len().div_ceil(self.original_count).next_multiple_of(MIN_SHARD).max(MIN_SHARD);
 
-        let mut original = vec![0u8; self.original_count.saturating_mul(shard_size)];
+        let mut original = vec![u8::MIN; self.original_count.saturating_mul(shard_size)];
         for (shard, chunk) in original.chunks_mut(shard_size).zip(data.chunks(shard_size)) {
             let prefix = shard.get_mut(..chunk.len()).context("invalid shard slice")?;
             prefix.copy_from_slice(chunk);
         }
 
-        let mut result = Vec::with_capacity(LEN.saturating_add(self.total_count.saturating_mul(CRC.saturating_add(shard_size))));
-        let original_len = u32::try_from(data.len()).context("data size overflow")?;
-        result.extend_from_slice(&original_len.to_le_bytes());
+        let mut encoded = Vec::with_capacity(PREFIX_LEN.saturating_add(self.total_count.saturating_mul(CRC_LEN.saturating_add(shard_size))));
+        let stored = u32::try_from(data.len()).context("data size overflow")?;
+        encoded.extend_from_slice(&stored.to_le_bytes());
 
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, original.chunks(shard_size)).context("failed to encode shards")?;
         for shard in original.chunks(shard_size).chain(recovery.iter().map(Vec::as_slice)) {
-            result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
-            result.extend_from_slice(shard);
+            encoded.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
+            encoded.extend_from_slice(shard);
         }
 
-        Ok(result)
+        Ok(encoded)
     }
 
     pub(crate) fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let (len_bytes, shard_bytes) = data.split_at_checked(LEN).context("encoded data too short")?;
-        let len_bytes: [u8; LEN] = len_bytes.try_into().context("invalid length prefix")?;
-        let original_size = u32::from_le_bytes(len_bytes) as usize;
-        let shard_size = shard_bytes.len().checked_div(self.total_count).context("invalid shard count")?;
-        if shard_size <= CRC {
+        let (prefix, body) = data.split_at_checked(PREFIX_LEN).context("encoded data too short")?;
+        let prefix: [u8; PREFIX_LEN] = prefix.try_into().context("invalid length prefix")?;
+        let original_size = u32::from_le_bytes(prefix) as usize;
+        let shard_size = body.len().checked_div(self.total_count).context("invalid shard count")?;
+        if shard_size <= CRC_LEN {
             anyhow::bail!("invalid shard size");
         }
 
         let mut original = Vec::with_capacity(self.original_count);
         let mut recovery = Vec::with_capacity(self.recovery_count);
 
-        for (index, chunk) in shard_bytes.chunks_exact(shard_size).enumerate() {
-            let (crc, shard) = chunk.split_at(CRC);
+        for (index, chunk) in body.chunks_exact(shard_size).enumerate() {
+            let (crc, shard) = chunk.split_at(CRC_LEN);
             if !bool::from(crc.ct_eq(&crc32fast::hash(shard).to_le_bytes())) {
                 continue;
             }
@@ -67,19 +67,19 @@ impl Encoding {
             }
         }
 
-        let mut result = Vec::with_capacity(self.original_count.saturating_mul(shard_size.saturating_sub(CRC)));
+        let mut decoded = Vec::with_capacity(self.original_count.saturating_mul(shard_size.saturating_sub(CRC_LEN)));
         if original.len() == self.original_count {
             for (_, shard) in original {
-                result.extend_from_slice(shard);
+                decoded.extend_from_slice(shard);
             }
         } else {
             let restored = reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode shards")?;
             for index in 0..self.original_count {
-                result.extend_from_slice(restored.get(&index).context("failed to restore shard")?);
+                decoded.extend_from_slice(restored.get(&index).context("failed to restore shard")?);
             }
         }
-        result.truncate(original_size);
+        decoded.truncate(original_size);
 
-        Ok(result)
+        Ok(decoded)
     }
 }

@@ -47,21 +47,21 @@ impl Pkcs7Padding {
     fn pad_with<B: ArraySize>(data: &[u8]) -> Result<Vec<u8>> {
         match Pkcs7::pad_detached::<B>(data) {
             PaddedData::Pad { blocks, tail_block } => {
-                let total_len = blocks.len().saturating_mul(B::USIZE).saturating_add(B::USIZE);
-                let mut result = Vec::with_capacity(total_len);
+                let total = blocks.len().saturating_mul(B::USIZE).saturating_add(B::USIZE);
+                let mut padded = Vec::with_capacity(total);
                 for block in blocks {
-                    result.extend_from_slice(block.as_slice());
+                    padded.extend_from_slice(block.as_slice());
                 }
-                result.extend_from_slice(tail_block.as_slice());
-                Ok(result)
+                padded.extend_from_slice(tail_block.as_slice());
+                Ok(padded)
             }
             PaddedData::NoPad { blocks } => {
-                let total_len = blocks.len().saturating_mul(B::USIZE);
-                let mut result = Vec::with_capacity(total_len);
+                let total = blocks.len().saturating_mul(B::USIZE);
+                let mut padded = Vec::with_capacity(total);
                 for block in blocks {
-                    result.extend_from_slice(block.as_slice());
+                    padded.extend_from_slice(block.as_slice());
                 }
-                Ok(result)
+                Ok(padded)
             }
             PaddedData::Error => anyhow::bail!("invalid padding"),
         }
@@ -71,10 +71,10 @@ impl Pkcs7Padding {
         let num_blocks = data.len().checked_div(B::USIZE).unwrap_or(0);
         let mut blocks = Vec::with_capacity(num_blocks);
 
-        for chunk in data.chunks_exact(B::USIZE) {
-            let mut arr = Array::default();
-            arr.copy_from_slice(chunk);
-            blocks.push(arr);
+        for block in data.chunks_exact(B::USIZE) {
+            let mut array = Array::default();
+            array.copy_from_slice(block);
+            blocks.push(array);
         }
         let unpadded = Pkcs7::unpad_blocks::<B>(&blocks).context("failed to unpad data")?;
 

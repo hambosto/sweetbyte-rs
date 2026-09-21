@@ -21,7 +21,7 @@ impl FileHandle {
     }
 
     pub(crate) fn name(&self) -> &str {
-        self.path.file_name().and_then(|n| n.to_str()).unwrap_or_default()
+        self.path.file_name().and_then(|name| name.to_str()).unwrap_or_default()
     }
 
     pub(crate) fn exists(&self) -> bool {
@@ -29,7 +29,7 @@ impl FileHandle {
     }
 
     pub(crate) fn is_encrypted(&self) -> bool {
-        self.path.extension().and_then(|e| e.to_str()).is_some_and(|e| e == FILE_EXTENSION)
+        self.path.extension().and_then(|extension| extension.to_str()).is_some_and(|extension| extension == FILE_EXTENSION)
     }
 
     pub(crate) fn output_path(&self, operation: Operation) -> PathBuf {
@@ -39,12 +39,12 @@ impl FileHandle {
         }
     }
 
-    pub(crate) async fn reader(&self) -> Result<File> {
+    pub(crate) async fn open_reader(&self) -> Result<File> {
         File::open(&self.path).await.context("failed to open source file")
     }
 
-    pub(crate) async fn writer(&self) -> Result<File> {
-        if let Some(parent) = self.path.parent().filter(|p| !p.as_os_str().is_empty()) {
+    pub(crate) async fn open_writer(&self) -> Result<File> {
+        if let Some(parent) = self.path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
             tokio::fs::create_dir_all(parent).await.context("failed to create output directory")?;
         }
 
@@ -73,10 +73,10 @@ impl FileHandle {
         let mut hasher = Hasher::new();
         hasher.update_mmap_rayon(self.path()).context("failed to hash source file")?;
 
-        let hash = *hasher.finalize().as_bytes();
-        let name = self.name();
-        let size = self.size().await.context("failed to read source size")?;
+        let file_hash = *hasher.finalize().as_bytes();
+        let file_name = self.name();
+        let file_size = self.size().await.context("failed to read source size")?;
 
-        Metadata::new(name, size, &hash)
+        Metadata::new(file_name, file_size, &file_hash)
     }
 }

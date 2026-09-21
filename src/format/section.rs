@@ -69,7 +69,7 @@ impl Section {
             anyhow::bail!("header exceeds limit");
         }
 
-        let mut compressed_section = vec![0u8; compressed_length as usize];
+        let mut compressed_section = vec![u8::MIN; compressed_length as usize];
         reader.read_exact(&mut compressed_section).await.context("failed to read header data")?;
 
         let decompressed_section = self.compressor.decompress(&compressed_section).context("failed to decompress header")?;

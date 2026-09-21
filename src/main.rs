@@ -14,83 +14,83 @@ use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
 use crate::core::{ExposeSecret, Metadata, Operation, Secret};
 use crate::crypto::{KeyDerivation, validate_hash};
 use crate::format::{Deserializer, Serializer};
-use crate::fs::{Discover, FileHandle};
+use crate::fs::{FileHandle, Scanner};
 use crate::pipeline::Pipeline;
-use crate::ui::Input;
+use crate::ui::Prompt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    ui::clear()?;
-    ui::banner()?;
+    ui::clear_screen()?;
+    ui::show_banner()?;
 
-    let input = Input::new(PASSWORD_LEN, true);
-    let (source, target, operation) = select_files(&input).await?;
-    let secret = input.password(operation)?;
+    let prompt = Prompt::new(PASSWORD_LEN, true);
+    let (source, target, operation) = select_files(&prompt).await?;
+    let secret = prompt.read_password(operation)?;
 
     let metadata = match operation {
-        Operation::Encryption => encrypt(&source, &target, &secret).await?,
-        Operation::Decryption => decrypt(&source, &target, &secret).await?,
+        Operation::Encryption => encrypt_file(&source, &target, &secret).await?,
+        Operation::Decryption => decrypt_file(&source, &target, &secret).await?,
     };
 
-    ui::success(operation, &target)?;
-    ui::header(metadata.name(), metadata.size(), metadata.hash())?;
+    ui::show_success(operation, &target)?;
+    ui::show_header(metadata.name(), metadata.size(), metadata.hash())?;
 
-    if input.delete(&source, operation)? {
+    if prompt.confirm_deletion(&source, operation)? {
         source.delete().await?;
-        ui::deleted(&source)?;
+        ui::show_deletion(&source)?;
     }
 
-    ui::exit()
+    ui::show_exit()
 }
 
-async fn select_files(input: &Input) -> Result<(FileHandle, FileHandle, Operation)> {
-    let operation = input.operation_mode()?;
-    let files: Vec<FileHandle> = Discover::new(".", operation).run().into_iter().map(FileHandle::new).collect();
+async fn select_files(prompt: &Prompt) -> Result<(FileHandle, FileHandle, Operation)> {
+    let operation = prompt.select_operation()?;
+    let files: Vec<FileHandle> = Scanner::new(".", operation).scan().into_iter().map(FileHandle::new).collect();
 
     if files.is_empty() {
         anyhow::bail!("no files found");
     }
 
-    ui::files(&files).await?;
+    ui::list_files(&files).await?;
 
-    let source = FileHandle::new(input.file(&files)?);
+    let source = FileHandle::new(prompt.select_file(&files)?);
     let target = FileHandle::new(source.output_path(operation));
 
-    if target.exists() && !input.overwrite(&target)? {
+    if target.exists() && !prompt.confirm_overwrite(&target)? {
         anyhow::bail!("operation aborted");
     }
 
     Ok((source, target, operation))
 }
 
-async fn encrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
+async fn encrypt_file(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
     let metadata = source.metadata().await?;
     let salt = KeyDerivation::generate_salt(ARGON2_SALT_LEN)?;
     let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(&salt)?;
 
     let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash())?;
-    let header = serializer.serialize(salt.expose_secret(), &signer_key)?;
+    let raw_header = serializer.to_bytes(salt.expose_secret(), &signer_key)?;
 
-    let mut writer = target.writer().await?;
-    writer.write_all(&header).await?;
+    let mut writer = target.open_writer().await?;
+    writer.write_all(&raw_header).await?;
 
-    let reader = source.reader().await?;
-    Pipeline::new(&primary_key, &secondary_key, Operation::Encryption)?.process(reader, writer, metadata.size()).await?;
+    let reader = source.open_reader().await?;
+    Pipeline::new(&primary_key, &secondary_key, Operation::Encryption)?.run(reader, writer, metadata.size()).await?;
 
     Ok(metadata)
 }
 
-async fn decrypt(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
-    let mut reader = source.reader().await?;
+async fn decrypt_file(source: &FileHandle, target: &FileHandle, secret: &Secret) -> Result<Metadata> {
+    let mut reader = source.open_reader().await?;
     let header = Deserializer::from_reader(&mut reader).await?;
     let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(header.salt())?;
 
-    if !header.verify(&signer_key)? {
+    if !header.verify_tag(&signer_key)? {
         anyhow::bail!("invalid password or corrupt file");
     }
 
-    let writer = target.writer().await?;
-    Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?.process(reader, writer, header.file_size()).await?;
+    let writer = target.open_writer().await?;
+    Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?.run(reader, writer, header.file_size()).await?;
 
     if !validate_hash(target.path(), header.file_hash())? {
         anyhow::bail!("file hash mismatch");
@@ -127,8 +127,8 @@ mod tests {
         let decrypted = FileHandle::new(&decrypted_path);
 
         // Act
-        encrypt(&source, &encrypted, &secret).await.unwrap();
-        decrypt(&encrypted, &decrypted, &secret).await.unwrap();
+        encrypt_file(&source, &encrypted, &secret).await.unwrap();
+        decrypt_file(&encrypted, &decrypted, &secret).await.unwrap();
 
         // Assert
         assert_eq!(fs::read(&decrypted_path).await.unwrap(), b"test content");
@@ -147,7 +147,7 @@ mod tests {
         let encrypted = FileHandle::new(&encrypted_path);
 
         // Act
-        encrypt(&source, &encrypted, &secret).await.unwrap();
+        encrypt_file(&source, &encrypted, &secret).await.unwrap();
 
         // Assert
         let original = fs::read(&source_path).await.unwrap();
@@ -167,10 +167,10 @@ mod tests {
         let source = FileHandle::new(&source_path);
         let encrypted = FileHandle::new(&encrypted_path);
         let decrypted = FileHandle::new(&decrypted_path);
-        encrypt(&source, &encrypted, &secret(b"correct")).await.unwrap();
+        encrypt_file(&source, &encrypted, &secret(b"correct")).await.unwrap();
 
         // Act
-        let result = decrypt(&encrypted, &decrypted, &secret(b"wrong")).await;
+        let result = decrypt_file(&encrypted, &decrypted, &secret(b"wrong")).await;
 
         // Assert
         assert!(result.is_err());
@@ -193,8 +193,8 @@ mod tests {
         let original_meta = source.metadata().await.unwrap();
 
         // Act
-        encrypt(&source, &encrypted, &secret).await.unwrap();
-        let decrypted_meta = decrypt(&encrypted, &decrypted, &secret).await.unwrap();
+        encrypt_file(&source, &encrypted, &secret).await.unwrap();
+        let decrypted_meta = decrypt_file(&encrypted, &decrypted, &secret).await.unwrap();
 
         // Assert
         assert_eq!(decrypted_meta.name(), original_meta.name());
@@ -214,7 +214,7 @@ mod tests {
         let encrypted = FileHandle::new(&encrypted_path);
 
         // Act
-        let result = encrypt(&source, &encrypted, &secret(b"pass")).await;
+        let result = encrypt_file(&source, &encrypted, &secret(b"pass")).await;
 
         // Assert
         assert!(result.is_err());
@@ -232,7 +232,7 @@ mod tests {
         let encrypted = FileHandle::new(&encrypted_path);
 
         // Act
-        encrypt(&source, &encrypted, &secret(b"pass")).await.unwrap();
+        encrypt_file(&source, &encrypted, &secret(b"pass")).await.unwrap();
 
         // Assert
         assert_eq!(encrypted_path.extension().unwrap(), "swx");

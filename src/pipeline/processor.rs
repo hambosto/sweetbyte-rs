@@ -5,7 +5,7 @@ use crate::core::{Operation, Secret, Task, TaskResult};
 use crate::crypto::{Aes256Gcm, Cipher, XChaCha20Poly1305};
 use crate::transform::{Compression, Encoding, Pkcs7Padding};
 
-pub(super) struct Process {
+pub(super) struct Processor {
     primary_cipher: Cipher<Aes256Gcm>,
     secondary_cipher: Cipher<XChaCha20Poly1305>,
     encoder: Encoding,
@@ -14,7 +14,7 @@ pub(super) struct Process {
     operation: Operation,
 }
 
-impl Process {
+impl Processor {
     pub(super) fn new(primary_key: &Secret, secondary_key: &Secret, operation: Operation) -> Result<Self> {
         let primary_cipher = Cipher::<Aes256Gcm>::new(primary_key).context("failed to init AES cipher")?;
         let secondary_cipher = Cipher::<XChaCha20Poly1305>::new(secondary_key).context("failed to init XChaCha cipher")?;
@@ -25,7 +25,7 @@ impl Process {
         Ok(Self { primary_cipher, secondary_cipher, encoder, compressor, padding, operation })
     }
 
-    pub(super) fn process(&self, task: &Task) -> Result<TaskResult> {
+    pub(super) fn transform(&self, task: &Task) -> Result<TaskResult> {
         match self.operation {
             Operation::Encryption => self.encrypt(task),
             Operation::Decryption => self.decrypt(task),
@@ -35,26 +35,26 @@ impl Process {
     fn encrypt(&self, task: &Task) -> Result<TaskResult> {
         self.compressor
             .compress(&task.data)
-            .and_then(|data| self.padding.pad(&data))
-            .and_then(|data| self.primary_cipher.encrypt(&data))
-            .and_then(|data| self.secondary_cipher.encrypt(&data))
-            .and_then(|data| self.encoder.encode(&data))
-            .map(|data| {
+            .and_then(|compressed| self.padding.pad(&compressed))
+            .and_then(|padded| self.primary_cipher.encrypt(&padded))
+            .and_then(|primary| self.secondary_cipher.encrypt(&primary))
+            .and_then(|secondary| self.encoder.encode(&secondary))
+            .map(|encoded| {
                 let size = task.data.len();
-                TaskResult::new(task.index, data, size)
+                TaskResult::new(task.index, encoded, size)
             })
     }
 
     fn decrypt(&self, task: &Task) -> Result<TaskResult> {
         self.encoder
             .decode(&task.data)
-            .and_then(|data| self.secondary_cipher.decrypt(&data))
-            .and_then(|data| self.primary_cipher.decrypt(&data))
-            .and_then(|data| self.padding.unpad(&data))
-            .and_then(|data| self.compressor.decompress(&data))
-            .map(|data| {
-                let size = data.len();
-                TaskResult::new(task.index, data, size)
+            .and_then(|decoded| self.secondary_cipher.decrypt(&decoded))
+            .and_then(|secondary| self.primary_cipher.decrypt(&secondary))
+            .and_then(|primary| self.padding.unpad(&primary))
+            .and_then(|unpadded| self.compressor.decompress(&unpadded))
+            .map(|decompressed| {
+                let size = decompressed.len();
+                TaskResult::new(task.index, decompressed, size)
             })
     }
 }
