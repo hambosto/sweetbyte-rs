@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use block_padding::array::typenum::{U16, U32, U64, U128, Unsigned};
+use block_padding::array::typenum::{U16, U32, U64, U128};
 use block_padding::array::{Array, ArraySize};
 use block_padding::{PaddedData, Padding as _, Pkcs7};
 
@@ -48,36 +48,25 @@ impl Padding {
         match Pkcs7::pad_detached::<B>(data) {
             PaddedData::Pad { blocks, tail_block } => {
                 let total = blocks.len().saturating_mul(B::USIZE).saturating_add(B::USIZE);
-                let mut padded = Vec::with_capacity(total);
-                for block in blocks {
-                    padded.extend_from_slice(block.as_slice());
-                }
-                padded.extend_from_slice(tail_block.as_slice());
-                Ok(padded)
+
+                let mut result = Vec::with_capacity(total);
+                result.extend_from_slice(Array::slice_as_flattened(blocks));
+                result.extend_from_slice(tail_block.as_slice());
+
+                Ok(result)
             }
-            PaddedData::NoPad { blocks } => {
-                let total = blocks.len().saturating_mul(B::USIZE);
-                let mut padded = Vec::with_capacity(total);
-                for block in blocks {
-                    padded.extend_from_slice(block.as_slice());
-                }
-                Ok(padded)
-            }
-            PaddedData::Error => anyhow::bail!("invalid padding"),
+            _ => anyhow::bail!("invalid padding"),
         }
     }
 
-    fn unpad_with<B: ArraySize + Unsigned>(data: &[u8]) -> Result<Vec<u8>> {
-        let num_blocks = data.len().checked_div(B::USIZE).unwrap_or(0);
-        let mut blocks = Vec::with_capacity(num_blocks);
-
-        for block in data.chunks_exact(B::USIZE) {
-            let mut array = Array::default();
-            array.copy_from_slice(block);
-            blocks.push(array);
+    fn unpad_with<B: ArraySize>(data: &[u8]) -> Result<Vec<u8>> {
+        let (blocks, remainder) = Array::<u8, B>::slice_as_chunks(data);
+        if !remainder.is_empty() {
+            anyhow::bail!("invalid padded length");
         }
-        let unpadded = Pkcs7::unpad_blocks::<B>(&blocks).context("failed to unpad data")?;
 
-        Ok(unpadded.into())
+        let result = Pkcs7::unpad_blocks::<B>(blocks).context("failed to unpad data")?;
+
+        Ok(result.to_vec())
     }
 }

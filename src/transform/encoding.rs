@@ -30,17 +30,17 @@ impl Encoding {
             prefix.copy_from_slice(chunk);
         }
 
-        let mut encoded = Vec::with_capacity(PREFIX_LEN.saturating_add(self.total_count.saturating_mul(CRC_LEN.saturating_add(shard_size))));
+        let mut result = Vec::with_capacity(PREFIX_LEN.saturating_add(self.total_count.saturating_mul(CRC_LEN.saturating_add(shard_size))));
         let stored = u32::try_from(data.len()).context("data size overflow")?;
-        encoded.extend_from_slice(&stored.to_le_bytes());
+        result.extend_from_slice(&stored.to_le_bytes());
 
         let recovery = reed_solomon_simd::encode(self.original_count, self.recovery_count, original.chunks(shard_size)).context("failed to encode shards")?;
         for shard in original.chunks(shard_size).chain(recovery.iter().map(Vec::as_slice)) {
-            encoded.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
-            encoded.extend_from_slice(shard);
+            result.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
+            result.extend_from_slice(shard);
         }
 
-        Ok(encoded)
+        Ok(result)
     }
 
     pub(crate) fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {
@@ -67,19 +67,19 @@ impl Encoding {
             }
         }
 
-        let mut decoded = Vec::with_capacity(self.original_count.saturating_mul(shard_size.saturating_sub(CRC_LEN)));
+        let mut result = Vec::with_capacity(self.original_count.saturating_mul(shard_size.saturating_sub(CRC_LEN)));
         if original.len() == self.original_count {
             for (_, shard) in original {
-                decoded.extend_from_slice(shard);
+                result.extend_from_slice(shard);
             }
         } else {
             let restored = reed_solomon_simd::decode(self.original_count, self.recovery_count, original, recovery).context("failed to decode shards")?;
             for index in 0..self.original_count {
-                decoded.extend_from_slice(restored.get(&index).context("failed to restore shard")?);
+                result.extend_from_slice(restored.get(&index).context("failed to restore shard")?);
             }
         }
-        decoded.truncate(original_size);
+        result.truncate(original_size);
 
-        Ok(decoded)
+        Ok(result)
     }
 }
