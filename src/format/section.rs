@@ -76,10 +76,10 @@ impl Section {
         let encoded_section: SectionList = postcard::from_bytes(&decompressed_section).context("failed to parse header")?;
 
         Ok(SectionData {
-            salt: Secret::new(self.encoder.decode(&encoded_section.salt).context("failed to decode header salt")?),
-            params: Secret::new(self.encoder.decode(&encoded_section.params).context("failed to decode header params")?),
-            metadata: Secret::new(self.encoder.decode(&encoded_section.metadata).context("failed to decode header metadata")?),
-            mac: Secret::new(self.encoder.decode(&encoded_section.mac).context("failed to decode header tag")?),
+            salt: Secret::from(self.encoder.decode(&encoded_section.salt).context("failed to decode header salt")?),
+            params: Secret::from(self.encoder.decode(&encoded_section.params).context("failed to decode header params")?),
+            metadata: Secret::from(self.encoder.decode(&encoded_section.metadata).context("failed to decode header metadata")?),
+            mac: Secret::from(self.encoder.decode(&encoded_section.mac).context("failed to decode header tag")?),
         })
     }
 }

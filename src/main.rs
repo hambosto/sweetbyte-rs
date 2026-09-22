@@ -11,7 +11,7 @@ use anyhow::Result;
 use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
-use crate::core::{ExposeSecret, Metadata, Operation, Secret};
+use crate::core::{Metadata, Operation, Secret};
 use crate::crypto::{KeyDerivation, validate_hash};
 use crate::format::{Deserializer, Serializer};
 use crate::fs::{Entry, Scanner};
@@ -109,7 +109,7 @@ mod tests {
 
     fn secret(password: &[u8]) -> Secret {
         let key = sha2::Sha256::digest(password);
-        Secret::new(key.to_vec())
+        Secret::from(key.to_vec())
     }
 
     #[tokio::test]

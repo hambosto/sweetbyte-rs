@@ -3,7 +3,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::core::{ExposeSecret, KeyBytes, Secret};
+use crate::core::{KeyBytes, Secret};
 
 const MAX_PARTS: usize = 1 << 10;
 const MAX_PART_LEN: usize = 1 << 20;

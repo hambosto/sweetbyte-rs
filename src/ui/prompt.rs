@@ -35,7 +35,7 @@ impl Prompt {
             }
         }
 
-        Ok(Secret::new(Sha256::digest(password.as_bytes()).to_vec()))
+        Ok(Secret::from(Sha256::digest(password.as_bytes()).to_vec()))
     }
 
     pub(crate) fn select_operation(&self) -> Result<Operation> {

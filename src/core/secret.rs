@@ -4,64 +4,54 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::key::KeyBytes;
 
-pub(crate) trait ExposeSecret<S: ?Sized> {
-    fn expose_secret(&self) -> &S;
+pub(crate) struct Secret {
+    boxed_secret: Box<[u8]>,
 }
 
-pub(crate) struct SecretBox<S: Zeroize + ?Sized> {
-    boxed_secret: Box<S>,
-}
-
-impl<S: Zeroize + ?Sized> SecretBox<S> {
-    pub(crate) fn new(boxed_secret: Box<S>) -> Self {
-        Self { boxed_secret }
-    }
-}
-
-impl<S: Zeroize + ?Sized> ExposeSecret<S> for SecretBox<S> {
-    fn expose_secret(&self) -> &S {
-        self.boxed_secret.as_ref()
-    }
-}
-
-impl<S: Zeroize + ?Sized> Zeroize for SecretBox<S> {
+impl Zeroize for Secret {
     fn zeroize(&mut self) {
         self.boxed_secret.as_mut().zeroize();
     }
 }
 
-impl<S: Zeroize + ?Sized> Drop for SecretBox<S> {
+impl Drop for Secret {
     fn drop(&mut self) {
         self.zeroize();
     }
 }
 
-impl<S: Zeroize + ?Sized> ZeroizeOnDrop for SecretBox<S> {}
+impl ZeroizeOnDrop for Secret {}
 
-impl<S: Zeroize + ?Sized> Debug for SecretBox<S> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "[REDACTED]")
+impl From<Box<[u8]>> for Secret {
+    fn from(source: Box<[u8]>) -> Self {
+        Self::new(source)
     }
-}
-
-pub(crate) struct Secret {
-    secret: SecretBox<Vec<u8>>,
 }
 
 impl Secret {
-    pub(crate) fn new(secret: Vec<u8>) -> Self {
-        Self { secret: SecretBox::new(Box::new(secret)) }
+    pub(crate) fn new(boxed_secret: Box<[u8]>) -> Self {
+        Self { boxed_secret }
+    }
+
+    pub(crate) fn expose_secret(&self) -> &[u8] {
+        &self.boxed_secret
     }
 }
 
-impl ExposeSecret<[u8]> for Secret {
-    fn expose_secret(&self) -> &[u8] {
-        self.secret.expose_secret()
+impl Debug for Secret {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "SecretBox([REDACTED])")
+    }
+}
+
+impl From<Vec<u8>> for Secret {
+    fn from(secret: Vec<u8>) -> Self {
+        Self::from(secret.into_boxed_slice())
     }
 }
 
 impl From<KeyBytes> for Secret {
     fn from(key: KeyBytes) -> Self {
-        Secret::new(key.into_inner())
+        Self::from(key.into_inner())
     }
 }

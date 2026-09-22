@@ -13,5 +13,5 @@ pub(crate) use key::KeyBytes;
 pub(crate) use metadata::Metadata;
 pub(crate) use operation::Operation;
 pub(crate) use parameters::Parameters;
-pub(crate) use secret::{ExposeSecret, Secret};
+pub(crate) use secret::Secret;
 pub(crate) use task::{Task, TaskResult};

@@ -6,7 +6,7 @@ use rand::rngs::SysRng;
 use sha2::Sha256;
 
 use crate::config::{ARGON2_KEY_LEN, ARGON2_M_COST, ARGON2_P_COST, ARGON2_T_COST, KDF_INFO, KEY_LEN};
-use crate::core::{ExposeSecret, KeyBytes, Secret};
+use crate::core::{KeyBytes, Secret};
 
 pub(crate) struct KeyDerivation {
     key: Secret,
@@ -38,7 +38,7 @@ impl KeyDerivation {
         let mut signer_key = vec![u8::MIN; KEY_LEN];
         hkdf.expand(&KDF_INFO[2], &mut signer_key).context("failed to derive auth key")?;
 
-        Ok((Secret::new(primary_key), Secret::new(secondary_key), Secret::new(signer_key)))
+        Ok((Secret::from(primary_key), Secret::from(secondary_key), Secret::from(signer_key)))
     }
 
     pub(crate) fn generate_salt(salt_len: usize) -> Result<Secret> {
@@ -46,6 +46,6 @@ impl KeyDerivation {
 
         SysRng.try_fill_bytes(&mut salt).context("failed to generate salt")?;
 
-        Ok(Secret::new(salt))
+        Ok(Secret::from(salt))
     }
 }
