@@ -30,7 +30,7 @@ impl Signer {
         }
 
         let mut total_len: usize = 0;
-        for part in parts.iter() {
+        for part in parts {
             if part.len() > MAX_PART_LEN {
                 anyhow::bail!("auth input too large");
             }
