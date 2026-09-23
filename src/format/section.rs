@@ -10,13 +10,13 @@ const PREFIX_LEN: usize = 4;
 
 #[derive(Serialize, Deserialize)]
 struct SectionList {
-    #[serde(with = "serde_bytes")]
+    #[serde(with = "hex")]
     salt: Vec<u8>,
-    #[serde(with = "serde_bytes")]
+    #[serde(with = "hex")]
     params: Vec<u8>,
-    #[serde(with = "serde_bytes")]
+    #[serde(with = "hex")]
     metadata: Vec<u8>,
-    #[serde(with = "serde_bytes")]
+    #[serde(with = "hex")]
     mac: Vec<u8>,
 }
 
