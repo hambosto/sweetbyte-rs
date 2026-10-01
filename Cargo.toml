@@ -15,7 +15,7 @@ blake3            = { version = "1.8.7", features = ["mmap", "rayon", "zeroize"]
 block-padding     = "0.4.2"
 chacha20poly1305  = { version = "0.11.0", features = ["zeroize"] }
 cliclack          = "0.5.6"
-comfy-table       = "8.0.0"
+comfy-table       = "8.0.1"
 crc32fast         = "1.5.2"
 fast-glob         = "1.1.2"
 hex               = { version = "0.4.3", features = ["serde"] }
