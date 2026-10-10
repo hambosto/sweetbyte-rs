@@ -34,7 +34,7 @@ subtle            = "2.6.1"
 tokio             = { version = "1.53.2", features = ["full"] }
 walkdir           = "2.5.0"
 zeroize           = "1.9.1"
-zstd              = { version = "0.14.0", features = ["thin"] }
+zstd              = { version = "0.14.1", features = ["thin"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
