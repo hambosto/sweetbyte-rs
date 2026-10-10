@@ -37,6 +37,10 @@ impl Scanner {
             return false;
         }
 
+        if Self::is_empty(path) {
+            return false;
+        }
+
         if Self::is_hidden(path) {
             return false;
         }
@@ -49,6 +53,10 @@ impl Scanner {
             Operation::Encryption => !Self::is_encrypted(path),
             Operation::Decryption => Self::is_encrypted(path),
         }
+    }
+
+    fn is_empty(path: &Path) -> bool {
+        std::fs::metadata(path).is_ok_and(|metadata| metadata.len() == 0)
     }
 
     fn is_hidden(path: &Path) -> bool {
