@@ -1,14 +1,28 @@
-use std::path::Path;
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use blake3::Hasher;
 use subtle::ConstantTimeEq;
 
-pub(crate) fn validate_hash(path: &Path, expected: &[u8]) -> Result<bool> {
-    let mut hasher = Hasher::new();
-    hasher.update_mmap_rayon(path).context("failed to verify file hash")?;
+pub(crate) struct Hash {
+    path: PathBuf,
+}
 
-    let actual = *hasher.finalize().as_bytes();
+impl Hash {
+    pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
+        Self { path: path.into() }
+    }
 
-    Ok(bool::from(actual.ct_eq(expected)))
+    pub(crate) fn compute(&self) -> Result<[u8; 32]> {
+        let mut hasher = Hasher::new();
+        hasher.update_mmap_rayon(&self.path).context("failed to hash file")?;
+
+        Ok(*hasher.finalize().as_bytes())
+    }
+
+    pub(crate) fn verify(&self, expected: &[u8]) -> Result<bool> {
+        let actual = self.compute().context("failed to verify file hash")?;
+
+        Ok(bool::from(actual.ct_eq(expected)))
+    }
 }

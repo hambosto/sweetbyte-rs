@@ -1,9 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use walkdir::WalkDir;
 
-use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::core::Operation;
+
+use super::entry::Entry;
 
 pub(crate) struct Scanner {
     root: PathBuf,
@@ -15,87 +16,43 @@ impl Scanner {
         Self { root: root.into(), operation }
     }
 
-    pub(crate) fn scan(&self) -> Vec<PathBuf> {
-        let mut paths = Vec::new();
+    pub(crate) fn scan(&self) -> Vec<Entry> {
+        let mut entries = Vec::new();
 
         for entry in WalkDir::new(&self.root).min_depth(1).same_file_system(true).sort_by_file_name() {
             let Ok(entry) = entry else {
                 continue;
             };
 
-            let path = entry.into_path();
-            if self.is_eligible(&path) {
-                paths.push(path);
+            let entry = Entry::new(entry.into_path());
+            if self.is_eligible(&entry) {
+                entries.push(entry);
             }
         }
 
-        paths
+        entries
     }
 
-    fn is_eligible(&self, path: &Path) -> bool {
-        if !path.is_file() {
+    fn is_eligible(&self, entry: &Entry) -> bool {
+        if !entry.path().is_file() {
             return false;
         }
 
-        if Self::is_empty(path) {
+        if entry.is_empty() {
             return false;
         }
 
-        if Self::is_hidden(path) {
+        if entry.is_hidden() {
             return false;
         }
 
-        if Self::is_excluded(path) {
+        if entry.is_excluded() {
             return false;
         }
 
         match self.operation {
-            Operation::Encryption => !Self::is_encrypted(path),
-            Operation::Decryption => Self::is_encrypted(path),
+            Operation::Encryption => !entry.is_encrypted(),
+            Operation::Decryption => entry.is_encrypted(),
         }
-    }
-
-    fn is_empty(path: &Path) -> bool {
-        std::fs::metadata(path).is_ok_and(|metadata| metadata.len() == 0)
-    }
-
-    fn is_hidden(path: &Path) -> bool {
-        let Some(raw) = path.file_name() else {
-            return false;
-        };
-
-        let Some(name) = raw.to_str() else {
-            return false;
-        };
-
-        name.starts_with('.')
-    }
-
-    fn is_excluded(path: &Path) -> bool {
-        for component in path {
-            let Some(segment) = component.to_str() else {
-                continue;
-            };
-
-            for pattern in EXCLUDED_PATTERNS {
-                if fast_glob::glob_match(pattern, segment) {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
-    fn is_encrypted(path: &Path) -> bool {
-        let Some(extension) = path.extension() else {
-            return false;
-        };
-
-        let Some(name) = extension.to_str() else {
-            return false;
-        };
-
-        name == FILE_EXTENSION
     }
 }

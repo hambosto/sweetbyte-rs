@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use blake3::Hasher;
 use tokio::fs::{File, OpenOptions};
 
-use crate::config::FILE_EXTENSION;
+use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::core::{Metadata, Operation};
+use crate::crypto::Hash;
 
 pub(crate) struct Entry {
     path: PathBuf,
@@ -30,6 +30,21 @@ impl Entry {
 
     pub(crate) fn is_encrypted(&self) -> bool {
         self.path.extension().and_then(|extension| extension.to_str()).is_some_and(|extension| extension == FILE_EXTENSION)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        std::fs::metadata(&self.path).is_ok_and(|metadata| metadata.len() == 0)
+    }
+
+    pub(crate) fn is_hidden(&self) -> bool {
+        self.name().starts_with('.')
+    }
+
+    pub(crate) fn is_excluded(&self) -> bool {
+        self.path
+            .iter()
+            .filter_map(|component| component.to_str())
+            .any(|segment| EXCLUDED_PATTERNS.iter().any(|pattern| fast_glob::glob_match(pattern, segment)))
     }
 
     pub(crate) fn output_path(&self, operation: Operation) -> PathBuf {
@@ -70,10 +85,7 @@ impl Entry {
     }
 
     pub(crate) async fn metadata(&self) -> Result<Metadata> {
-        let mut hasher = Hasher::new();
-        hasher.update_mmap_rayon(self.path()).context("failed to hash source file")?;
-
-        let file_hash = *hasher.finalize().as_bytes();
+        let file_hash = Hash::new(self.path()).compute().context("failed to hash source file")?;
         let file_name = self.name();
         let file_size = self.size().await.context("failed to read source size")?;
 

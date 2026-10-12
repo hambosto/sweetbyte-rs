@@ -12,7 +12,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
 use crate::core::{Metadata, Operation, Secret};
-use crate::crypto::{KeyDerivation, validate_hash};
+use crate::crypto::{Hash, KeyDerivation};
 use crate::format::{Deserializer, Serializer};
 use crate::fs::{Entry, Scanner};
 use crate::pipeline::Pipeline;
@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
 
 async fn select_files(prompt: &Prompt) -> Result<(Entry, Entry, Operation)> {
     let operation = prompt.select_operation()?;
-    let entries: Vec<Entry> = Scanner::new(".", operation).scan().into_iter().map(Entry::new).collect();
+    let entries: Vec<Entry> = Scanner::new(".", operation).scan();
 
     if entries.is_empty() {
         anyhow::bail!("no files found");
@@ -92,7 +92,7 @@ async fn decrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result
     let writer = target.open_writer().await?;
     Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?.run(reader, writer, header.file_size()).await?;
 
-    if !validate_hash(target.path(), header.file_hash())? {
+    if !Hash::new(target.path()).verify(header.file_hash())? {
         anyhow::bail!("file hash mismatch");
     }
 
