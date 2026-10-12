@@ -2,9 +2,8 @@ use std::path::PathBuf;
 
 use walkdir::WalkDir;
 
-use crate::core::Operation;
-
 use super::entry::Entry;
+use crate::core::Operation;
 
 pub(crate) struct Scanner {
     root: PathBuf,
