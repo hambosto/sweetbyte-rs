@@ -53,7 +53,8 @@ async fn select_files(prompt: &Prompt) -> Result<(Entry, Entry, Operation)> {
 
     ui::list_files(&entries).await?;
 
-    let source = Entry::new(prompt.select_file(&entries)?);
+    let selected = prompt.select_file(&entries)?;
+    let source = Entry::new(selected);
     let target = Entry::new(source.output_path(operation));
 
     if target.exists() && !prompt.confirm_overwrite(&target)? {
@@ -66,7 +67,9 @@ async fn select_files(prompt: &Prompt) -> Result<(Entry, Entry, Operation)> {
 async fn encrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result<Metadata> {
     let metadata = source.metadata().await?;
     let salt = KeyDerivation::generate_salt(ARGON2_SALT_LEN)?;
-    let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(&salt)?;
+
+    let kdf = KeyDerivation::new(secret)?;
+    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(&salt)?;
 
     let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash())?;
     let raw_header = serializer.to_bytes(salt.expose_secret(), &signer_key)?;
@@ -75,7 +78,8 @@ async fn encrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result
     writer.write_all(&raw_header).await?;
 
     let reader = source.open_reader().await?;
-    Pipeline::new(&primary_key, &secondary_key, Operation::Encryption)?.run(reader, writer, metadata.size()).await?;
+    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Encryption)?;
+    pipeline.run(reader, writer, metadata.size()).await?;
 
     Ok(metadata)
 }
@@ -83,14 +87,17 @@ async fn encrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result
 async fn decrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result<Metadata> {
     let mut reader = source.open_reader().await?;
     let header = Deserializer::from_reader(&mut reader).await?;
-    let (primary_key, secondary_key, signer_key) = KeyDerivation::new(secret)?.derive_keys(header.salt())?;
+
+    let kdf = KeyDerivation::new(secret)?;
+    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(header.salt())?;
 
     if !header.verify_tag(&signer_key)? {
         anyhow::bail!("invalid password or corrupt file");
     }
 
     let writer = target.open_writer().await?;
-    Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?.run(reader, writer, header.file_size()).await?;
+    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?;
+    pipeline.run(reader, writer, header.file_size()).await?;
 
     if !Hash::new(target.path()).verify(header.file_hash())? {
         anyhow::bail!("file hash mismatch");
