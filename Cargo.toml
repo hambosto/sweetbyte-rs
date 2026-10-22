@@ -16,7 +16,7 @@ block-padding     = "0.4.2"
 chacha20poly1305  = { version = "0.11.0", features = ["zeroize"] }
 cliclack          = "0.5.6"
 comfy-table       = "8.0.1"
-crc32fast         = "1.5.2"
+crc32fast         = "1.5.3"
 fast-glob         = "1.1.2"
 hex               = { version = "0.4.3", features = ["serde"] }
 hkdf              = "0.13.0"
@@ -31,7 +31,7 @@ serde             = { version = "1.0.229", features = ["derive"] }
 sha2              = { version = "0.11.1", features = ["zeroize"] }
 strum             = { version = "0.28.0", features = ["derive"] }
 subtle            = "2.6.1"
-tokio             = { version = "1.54.0", features = ["full"] }
+tokio             = { version = "1.54.1", features = ["full"] }
 walkdir           = "2.5.0"
 zeroize           = "1.9.1"
 zstd              = "0.14.3"
