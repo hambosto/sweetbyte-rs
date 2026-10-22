@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
+use zeroize::Zeroize;
 
 use crate::core::{Operation, Secret};
 use crate::fs::Entry;
@@ -27,15 +28,28 @@ impl Prompt {
             Operation::Decryption => ("Enter decryption password", None),
         };
 
-        let password = cliclack::password(prompt).validate(validate).interact().context("failed to read password")?;
-        if let Some(confirm_prompt) = confirm_prompt {
-            let confirmed = cliclack::password(confirm_prompt).validate(validate).interact().context("failed to confirm password")?;
-            if password != confirmed {
-                anyhow::bail!("password mismatch");
-            }
-        }
+        loop {
+            let mut password = cliclack::password(prompt).validate(validate).interact().context("failed to read password")?;
 
-        Ok(Secret::from(Sha256::digest(password.as_bytes()).to_vec()))
+            if let Some(confirmation) = confirm_prompt {
+                let mut confirmation_password = cliclack::password(confirmation).validate(validate).interact().context("failed to read confirmation password")?;
+
+                if confirmation_password != password {
+                    password.zeroize();
+                    confirmation_password.zeroize();
+
+                    cliclack::log::error("Passwords do not match").context("failed to report password mismatch")?;
+                    continue;
+                }
+
+                confirmation_password.zeroize();
+            }
+
+            let secret = Secret::from(Sha256::digest(password.as_bytes()).to_vec());
+            password.zeroize();
+
+            break Ok(secret);
+        }
     }
 
     pub(crate) fn select_operation(&self) -> Result<Operation> {
