@@ -32,13 +32,13 @@ impl Prompt {
             let mut password = cliclack::password(prompt).validate(validate).interact().context("failed to read password")?;
 
             if let Some(confirmation) = confirm_prompt {
-                let mut confirmation_password = cliclack::password(confirmation).validate(validate).interact().context("failed to read confirmation password")?;
+                let mut confirmation_password = cliclack::password(confirmation).validate(validate).interact().context("failed to read confirm password")?;
 
                 if confirmation_password != password {
                     password.zeroize();
                     confirmation_password.zeroize();
 
-                    cliclack::log::error("Passwords do not match").context("failed to report password mismatch")?;
+                    cliclack::log::error("Password mismatch").context("failed to display error")?;
                     continue;
                 }
 
