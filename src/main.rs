@@ -12,7 +12,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
 use crate::core::{Metadata, Operation, Secret};
-use crate::crypto::{Hash, KeyDerivation};
+use crate::crypto::{Hash, Key};
 use crate::format::{Deserializer, Serializer};
 use crate::fs::{Entry, Scanner};
 use crate::pipeline::Pipeline;
@@ -66,19 +66,19 @@ async fn select_files(prompt: &Prompt) -> Result<(Entry, Entry, Operation)> {
 
 async fn encrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result<Metadata> {
     let metadata = source.metadata().await?;
-    let salt = KeyDerivation::generate_salt(ARGON2_SALT_LEN)?;
+    let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
 
-    let kdf = KeyDerivation::new(secret)?;
-    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(&salt)?;
+    let key = Key::new(secret)?;
+    let key_pair = key.derive_keys(&salt)?;
 
     let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash())?;
-    let raw_header = serializer.to_bytes(salt.expose_secret(), &signer_key)?;
+    let raw_header = serializer.to_bytes(salt.expose_secret(), &key_pair.signer_key)?;
 
     let mut writer = target.open_writer().await?;
     writer.write_all(&raw_header).await?;
 
     let reader = source.open_reader().await?;
-    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Encryption)?;
+    let pipeline = Pipeline::new(&key_pair.primary_key, &key_pair.secondary_key, Operation::Encryption)?;
     pipeline.run(reader, writer, metadata.size()).await?;
 
     Ok(metadata)
@@ -88,15 +88,15 @@ async fn decrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result
     let mut reader = source.open_reader().await?;
     let header = Deserializer::from_reader(&mut reader).await?;
 
-    let kdf = KeyDerivation::new(secret)?;
-    let (primary_key, secondary_key, signer_key) = kdf.derive_keys(header.salt())?;
+    let key = Key::new(secret)?;
+    let key_pair = key.derive_keys(header.salt())?;
 
-    if !header.verify_tag(&signer_key)? {
+    if !header.verify_tag(&key_pair.signer_key)? {
         anyhow::bail!("invalid password or corrupt file");
     }
 
     let writer = target.open_writer().await?;
-    let pipeline = Pipeline::new(&primary_key, &secondary_key, Operation::Decryption)?;
+    let pipeline = Pipeline::new(&key_pair.primary_key, &key_pair.secondary_key, Operation::Decryption)?;
     pipeline.run(reader, writer, header.file_size()).await?;
 
     if !Hash::new(target.path()).verify(header.file_hash())? {
