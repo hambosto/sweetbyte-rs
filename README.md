@@ -78,7 +78,7 @@ Or add as a flake input and use the overlay:
 
 ### Download a binary
 
-Every push to `main` that passes CI refreshes the [`tip` prerelease](https://github.com/hambosto/sweetbyte-rs/releases/tag/tip) with binaries for Linux (x86_64, aarch64), macOS (aarch64), and Windows (x86_64, aarch64), with SHA-256 checksums.
+Every push to `main` that passes CI refreshes the [prerelease](https://github.com/hambosto/sweetbyte-rs/releases/tag/tip) with binaries for Linux (x86_64, aarch64), macOS (aarch64), and Windows (x86_64, aarch64), with SHA-256 checksums.
 
 ### From source
 
