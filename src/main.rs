@@ -91,7 +91,7 @@ async fn decrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result
     let key = Key::new(secret)?;
     let key_pair = key.derive_keys(header.salt())?;
 
-    if !header.verify_tag(&key_pair.signer_key)? {
+    if !header.verify_mac(&key_pair.signer_key)? {
         anyhow::bail!("invalid password or corrupt file");
     }
 

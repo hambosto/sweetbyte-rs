@@ -1,31 +1,11 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::config::MAX_SECTION_SIZE;
-use crate::core::Secret;
+use crate::core::{DecodedSection, EncodedSection, Secret};
 use crate::transform::{Compression, Encoding};
 
 const PREFIX_LEN: usize = 4;
-
-#[derive(Serialize, Deserialize)]
-struct SectionList {
-    #[serde(with = "hex")]
-    salt: Vec<u8>,
-    #[serde(with = "hex")]
-    params: Vec<u8>,
-    #[serde(with = "hex")]
-    metadata: Vec<u8>,
-    #[serde(with = "hex")]
-    mac: Vec<u8>,
-}
-
-pub(super) struct SectionData {
-    pub(super) salt: Secret,
-    pub(super) params: Secret,
-    pub(super) metadata: Secret,
-    pub(super) mac: Secret,
-}
 
 pub(super) struct Section {
     compressor: Compression,
@@ -40,12 +20,12 @@ impl Section {
         Ok(Self { compressor, encoder })
     }
 
-    pub(super) fn pack(&self, salt: &[u8], params: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
-        let encoded_section = SectionList {
+    pub(super) fn pack(&self, salt: &[u8], parameters: &[u8], metadata: &[u8], mac: &[u8]) -> Result<Vec<u8>> {
+        let encoded_section = EncodedSection {
             salt: self.encoder.encode(salt).context("failed to encode header salt")?,
-            params: self.encoder.encode(params).context("failed to encode header params")?,
+            parameters: self.encoder.encode(parameters).context("failed to encode header parameters")?,
             metadata: self.encoder.encode(metadata).context("failed to encode header metadata")?,
-            mac: self.encoder.encode(mac).context("failed to encode header tag")?,
+            mac: self.encoder.encode(mac).context("failed to encode header mac")?,
         };
 
         let serialized_section = postcard::to_allocvec(&encoded_section).context("failed to serialize header")?;
@@ -63,7 +43,7 @@ impl Section {
         Ok(packed_section)
     }
 
-    pub(super) async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<SectionData> {
+    pub(super) async fn unpack<R: AsyncRead + Unpin>(&self, reader: &mut R) -> Result<DecodedSection> {
         let compressed_length = reader.read_u32_le().await.context("failed to read header length")?;
         if compressed_length > MAX_SECTION_SIZE {
             anyhow::bail!("header exceeds limit");
@@ -73,13 +53,13 @@ impl Section {
         reader.read_exact(&mut compressed_section).await.context("failed to read header data")?;
 
         let decompressed_section = self.compressor.decompress(&compressed_section).context("failed to decompress header")?;
-        let encoded_section: SectionList = postcard::from_bytes(&decompressed_section).context("failed to parse header")?;
+        let encoded_section: EncodedSection = postcard::from_bytes(&decompressed_section).context("failed to parse header")?;
 
-        Ok(SectionData {
+        Ok(DecodedSection {
             salt: Secret::from(self.encoder.decode(&encoded_section.salt).context("failed to decode header salt")?),
-            params: Secret::from(self.encoder.decode(&encoded_section.params).context("failed to decode header params")?),
+            parameters: Secret::from(self.encoder.decode(&encoded_section.parameters).context("failed to decode header parameters")?),
             metadata: Secret::from(self.encoder.decode(&encoded_section.metadata).context("failed to decode header metadata")?),
-            mac: Secret::from(self.encoder.decode(&encoded_section.mac).context("failed to decode header tag")?),
+            mac: Secret::from(self.encoder.decode(&encoded_section.mac).context("failed to decode header mac")?),
         })
     }
 }
