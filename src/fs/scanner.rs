@@ -2,56 +2,69 @@ use std::path::PathBuf;
 
 use walkdir::WalkDir;
 
-use super::entry::Entry;
+use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
 use crate::core::Operation;
 
-pub(crate) struct Scanner {
+pub(crate) struct FileScanner {
     root: PathBuf,
     operation: Operation,
 }
 
-impl Scanner {
+impl FileScanner {
     pub(crate) fn new(root: impl Into<PathBuf>, operation: Operation) -> Self {
         Self { root: root.into(), operation }
     }
 
-    pub(crate) fn scan(&self) -> Vec<Entry> {
+    pub(crate) fn scan(&self) -> Vec<PathBuf> {
+        let walker = WalkDir::new(&self.root).same_file_system(true).sort_by_file_name().into_iter().filter_entry(|entry| {
+            if entry.depth() == 0 {
+                return true;
+            }
+
+            let name = entry.file_name().to_string_lossy();
+            if name.starts_with('.') {
+                return false;
+            }
+
+            for pattern in EXCLUDED_PATTERNS.iter() {
+                if fast_glob::glob_match(*pattern, name.as_bytes()) {
+                    return false;
+                }
+            }
+
+            true
+        });
+
         let mut entries = Vec::new();
 
-        for entry in WalkDir::new(&self.root).min_depth(1).same_file_system(true).sort_by_file_name() {
+        for entry in walker {
             let Ok(entry) = entry else {
                 continue;
             };
 
-            let entry = Entry::new(entry.into_path());
-            if self.is_eligible(&entry) {
-                entries.push(entry);
+            if !entry.file_type().is_file() {
+                continue;
             }
+
+            let is_encrypted = entry.path().extension().is_some_and(|extension| extension == FILE_EXTENSION);
+            let wanted = match self.operation {
+                Operation::Encryption => !is_encrypted,
+                Operation::Decryption => is_encrypted,
+            };
+            if !wanted {
+                continue;
+            }
+
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            if metadata.len() == 0 {
+                continue;
+            }
+
+            entries.push(entry.into_path());
         }
 
         entries
-    }
-
-    fn is_eligible(&self, entry: &Entry) -> bool {
-        if !entry.path().is_file() {
-            return false;
-        }
-
-        if entry.is_empty() {
-            return false;
-        }
-
-        if entry.is_hidden() {
-            return false;
-        }
-
-        if entry.is_excluded() {
-            return false;
-        }
-
-        match self.operation {
-            Operation::Encryption => !entry.is_encrypted(),
-            Operation::Decryption => entry.is_encrypted(),
-        }
     }
 }

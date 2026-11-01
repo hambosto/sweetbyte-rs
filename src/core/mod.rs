@@ -1,5 +1,6 @@
 mod file;
 mod header;
+mod item;
 mod key;
 mod metadata;
 mod operation;
@@ -10,6 +11,7 @@ mod task;
 
 pub(crate) use file::{FileHash, FileSize, Filename};
 pub(crate) use header::{Magic, Version};
+pub(crate) use item::FileItem;
 pub(crate) use key::{KeyBytes, KeyPair};
 pub(crate) use metadata::Metadata;
 pub(crate) use operation::Operation;

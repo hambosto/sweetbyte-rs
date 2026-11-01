@@ -11,10 +11,10 @@ use anyhow::Result;
 use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
-use crate::core::{Metadata, Operation, Secret};
+use crate::core::{FileItem, Metadata, Operation, Secret};
 use crate::crypto::{Hash, Key};
 use crate::format::{Deserializer, Serializer};
-use crate::fs::{Entry, Scanner};
+use crate::fs::{FileEntry, FileScanner};
 use crate::pipeline::Pipeline;
 use crate::ui::Prompt;
 
@@ -32,39 +32,44 @@ async fn main() -> Result<()> {
         Operation::Decryption => decrypt_file(&source, &target, &secret).await?,
     };
 
-    ui::show_success(operation, &target)?;
+    ui::show_success(operation, &target.name())?;
     ui::show_header(metadata.name(), metadata.size(), metadata.hash())?;
 
-    if prompt.confirm_deletion(&source, operation)? {
+    if prompt.confirm_deletion(&source.name(), operation)? {
         source.delete().await?;
-        ui::show_deletion(&source)?;
+        ui::show_deletion(&source.name())?;
     }
 
     ui::show_exit()
 }
 
-async fn select_files(prompt: &Prompt) -> Result<(Entry, Entry, Operation)> {
+async fn select_files(prompt: &Prompt) -> Result<(FileEntry, FileEntry, Operation)> {
     let operation = prompt.select_operation()?;
-    let entries: Vec<Entry> = Scanner::new(".", operation).scan();
+    let entries = FileScanner::new(".", operation).scan();
 
     if entries.is_empty() {
         anyhow::bail!("no files found");
     }
 
-    ui::list_files(&entries).await?;
+    let mut items = Vec::with_capacity(entries.len());
+    for path in &entries {
+        let entry = FileEntry::new(path);
+        items.push(FileItem::new(entry.path(), entry.name(), entry.size().await?, entry.is_encrypted()));
+    }
+    ui::list_files(&items)?;
 
-    let selected = prompt.select_file(&entries)?;
-    let source = Entry::new(selected);
-    let target = Entry::new(source.output_path(operation));
+    let selected = prompt.select_file(&items)?;
+    let source = FileEntry::new(selected);
+    let target = FileEntry::new(source.output_path(operation));
 
-    if target.exists() && !prompt.confirm_overwrite(&target)? {
+    if target.exists() && !prompt.confirm_overwrite(&target.name())? {
         anyhow::bail!("operation aborted");
     }
 
     Ok((source, target, operation))
 }
 
-async fn encrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result<Metadata> {
+async fn encrypt_file(source: &FileEntry, target: &FileEntry, secret: &Secret) -> Result<Metadata> {
     let metadata = source.metadata().await?;
     let salt = Key::generate_salt(ARGON2_SALT_LEN)?;
 
@@ -74,18 +79,18 @@ async fn encrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result
     let serializer = Serializer::new(metadata.name(), metadata.size(), metadata.hash())?;
     let raw_header = serializer.to_bytes(salt.expose_secret(), &key_pair.signer_key)?;
 
-    let mut writer = target.open_writer().await?;
+    let mut writer = target.writer().await?;
     writer.write_all(&raw_header).await?;
 
-    let reader = source.open_reader().await?;
+    let reader = source.reader().await?;
     let pipeline = Pipeline::new(&key_pair.primary_key, &key_pair.secondary_key, Operation::Encryption)?;
     pipeline.run(reader, writer, metadata.size()).await?;
 
     Ok(metadata)
 }
 
-async fn decrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result<Metadata> {
-    let mut reader = source.open_reader().await?;
+async fn decrypt_file(source: &FileEntry, target: &FileEntry, secret: &Secret) -> Result<Metadata> {
+    let mut reader = source.reader().await?;
     let header = Deserializer::from_reader(&mut reader).await?;
 
     let key = Key::new(secret)?;
@@ -95,7 +100,7 @@ async fn decrypt_file(source: &Entry, target: &Entry, secret: &Secret) -> Result
         anyhow::bail!("invalid password or corrupt file");
     }
 
-    let writer = target.open_writer().await?;
+    let writer = target.writer().await?;
     let pipeline = Pipeline::new(&key_pair.primary_key, &key_pair.secondary_key, Operation::Decryption)?;
     pipeline.run(reader, writer, header.file_size()).await?;
 
@@ -129,9 +134,9 @@ mod tests {
         fs::write(&source_path, b"test content").await.unwrap();
 
         let secret = secret(b"password");
-        let source = Entry::new(&source_path);
-        let encrypted = Entry::new(&encrypted_path);
-        let decrypted = Entry::new(&decrypted_path);
+        let source = FileEntry::new(&source_path);
+        let encrypted = FileEntry::new(&encrypted_path);
+        let decrypted = FileEntry::new(&decrypted_path);
 
         // Act
         encrypt_file(&source, &encrypted, &secret).await.unwrap();
@@ -150,8 +155,8 @@ mod tests {
         fs::write(&source_path, b"sensitive data").await.unwrap();
 
         let secret = secret(b"pass123");
-        let source = Entry::new(&source_path);
-        let encrypted = Entry::new(&encrypted_path);
+        let source = FileEntry::new(&source_path);
+        let encrypted = FileEntry::new(&encrypted_path);
 
         // Act
         encrypt_file(&source, &encrypted, &secret).await.unwrap();
@@ -171,9 +176,9 @@ mod tests {
         let decrypted_path = dir.path().join("file_dec.txt");
         fs::write(&source_path, b"secret").await.unwrap();
 
-        let source = Entry::new(&source_path);
-        let encrypted = Entry::new(&encrypted_path);
-        let decrypted = Entry::new(&decrypted_path);
+        let source = FileEntry::new(&source_path);
+        let encrypted = FileEntry::new(&encrypted_path);
+        let decrypted = FileEntry::new(&decrypted_path);
         encrypt_file(&source, &encrypted, &secret(b"correct")).await.unwrap();
 
         // Act
@@ -194,9 +199,9 @@ mod tests {
         fs::write(&source_path, vec![42u8; 4096].as_slice()).await.unwrap();
 
         let secret = secret(b"metadata-test");
-        let source = Entry::new(&source_path);
-        let encrypted = Entry::new(&encrypted_path);
-        let decrypted = Entry::new(&decrypted_path);
+        let source = FileEntry::new(&source_path);
+        let encrypted = FileEntry::new(&encrypted_path);
+        let decrypted = FileEntry::new(&decrypted_path);
         let original_meta = source.metadata().await.unwrap();
 
         // Act
@@ -217,8 +222,8 @@ mod tests {
         let encrypted_path = dir.path().join("empty.txt.swx");
         fs::write(&source_path, b"").await.unwrap();
 
-        let source = Entry::new(&source_path);
-        let encrypted = Entry::new(&encrypted_path);
+        let source = FileEntry::new(&source_path);
+        let encrypted = FileEntry::new(&encrypted_path);
 
         // Act
         let result = encrypt_file(&source, &encrypted, &secret(b"pass")).await;
@@ -235,8 +240,8 @@ mod tests {
         let encrypted_path = dir.path().join("report.pdf.swx");
         fs::write(&source_path, b"pdf content").await.unwrap();
 
-        let source = Entry::new(&source_path);
-        let encrypted = Entry::new(&encrypted_path);
+        let source = FileEntry::new(&source_path);
+        let encrypted = FileEntry::new(&encrypted_path);
 
         // Act
         encrypt_file(&source, &encrypted, &secret(b"pass")).await.unwrap();

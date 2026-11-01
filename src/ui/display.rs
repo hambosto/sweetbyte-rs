@@ -2,10 +2,9 @@ use anyhow::{Context, Result};
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};
 
-use crate::core::Operation;
-use crate::fs::Entry;
+use crate::core::{FileItem, Operation};
 
-pub(crate) async fn list_files(entries: &[Entry]) -> Result<()> {
+pub(crate) fn list_files(entries: &[FileItem]) -> Result<()> {
     if entries.is_empty() {
         return cliclack::log::warning("No files found").context("failed to display files");
     }
@@ -15,28 +14,27 @@ pub(crate) async fn list_files(entries: &[Entry]) -> Result<()> {
     table.set_header(["No", "Name", "Size", "Status"].map(|h| Cell::new(h).fg(Color::White)));
 
     for (index, entry) in entries.iter().enumerate() {
-        let size = entry.size().await.context("failed to read file size")?;
-        let formatted = humansize::format_size(size, humansize::DECIMAL);
+        let file_size = humansize::format_size(entry.size(), humansize::DECIMAL);
         let file_status = if entry.is_encrypted() { "[E] encrypted" } else { "[D] unencrypted" };
         let status_color = if entry.is_encrypted() { Color::Cyan } else { Color::Green };
 
-        table.add_row([Cell::new(index.saturating_add(1)).fg(Color::Green), Cell::new(entry.name()).fg(Color::Green), Cell::new(formatted).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
+        table.add_row([Cell::new(index.saturating_add(1)).fg(Color::Green), Cell::new(entry.name()).fg(Color::Green), Cell::new(file_size).fg(Color::Green), Cell::new(file_status).fg(status_color)]);
     }
 
     cliclack::note(format!("Found {} file(s)", entries.len()), table).context("failed to display files")
 }
 
-pub(crate) fn show_success(operation: Operation, entry: &Entry) -> Result<()> {
+pub(crate) fn show_success(operation: Operation, file_name: &str) -> Result<()> {
     let action = match operation {
         Operation::Encryption => "encrypted",
         Operation::Decryption => "decrypted",
     };
 
-    cliclack::log::success(format!("File {action}: {}", entry.name())).context("failed to display success")
+    cliclack::log::success(format!("File {action}: {file_name}")).context("failed to display success")
 }
 
-pub(crate) fn show_deletion(entry: &Entry) -> Result<()> {
-    cliclack::log::success(format!("File deleted: {}", entry.name())).context("failed to display deletion")
+pub(crate) fn show_deletion(file_name: &str) -> Result<()> {
+    cliclack::log::success(format!("File deleted: {file_name}")).context("failed to display deletion")
 }
 
 pub(crate) fn show_header(file_name: &str, file_size: u64, file_hash: &[u8]) -> Result<()> {

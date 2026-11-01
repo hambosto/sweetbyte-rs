@@ -1,5 +1,5 @@
-mod entry;
+mod files;
 mod scanner;
 
-pub(crate) use entry::Entry;
-pub(crate) use scanner::Scanner;
+pub(crate) use files::FileEntry;
+pub(crate) use scanner::FileScanner;
