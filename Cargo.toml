@@ -16,7 +16,7 @@ block-padding     = "0.4.2"
 chacha20poly1305  = { version = "0.11.0", features = ["zeroize"] }
 cliclack          = "0.5.7"
 comfy-table       = "8.0.1"
-crc32fast         = "1.5.3"
+crc32fast         = "1.5.4"
 fast-glob         = "1.1.2"
 hex               = { version = "0.4.3", features = ["serde"] }
 hkdf              = "0.13.0"

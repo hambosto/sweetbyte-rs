@@ -28,10 +28,6 @@ impl FileEntry {
         self.path.exists()
     }
 
-    pub(crate) fn is_encrypted(&self) -> bool {
-        self.path.extension().is_some_and(|extension| extension == FILE_EXTENSION)
-    }
-
     pub(crate) fn output_path(&self, operation: Operation) -> PathBuf {
         match operation {
             Operation::Encryption => self.path.with_added_extension(FILE_EXTENSION),

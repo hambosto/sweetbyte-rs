@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use walkdir::WalkDir;
 
 use crate::config::{EXCLUDED_PATTERNS, FILE_EXTENSION};
-use crate::core::Operation;
+use crate::core::{FileItem, Operation};
 
 pub(crate) struct FileScanner {
     root: PathBuf,
@@ -15,7 +15,7 @@ impl FileScanner {
         Self { root: root.into(), operation }
     }
 
-    pub(crate) fn scan(&self) -> Vec<PathBuf> {
+    pub(crate) fn scan(&self) -> Vec<FileItem> {
         let walker = WalkDir::new(&self.root).same_file_system(true).sort_by_file_name().into_iter().filter_entry(|entry| {
             if entry.depth() == 0 {
                 return true;
@@ -47,10 +47,12 @@ impl FileScanner {
             }
 
             let is_encrypted = entry.path().extension().is_some_and(|extension| extension == FILE_EXTENSION);
+
             let wanted = match self.operation {
                 Operation::Encryption => !is_encrypted,
                 Operation::Decryption => is_encrypted,
             };
+
             if !wanted {
                 continue;
             }
@@ -58,11 +60,16 @@ impl FileScanner {
             let Ok(metadata) = entry.metadata() else {
                 continue;
             };
-            if metadata.len() == 0 {
+
+            let size = metadata.len();
+            if size == 0 {
                 continue;
             }
 
-            entries.push(entry.into_path());
+            let path = entry.into_path();
+            let name = path.file_name().map_or_default(|name| name.to_string_lossy().into_owned());
+
+            entries.push(FileItem::new(path, name, size, is_encrypted));
         }
 
         entries

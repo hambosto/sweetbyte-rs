@@ -11,7 +11,7 @@ use anyhow::Result;
 use tokio::io::AsyncWriteExt;
 
 use crate::config::{ARGON2_SALT_LEN, PASSWORD_LEN};
-use crate::core::{FileItem, Metadata, Operation, Secret};
+use crate::core::{Metadata, Operation, Secret};
 use crate::crypto::{Hash, Key};
 use crate::format::{Deserializer, Serializer};
 use crate::fs::{FileEntry, FileScanner};
@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
     ui::show_banner()?;
 
     let prompt = Prompt::new(PASSWORD_LEN, true);
-    let (source, target, operation) = select_files(&prompt).await?;
+    let (source, target, operation) = select_files(&prompt)?;
     let secret = prompt.read_password(operation)?;
 
     let metadata = match operation {
@@ -43,19 +43,14 @@ async fn main() -> Result<()> {
     ui::show_exit()
 }
 
-async fn select_files(prompt: &Prompt) -> Result<(FileEntry, FileEntry, Operation)> {
+fn select_files(prompt: &Prompt) -> Result<(FileEntry, FileEntry, Operation)> {
     let operation = prompt.select_operation()?;
-    let entries = FileScanner::new(".", operation).scan();
+    let items = FileScanner::new(".", operation).scan();
 
-    if entries.is_empty() {
+    if items.is_empty() {
         anyhow::bail!("no files found");
     }
 
-    let mut items = Vec::with_capacity(entries.len());
-    for path in &entries {
-        let entry = FileEntry::new(path);
-        items.push(FileItem::new(entry.path(), entry.name(), entry.size().await?, entry.is_encrypted()));
-    }
     ui::list_files(&items)?;
 
     let selected = prompt.select_file(&items)?;

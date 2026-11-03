@@ -67,7 +67,7 @@ impl Prompt {
     pub(crate) fn select_file(&self, entries: &[FileItem]) -> Result<PathBuf> {
         let mut select = cliclack::select("Select file");
         for entry in entries {
-            select = select.item(entry.path().to_path_buf(), entry.name(), "");
+            select = select.item(entry.path().into(), entry.name(), humansize::format_size(entry.size(), humansize::DECIMAL));
         }
 
         if self.filter_mode {
