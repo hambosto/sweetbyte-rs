@@ -1,9 +1,11 @@
 {
   date ? "19700101",
   lib,
+  pkg-config,
   rev ? "unknown",
   rustPlatform,
   version ? "git",
+  zstd,
 }:
 rustPlatform.buildRustPackage {
   pname = "sweetbyte";
@@ -13,6 +15,9 @@ rustPlatform.buildRustPackage {
 
   cargoLock.lockFile = ../Cargo.lock;
   doCheck = false;
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ zstd ];
 
   SWEETBYTE_BUILD_VERSION = "unstable ${date} (commit ${rev})";
 
