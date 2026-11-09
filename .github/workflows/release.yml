@@ -1,17 +1,17 @@
-name: Prerelease
+name: Nightly Release
 
 permissions:
   contents: read
 
 on:
   workflow_run:
-    workflows: [CI]
+    workflows: [Code Quality]
     types: [completed]
     branches: [main]
 
 jobs:
   create-release:
-    name: Create prerelease tag
+    name: Create release tag
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -30,17 +30,17 @@ jobs:
             grep -o '"name":"[^"]*"' | head -n1 | cut -d'"' -f4)
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Delete previous tip release
+      - name: Delete previous nightly release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release delete tip --yes --cleanup-tag || true
+        run: gh release delete nightly --yes --cleanup-tag || true
 
-      - name: Create fresh tip release
+      - name: Create fresh nightly release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cat > notes.md << 'NOTES'
-          This tip release is automatically built and generated on every commit to `main` that passes CI.
+          This nightly release is automatically built and generated on every commit to `main` that passes CI.
 
           > [!WARNING]
           > This is a nightly build, not a tagged release. We recommend using tagged releases for daily use.
@@ -48,14 +48,14 @@ jobs:
           Commit: ${{ github.event.workflow_run.head_sha }}
           NOTES
 
-          gh release create tip \
-            --title "${{ steps.meta.outputs.name }} Tip (\"Nightly\")" \
+          gh release create nightly \
+            --title "${{ steps.meta.outputs.name }} Nightly" \
             --notes-file notes.md \
             --prerelease \
             --target ${{ github.event.workflow_run.head_sha }}
 
   build:
-    name: Build & upload (${{ matrix.target }})
+    name: Build (${{ matrix.target }})
     needs: create-release
     runs-on: ${{ matrix.os }}
     permissions:
@@ -77,7 +77,7 @@ jobs:
           - os: windows-latest
             target: aarch64-pc-windows-msvc
     steps:
-      - name: Checkout source code at Code Quality's commit
+      - name: Checkout source code
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -104,5 +104,5 @@ jobs:
           target: ${{ matrix.target }}
           archive: $bin-$target
           checksum: sha256
-          ref: refs/tags/tip
+          ref: refs/tags/nightly
           token: ${{ secrets.GITHUB_TOKEN }}
